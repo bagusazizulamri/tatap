@@ -5,3 +5,4 @@ backend/anime.db*
 cache/*
 !.gitkeep
 .env
+server.pid
