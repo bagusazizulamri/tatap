@@ -80,7 +80,10 @@ main{max-width:1060px;margin:0 auto;padding:18px;position:relative;z-index:1}
 .player-head-btns button{background:#16223a;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:6px 12px;cursor:pointer}
 .player-head-btns button:hover{border-color:var(--acc)}
 .ambient-stage{position:relative;border-radius:14px;background:#000}
+.ambient-stage.idle{cursor:none}
 .ambient-stage video{position:relative;z-index:2;width:100%;aspect-ratio:16/9;max-height:74vh;background:#000;display:block;border-radius:14px;object-fit:contain}
+.player-shell.idle .player-foot,.player-shell.idle .player-hint{opacity:0;pointer-events:none}
+.player-foot,.player-hint{transition:opacity .4s ease}
 #ambient{position:absolute;left:-60px;right:-60px;top:-60px;bottom:-60px;z-index:1;width:calc(100% + 120px);height:calc(100% + 120px);filter:blur(70px) saturate(1.8);opacity:.6;pointer-events:none}
 #ambient-fallback{position:absolute;left:-60px;right:-60px;top:-60px;bottom:-60px;z-index:0;filter:blur(70px);opacity:.5;pointer-events:none;transition:background 1.2s ease;background:transparent}
 body.no-ambient #ambient,body.no-ambient #ambient-fallback{display:none}

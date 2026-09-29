@@ -229,6 +229,42 @@ function renderVariants() {
     })(vs[i]);
   }
 }
+function armAutohide() {
+  var stage = document.querySelector(".ambient-stage");
+  var shell = document.querySelector(".player-shell");
+  if (!stage || stage._armed) return;
+  stage._armed = true;
+  var v = $("vid");
+  var t = null;
+  var show = function () {
+    stage.classList.remove("idle");
+    if (shell) shell.classList.remove("idle");
+    if (v.hasAttribute("controls")) { /* keep native */ }
+    clearTimeout(t);
+    t = setTimeout(function () {
+      if (v.paused) return;
+      v.removeAttribute("controls");
+      stage.classList.add("idle");
+      if (shell) shell.classList.add("idle");
+    }, 2800);
+  };
+  var wake = function () {
+    if (!v.hasAttribute("controls")) v.setAttribute("controls", "");
+    show();
+  };
+  ["mousemove", "touchstart", "click"].forEach(function (ev) {
+    stage.addEventListener(ev, wake, { passive: true });
+  });
+  v.addEventListener("play", show);
+  v.addEventListener("pause", function () {
+    clearTimeout(t);
+    v.setAttribute("controls", "");
+    stage.classList.remove("idle");
+    if (shell) shell.classList.remove("idle");
+  });
+  v.addEventListener("seeking", show);
+  show();
+}
 function playUrl(url, referer, sub, subRef) {
   var v = $("vid");
   var prox = "/api/player/video?url=" + encodeURIComponent(url) + "&referer=" + encodeURIComponent(referer || "");
@@ -257,6 +293,7 @@ function playUrl(url, referer, sub, subRef) {
     v.src = url.indexOf(".m3u8") >= 0 ? prox : url;
   }
   v.play().catch(function () { $("pm-spinner").classList.add("hidden"); });
+  armAutohide();
 }
 function switchQ(q) {
   if (!cur.res) return;
