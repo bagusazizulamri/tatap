@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+backend/anime.db*
+cache/*
+!.gitkeep
+.env
