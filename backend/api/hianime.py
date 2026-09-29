@@ -79,12 +79,26 @@ def _parse_browse_cards(html: str):
         })
     return out
 
+def _warp_proxy():
+    import os
+    host = os.getenv("WARP_PROXY", "").strip()
+    if not host:
+        return None
+    if "://" not in host:
+        host = "http://" + host
+    return {"http": host, "https": host}
+
+
 def _fetch(url, referer=None, timeout=15):
     last_err = ""
     try:
         from curl_cffi import requests as creq
         try:
-            r = creq.get(url, headers={"User-Agent": HI_UA, "Accept": "text/html,application/json,*/*", **({"Referer": referer} if referer else {})}, impersonate="chrome124", timeout=timeout)
+            px = _warp_proxy()
+            kw = dict(headers={"User-Agent": HI_UA, "Accept": "text/html,application/json,*/*", **({"Referer": referer} if referer else {})}, impersonate="chrome124", timeout=timeout)
+            if px:
+                kw["proxies"] = px
+            r = creq.get(url, **kw)
             if r.status_code == 200:
                 return r.text
             if "Just a moment" in r.text or "cf-challenge" in r.text:

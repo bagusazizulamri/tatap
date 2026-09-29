@@ -210,9 +210,11 @@ def _client():
     global _shared_client
     if _shared_client is None:
         import httpx as _hx
+        import os as _os
         limits = _hx.Limits(max_connections=40, max_keepalive_connections=20, keepalive_expiry=60.0)
+        proxy = _os.getenv("WARP_PROXY", "").strip() or None
         _shared_client = _hx.AsyncClient(follow_redirects=True, timeout=_hx.Timeout(20.0, connect=8.0),
-                                         limits=limits, http2=False)
+                                         limits=limits, http2=False, proxy=proxy)
     return _shared_client
 
 
