@@ -6,6 +6,78 @@ from config import HI_BASE, HI_UA, XOR_KEY
 SEARCH_API = HI_BASE + "/search?keyword={}"
 EPISODES_API = HI_BASE + "/api/theme/episode/list/{}"
 SERVERS_API = HI_BASE + "/api/theme/episode/servers?episodeId={}"
+BROWSE_API = HI_BASE + "/browse"
+
+FILTERS = {
+    "type": ["tv", "movie", "ova", "ona", "special", "music"],
+    "status": ["releasing", "completed", "not_yet_aired"],
+    "rating": ["g", "pg", "pg_13", "r_17", "r_plus", "rx"],
+    "score": ["10", "9", "8", "7", "6", "5", "4", "3", "2", "1"],
+    "season": ["spring", "summer", "fall", "winter"],
+    "language": ["sub", "dub"],
+    "sort": ["popularity", "trending", "score", "latest", "az", "most_favorite"],
+}
+
+
+def browse(params: dict = None, page: int = 1):
+    """GET /browse?{filter} — kartu + total halaman. Maksimal sesuai form filter."""
+    from urllib.parse import urlencode
+    q = dict(params or {})
+    q["page"] = max(1, int(page or 1))
+    clean = {}
+    for k, v in q.items():
+        if k == "page":
+            clean[k] = v
+            continue
+        v = str(v or "").strip().lower()
+        if not v:
+            continue
+        if k in FILTERS and v in FILTERS[k]:
+            clean[k] = v
+        elif k in ("keyword", "sy", "sm", "ey", "em", "genre"):
+            clean[k] = v
+    url = BROWSE_API + "?" + urlencode(clean)
+    page_html = _fetch(url)
+    items = _parse_browse_cards(page_html)
+    last = 1
+    for m in re.finditer(r"page=(\d+)", page_html):
+        try:
+            last = max(last, int(m.group(1)))
+        except ValueError:
+            pass
+    return {"items": items, "page": clean["page"], "total_pages": last, "params": clean}
+
+
+def _parse_browse_cards(html: str):
+    blocks = html.split("flw-item")
+    out = []
+    for b in blocks[1:]:
+        m = re.search(r"film-name.*?href=\"[^\"]*/([^\"]+)\"[^>]*title=\"([^\"]*)\"", b, re.S)
+        if not m:
+            continue
+        slug = m.group(1)
+        if slug.startswith("watch/"):
+            slug = slug[len("watch/"):]
+        title = _clean(m.group(2))
+        img = re.search(r"<img[^>]*src=\"([^\"]+)\"", b)
+        poster = img.group(1) if img else ""
+        sub = re.search(r"tick-sub.*?(\d+)<", b, re.S)
+        dub = re.search(r"tick-dub.*?(\d+)<", b, re.S)
+        eps = re.search(r"tick-eps.*?(\d+)<", b, re.S)
+        typ = re.search(r"fdi-item\">(TV|Movie|OVA|ONA|Special|Music)<", b)
+        dur = re.search(r"fdi-duration\">([^<]*)<", b)
+        desc = re.search(r"class=\"description\">(.*?)</div>", b, re.S)
+        out.append({
+            "id": slug, "title": title,
+            "poster": poster,
+            "sub": int(sub.group(1)) if sub else 0,
+            "dub": int(dub.group(1)) if dub else 0,
+            "eps": int(eps.group(1)) if eps else 0,
+            "type": typ.group(1) if typ else "",
+            "duration": _clean(dur.group(1)) if dur else "",
+            "synopsis": _clean(re.sub(r"<[^>]+>", "", desc.group(1)))[:220] if desc else "",
+        })
+    return out
 
 def _fetch(url, referer=None, timeout=15):
     last_err = ""

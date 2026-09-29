@@ -23,6 +23,8 @@ async def init_db():
             played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
         await db.execute("""CREATE TABLE IF NOT EXISTS settings(
             key TEXT PRIMARY KEY, value TEXT)""")
+        await db.execute("""CREATE TABLE IF NOT EXISTS browse_cache(
+            key TEXT PRIMARY KEY, payload TEXT, fetched_at INTEGER)""")
         await db.commit()
 
 def _now():
@@ -89,6 +91,26 @@ async def get_history(limit=50):
 async def clear_history():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM watch_history")
+        await db.commit()
+
+async def get_browse_cache(key: str, ttl=6*3600):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT payload, fetched_at FROM browse_cache WHERE key=?", (key,)) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return None
+            if _now() - row["fetched_at"] > ttl:
+                return None
+            try:
+                return json.loads(row["payload"])
+            except Exception:
+                return None
+
+async def set_browse_cache(key: str, payload):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("INSERT OR REPLACE INTO browse_cache(key,payload,fetched_at) VALUES(?,?,?)",
+                         (key, json.dumps(payload), _now()))
         await db.commit()
 
 async def get_setting(key, default=""):

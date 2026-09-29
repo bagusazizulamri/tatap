@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse, FileResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from config import APP_PORT, APP_HOST, HI_BASE, HI_UA
-from database import init_db, get_search_cache, set_search_cache, get_episode_cache, set_episode_cache, add_history, get_history, clear_history, get_setting, set_setting
+from database import init_db, get_search_cache, set_search_cache, get_episode_cache, set_episode_cache, add_history, get_history, clear_history, get_setting, set_setting, get_browse_cache, set_browse_cache
 from api import hianime as hi
 import httpx
 
@@ -47,6 +47,102 @@ async def search(q: str = Query(""), limit: int = 15):
         res = await loop.run_in_executor(None, lambda: hi.hianime_search(q, limit))
         await set_search_cache(q.lower(), res)
         return ok({"results": res, "cached": False})
+    except Exception as e:
+        return fail(str(e))
+
+@app.get("/api/filters")
+async def filters():
+    return ok(hi.FILTERS)
+
+@app.get("/api/catalog")
+async def catalog(page: int = Query(1, ge=1, le=100)):
+    """Katalog umum: semua judul, default urut populer."""
+    try:
+        import json as _json
+        key = f"catalog|page={page}"
+        hit = await get_browse_cache(key)
+        if hit:
+            hit["cached"] = True
+            return ok(hit)
+        loop = asyncio.get_running_loop()
+        res = await loop.run_in_executor(None, lambda: hi.browse({}, page))
+        await set_browse_cache(key, res)
+        res["cached"] = False
+        return ok(res)
+    except Exception as e:
+        return fail(str(e))
+
+@app.get("/api/season-now")
+async def season_now(page: int = Query(1, ge=1, le=100)):
+    """Sedang tayang musim ini."""
+    try:
+        import datetime as _dt
+        m = _dt.date.today().month
+        season = "winter" if m in (1, 2, 3) else "spring" if m in (4, 5, 6) else "summer" if m in (7, 8, 9) else "fall"
+        key = f"season-now|{season}|page={page}"
+        hit = await get_browse_cache(key)
+        if hit:
+            hit["cached"] = True
+            hit["season"] = season
+            return ok(hit)
+        loop = asyncio.get_running_loop()
+        res = await loop.run_in_executor(None, lambda: hi.browse({"status": "releasing", "season": season}, page))
+        res["season"] = season
+        await set_browse_cache(key, res)
+        res["cached"] = False
+        return ok(res)
+    except Exception as e:
+        return fail(str(e))
+
+@app.get("/api/still-airing")
+async def still_airing(page: int = Query(1, ge=1, le=100)):
+    """Masih tayang tapi mulai musim lalu (lanjutan)."""
+    try:
+        import datetime as _dt
+        order = ["winter", "spring", "summer", "fall"]
+        m = _dt.date.today().month
+        cur = 0 if m in (1, 2, 3) else 1 if m in (4, 5, 6) else 2 if m in (7, 8, 9) else 3
+        prev = order[(cur - 1) % 4]
+        key = f"still-airing|{prev}|page={page}"
+        hit = await get_browse_cache(key)
+        if hit:
+            hit["cached"] = True
+            hit["season"] = prev
+            return ok(hit)
+        loop = asyncio.get_running_loop()
+        res = await loop.run_in_executor(None, lambda: hi.browse({"status": "releasing", "season": prev}, page))
+        res["season"] = prev
+        await set_browse_cache(key, res)
+        res["cached"] = False
+        return ok(res)
+    except Exception as e:
+        return fail(str(e))
+
+@app.get("/api/browse")
+async def browse_ep(
+    type: str = Query(""), status: str = Query(""), rating: str = Query(""),
+    score: str = Query(""), season: str = Query(""), language: str = Query(""),
+    sort: str = Query(""), genre: str = Query(""), keyword: str = Query(""),
+    sy: str = Query(""), sm: str = Query(""), ey: str = Query(""), em: str = Query(""),
+    page: int = Query(1, ge=1, le=100),
+):
+    """Filter bebas — semua parameter sesuai form filter."""
+    try:
+        import json as _json
+        params = {k: v for k, v in
+                  {"type": type, "status": status, "rating": rating, "score": score,
+                   "season": season, "language": language, "sort": sort, "genre": genre,
+                   "keyword": keyword, "sy": sy, "sm": sm, "ey": ey, "em": em}.items() if v}
+        key = "browse|" + _json.dumps(params, sort_keys=True) + f"|page={page}"
+        hit = await get_browse_cache(key)
+        if hit:
+            hit["cached"] = True
+            return ok(hit)
+        loop = asyncio.get_running_loop()
+        res = await loop.run_in_executor(None, lambda: hi.browse(params, page))
+        await set_browse_cache(key, res)
+        res["cached"] = False
+        return ok(res)
     except Exception as e:
         return fail(str(e))
 
@@ -216,4 +312,4 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=APP_HOST, port=APP_PORT)
+    uvicorn.run(app, host=APP_HOST, port=APP_PORT, loop="asyncio", http="h11")

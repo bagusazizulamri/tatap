@@ -30,9 +30,26 @@
 </header>
 
 <main>
+  <nav class="tabs" id="tabs">
+    <button data-tab="home" class="active">Cari</button>
+    <button data-tab="season">Tayang Musim Ini</button>
+    <button data-tab="still">Masih Tayang</button>
+    <button data-tab="catalog">Katalog</button>
+  </nav>
+
   <section id="continue-sec" class="hidden">
     <div class="sec-head"><h2>Lanjutkan menonton</h2><button class="link-btn" id="clear-hist">hapus</button></div>
     <div id="continue-row" class="hscroll"></div>
+  </section>
+
+  <section id="lane-season-sec" class="hidden">
+    <div class="sec-head"><h2 id="lane-season-title">Tayang musim ini</h2><button class="link-btn" data-goto="season">lihat semua</button></div>
+    <div id="lane-season" class="hscroll"></div>
+  </section>
+
+  <section id="lane-still-sec" class="hidden">
+    <div class="sec-head"><h2>Masih tayang (mulai musim lalu)</h2><button class="link-btn" data-goto="still">lihat semua</button></div>
+    <div id="lane-still" class="hscroll"></div>
   </section>
 
   <section id="search-sec">
@@ -41,10 +58,25 @@
       <span id="results-meta" class="dim"></span>
     </div>
     <div id="recent-chips" class="chips"></div>
+    <div id="filter-bar" class="hidden">
+      <select id="f-type"><option value="">Tipe: semua</option><option value="tv">TV</option><option value="movie">Movie</option><option value="ova">OVA</option><option value="ona">ONA</option><option value="special">Special</option><option value="music">Music</option></select>
+      <select id="f-status"><option value="">Status: semua</option><option value="releasing">Sedang tayang</option><option value="completed">Tamat</option><option value="not_yet_aired">Belum tayang</option></select>
+      <select id="f-season"><option value="">Musim: semua</option><option value="winter">Winter</option><option value="spring">Spring</option><option value="summer">Summer</option><option value="fall">Fall</option></select>
+      <select id="f-language"><option value="">Bahasa: semua</option><option value="sub">SUB</option><option value="dub">DUB</option></select>
+      <select id="f-sort"><option value="">Urut: populer</option><option value="popularity">Populer</option><option value="trending">Trending</option><option value="score">Skor</option><option value="latest">Terbaru</option><option value="az">A-Z</option><option value="most_favorite">Favorit</option></select>
+      <select id="f-score"><option value="">Skor: semua</option><option value="9">9+</option><option value="8">8+</option><option value="7">7+</option><option value="6">6+</option></select>
+      <button id="f-apply">Terapkan</button>
+      <button id="f-reset" class="icon-btn">Reset</button>
+    </div>
     <div id="results" class="grid"></div>
+    <div id="pager" class="pager hidden">
+      <button id="pg-prev">Sebelumnya</button>
+      <span id="pg-info" class="dim small"></span>
+      <button id="pg-next">Berikutnya</button>
+    </div>
     <div id="empty-state" class="empty">
       <div class="empty-art">[ ]</div>
-      <p>Ketik judul anime lalu tekan <b>Enter</b>.<br><span class="dim">Navigasi: ↑ ↓ pilih · Enter buka · Esc tutup</span></p>
+      <p>Ketik judul anime lalu tekan <b>Enter</b>.<br><span class="dim">Navigasi: atas bawah pilih, Enter buka, Esc tutup</span></p>
     </div>
   </section>
 </main>

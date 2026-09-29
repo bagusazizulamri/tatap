@@ -92,8 +92,43 @@ async function init() {
   $("pm-mpv").addEventListener("click", playMPV);
   document.addEventListener("keydown", onKey);
   startAmbient();
+  var tabs = document.querySelectorAll("#tabs button");
+  for (var ti = 0; ti < tabs.length; ti++) {
+    (function (b) { b.addEventListener("click", function () { setTab(b.getAttribute("data-tab")); }); })(tabs[ti]);
+  }
+  var gotoBtns = document.querySelectorAll("[data-goto]");
+  for (var gi = 0; gi < gotoBtns.length; gi++) {
+    (function (b) { b.addEventListener("click", function () { setTab(b.getAttribute("data-goto")); }); })(gotoBtns[gi]);
+  }
+  $("pg-prev").addEventListener("click", function () { if (curPage > 1) { curPage--; loadTab(); window.scrollTo(0, 0); } });
+  $("pg-next").addEventListener("click", function () { if (curPage < curTotal) { curPage++; loadTab(); window.scrollTo(0, 0); } });
+  $("f-apply").addEventListener("click", function () {
+    curFilter = {
+      type: $("f-type").value, status: $("f-status").value, season: $("f-season").value,
+      language: $("f-language").value, sort: $("f-sort").value || "popularity", score: $("f-score").value
+    };
+    curPage = 1;
+    loadTab();
+  });
+  $("f-reset").addEventListener("click", function () {
+    $("f-type").value = ""; $("f-status").value = ""; $("f-season").value = "";
+    $("f-language").value = ""; $("f-sort").value = ""; $("f-score").value = "";
+    curFilter = {}; curPage = 1;
+    loadTab();
+  });
+  // search apapun pindah ke tab Cari dulu
+  var _origDoSearchRef = { v: 0 };
+  loadLanes();
 }
-function goHome() { $("q").value = ""; $("results").innerHTML = ""; $("results-title").textContent = "Mulai pencarian di atas"; $("results-meta").textContent = ""; $("empty-state").style.display = ""; renderContinue(); }
+function goHome() {
+  if (typeof curTab !== "undefined" && curTab !== "home") { setTab("home"); return; }
+  $("q").value = ""; $("results").innerHTML = "";
+  $("results-title").textContent = "Mulai pencarian di atas"; $("results-meta").textContent = "";
+  $("pager").classList.add("hidden");
+  $("empty-state").style.display = ""; renderContinue();
+  var hasLane = $("lane-season").children.length || $("lane-still").children.length;
+  if (!hasLane) loadLanes();
+}
 function onKey(e) {
   var t = (e.target.tagName || "");
   var typing = t === "INPUT" || t === "SELECT" || t === "TEXTAREA";
@@ -112,7 +147,118 @@ function onKey(e) {
   else if (e.key === "ArrowRight") v.currentTime += 5;
   else if (e.key === "ArrowLeft") v.currentTime -= 5;
 }
+var curTab = "home", curPage = 1, curTotal = 1, curFilter = {};
+function setTab(t) {
+  curTab = t; curPage = 1;
+  var btns = document.querySelectorAll("#tabs button");
+  for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("active", btns[i].getAttribute("data-tab") === t);
+  var isHome = t === "home";
+  $("recent-chips").style.display = isHome ? "" : "none";
+  $("filter-bar").classList.toggle("hidden", t !== "catalog");
+  var showLane = isHome;
+  $("lane-season-sec").classList.toggle("hidden", !showLane || !$("lane-season").children.length);
+  $("lane-still-sec").classList.toggle("hidden", !showLane || !$("lane-still").children.length);
+  if (t === "home") { goHome(); return; }
+  $("empty-state").style.display = "none";
+  loadTab();
+}
+function posterMeta(a) {
+  var p = [];
+  if (a.type) p.push(a.type);
+  if (a.eps) p.push(a.eps + " ep");
+  else if (a.sub) p.push("SUB " + a.sub);
+  if (a.dub) p.push("DUB " + a.dub);
+  if (a.duration) p.push(a.duration);
+  return p.join(" · ");
+}
+function posterCard(a, idx, lane) {
+  var d = document.createElement("div");
+  d.className = (lane ? "poster-card lane-card" : "poster-card") + (idx === focusIdx && !lane ? " focused" : "");
+  d.tabIndex = 0;
+  if (a.poster) {
+    var im = document.createElement("img");
+    im.loading = "lazy"; im.alt = a.title;
+    im.src = a.poster;
+    im.onerror = function () { this.style.display = "none"; };
+    d.appendChild(im);
+  }
+  var body = document.createElement("div");
+  body.className = "poster-body";
+  var b = document.createElement("b"); b.textContent = a.title; body.appendChild(b);
+  var s = document.createElement("div"); s.className = "poster-meta"; s.textContent = posterMeta(a); body.appendChild(s);
+  d.appendChild(body);
+  d.addEventListener("click", function () { openTitle(a.id, a.title); });
+  d.addEventListener("keydown", function (e) { if (e.key === "Enter") openTitle(a.id, a.title); });
+  return d;
+}
+function renderPager() {
+  var show = curTab !== "home" && curTotal > 1;
+  $("pager").classList.toggle("hidden", !show);
+  if (!show) return;
+  $("pg-info").textContent = "Hal " + curPage + " / " + curTotal;
+  $("pg-prev").disabled = curPage <= 1;
+  $("pg-next").disabled = curPage >= curTotal;
+}
+async function loadTab() {
+  $("results").innerHTML = "<p class='dim'>memuat...</p>";
+  $("results-title").textContent = "Memuat...";
+  $("results-meta").textContent = "";
+  var r = null, label = "";
+  try {
+    if (curTab === "season") { r = await window.Tatap.seasonNow(curPage); label = "Tayang musim ini"; }
+    else if (curTab === "still") { r = await window.Tatap.stillAiring(curPage); label = "Masih tayang (mulai musim lalu)"; }
+    else if (curTab === "catalog") { r = await window.Tatap.browse(curFilter, curPage); label = "Katalog"; }
+    else return;
+  } catch (e) { $("results-title").textContent = "Gagal memuat"; return; }
+  if (!r || !r.success) { $("results-title").textContent = "Gagal memuat"; $("results-meta").textContent = (r && r.error) || ""; return; }
+  var d = r.data || {};
+  lastResults = d.items || [];
+  curPage = d.page || 1; curTotal = d.total_pages || 1;
+  focusIdx = -1;
+  if (d.season) label += " · " + String(d.season).toUpperCase();
+  $("results-title").textContent = label;
+  $("results-meta").textContent = lastResults.length + " judul" + (d.cached ? " · cached" : "");
+  renderPosterGrid();
+  renderPager();
+}
+function renderPosterGrid() {
+  var box = $("results"); box.innerHTML = "";
+  for (var i = 0; i < lastResults.length; i++) box.appendChild(posterCard(lastResults[i], i, false));
+  if (!lastResults.length) box.innerHTML = "<p class='dim'>Kosong.</p>";
+}
+async function loadLanes() {
+  try {
+    var s = await window.Tatap.seasonNow(1);
+    if (s.success && (s.data.items || []).length) {
+      var box = $("lane-season"); box.innerHTML = "";
+      var items = s.data.items.slice(0, 12);
+      for (var i = 0; i < items.length; i++) box.appendChild(posterCard(items[i], -1, true));
+      var label = "Tayang musim ini";
+      if (s.data.season) label += " · " + String(s.data.season).toUpperCase();
+      $("lane-season-title").textContent = label;
+      $("lane-season-sec").classList.remove("hidden");
+    }
+  } catch (e) {}
+  try {
+    var t = await window.Tatap.stillAiring(1);
+    if (t.success && (t.data.items || []).length) {
+      var box2 = $("lane-still"); box2.innerHTML = "";
+      var items2 = t.data.items.slice(0, 12);
+      for (var j = 0; j < items2.length; j++) box2.appendChild(posterCard(items2[j], -1, true));
+      $("lane-still-sec").classList.remove("hidden");
+    }
+  } catch (e) {}
+}
+function setTabSilent(t) {
+  curTab = t; curPage = 1;
+  var btns = document.querySelectorAll("#tabs button");
+  for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("active", btns[i].getAttribute("data-tab") === t);
+  $("filter-bar").classList.toggle("hidden", t !== "catalog");
+  $("recent-chips").style.display = t === "home" ? "" : "none";
+  $("pager").classList.add("hidden");
+}
 async function doSearch() {
+  setTabSilent("home");
   var q = $("q").value.trim();
   if (!q) return;
   pushRecent(q);
@@ -132,14 +278,18 @@ function renderCards() {
   var box = $("results"); box.innerHTML = "";
   for (var i = 0; i < lastResults.length; i++) {
     (function (a, idx) {
-      var d = document.createElement("div");
-      d.className = "card" + (idx === focusIdx ? " focused" : "");
-      d.tabIndex = 0;
-      var b = document.createElement("b"); b.textContent = a.title; d.appendChild(b);
-      var s = document.createElement("small"); s.textContent = a.id; d.appendChild(s);
-      var n = document.createElement("div"); n.className = "card-num"; n.textContent = "#" + (idx + 1); d.insertBefore(n, b);
-      d.addEventListener("click", function () { openTitle(a.id, a.title); });
-      d.addEventListener("keydown", function (e) { if (e.key === "Enter") openTitle(a.id, a.title); });
+      var d;
+      if (a.poster) d = posterCard(a, idx, false);
+      else {
+        d = document.createElement("div");
+        d.className = "card" + (idx === focusIdx ? " focused" : "");
+        d.tabIndex = 0;
+        var b = document.createElement("b"); b.textContent = a.title; d.appendChild(b);
+        var s = document.createElement("small"); s.textContent = a.id; d.appendChild(s);
+        var n = document.createElement("div"); n.className = "card-num"; n.textContent = "#" + (idx + 1); d.insertBefore(n, b);
+        d.addEventListener("click", function () { openTitle(a.id, a.title); });
+        d.addEventListener("keydown", function (e) { if (e.key === "Enter") openTitle(a.id, a.title); });
+      }
       box.appendChild(d);
     })(lastResults[i], i);
   }
@@ -147,12 +297,9 @@ function renderCards() {
 function moveFocus(d) {
   if (!lastResults.length) return;
   focusIdx = (focusIdx + d + lastResults.length) % lastResults.length;
-  renderCards();
-  var cards = $("results").querySelectorAll(".card");
+  if (curTab === "home") renderCards(); else renderPosterGrid();
+  var cards = $("results").querySelectorAll(".poster-card,.card");
   if (cards[focusIdx]) { cards[focusIdx].focus(); cards[focusIdx].scrollIntoView({block: "nearest"}); }
-  if (d !== 0 && document.activeElement === $("q")) {
-    var a = lastResults[focusIdx];
-  }
 }
 async function openTitle(slug, title) {
   cur.slug = slug; cur.title = title; cur.eps = [];
@@ -361,16 +508,14 @@ async function renderContinue() {
 function syncSeg() {
   document.querySelectorAll("#mode-seg button").forEach(function (x) { x.classList.toggle("active", x.getAttribute("data-mode") === cur.mode); });
 }
-function doSearch() { return window.__doSearch ? window.__doSearch() : null; }
+function doSearchLegacy() { return window.__doSearch ? window.__doSearch() : null; }
 window.__doSearch = null;
-(function () {
-  var realSearch = doSearch;
-})();
-window.doSearch = function () { var q = $("q").value; if (q && q.trim()) { pushRecentSilent(q.trim()); } return _searchNow(); };
-function pushRecentSilent(q) { pushRecent(q); }
+window.doSearch = function () { var q = $("q").value; if (q && q.trim()) { pushRecent(q.trim()); } return _searchNow(); };
 async function _searchNow() {
+  if (typeof setTabSilent === "function") setTabSilent("home");
   var q = $("q").value.trim();
   if (!q) return;
+  pushRecent(q);
   $("empty-state").style.display = "none";
   $("results-title").textContent = "Mencari...";
   var t0 = Date.now();

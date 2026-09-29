@@ -2,6 +2,15 @@ async function jget(u){var r=await fetch(u);return r.json();}
 async function jpost(u,b){var r=await fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});return r.json();}
 window.Tatap={
 search:function(q){return jget("/api/search?q="+encodeURIComponent(q));},
+catalog:function(p){return jget("/api/catalog?page="+(p||1));},
+seasonNow:function(p){return jget("/api/season-now?page="+(p||1));},
+stillAiring:function(p){return jget("/api/still-airing?page="+(p||1));},
+filters:function(){return jget("/api/filters");},
+browse:function(params,page){
+  var qs = "";
+  for (var k in params) if (params[k]) qs += "&"+encodeURIComponent(k)+"="+encodeURIComponent(params[k]);
+  return jget("/api/browse?page="+(page||1)+qs);
+},
 episodes:function(slug){return jget("/api/anime/"+encodeURIComponent(slug)+"/episodes");},
 resolve:function(slug,ep,mode,q){return jget("/api/stream/resolve?slug="+encodeURIComponent(slug)+"&ep="+ep+"&mode="+(mode||"sub")+"&q="+(q||"best"));},
 health:function(){return jget("/api/health");},
