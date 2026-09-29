@@ -18,8 +18,8 @@
 ## Mulai cepat
 
 ```bash
-python3 -m venv venv
-./venv/bin/pip install -r requirements.txt
+chmod +x install.sh run.sh
+./install.sh
 ./run.sh
 # buka http://127.0.0.1:8767
 ```
