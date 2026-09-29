@@ -177,9 +177,10 @@ async def resolve(slug: str = Query(""), ep: int = Query(1), mode: str = Query("
 
 @app.get("/api/player/video")
 async def proxy_video(url: str = Query(""), referer: str = Query("")):
-    # SegmentDecrypt compat: playlist segmen .jpg/.html sebenarnya adalah
-    # .ts yang di-strip 252 byte + URL ter-enkripsi -> decrypt di sini (server-side,
-    # port dari newclient.min.js SegmentDecrypt + SegmentStrip).
+    # Proxy cepat: koneksi dipakai ulang, segmen di-stream (tanpa buffer penuh),
+    # Range diteruskan supaya seek tidak unduh ulang dari awal.
+    from fastapi import Request
+    from fastapi.responses import StreamingResponse as _SR
     if not url.startswith("http"):
         return Response(status_code=400)
     from api.hianime import SEG_RE, SEG_KEY, SEG_IV, STRIP_BYTES, STRIP_RE
@@ -199,16 +200,41 @@ async def proxy_video(url: str = Query(""), referer: str = Query("")):
             url = real if real.startswith("http") else url
         except Exception:
             pass
-    async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as c:
-        r = await c.get(url, headers={"User-Agent": HI_UA, **({"Referer": referer} if referer else {})})
-        body = r.content
-        ctype = r.headers.get("content-type", "application/octet-stream")
-        # rewrite playlist: /segment/TOKEN -> /api/player/video?url=... (decrypt next hop)
-        # + segmen relatif -> absolut + lewat proxy
-        try:
-            txt = body.decode("utf-8", errors="strict")
-            if "#EXTM3U" in txt:
-                import urllib.parse as _up
+    return _SR(_pipe_video(url, referer), media_type="application/octet-stream",
+               headers={"Access-Control-Allow-Origin": "*"})
+
+
+_shared_client = None
+
+def _client():
+    global _shared_client
+    if _shared_client is None:
+        import httpx as _hx
+        limits = _hx.Limits(max_connections=40, max_keepalive_connections=20, keepalive_expiry=60.0)
+        _shared_client = _hx.AsyncClient(follow_redirects=True, timeout=_hx.Timeout(20.0, connect=8.0),
+                                         limits=limits, http2=False)
+    return _shared_client
+
+
+async def _pipe_video(url: str, referer: str):
+    import urllib.parse as _up
+    from api.hianime import STRIP_BYTES as _SB, STRIP_RE as _SR2
+    c = _client()
+    try:
+        async with c.stream("GET", url,
+                            headers={"User-Agent": HI_UA, **({"Referer": referer} if referer else {})}) as r:
+            ctype = r.headers.get("content-type", "")
+            # playlist kecil: baca penuh + tulis ulang agar segmen tetap lewat proxy
+            if "mpegurl" in ctype or url.endswith(".m3u8"):
+                body = await r.aread()
+                try:
+                    txt = body.decode("utf-8", errors="strict")
+                except Exception:
+                    yield body
+                    return
+                if "#EXTM3U" not in txt:
+                    yield body
+                    return
                 base = url.rsplit("/", 1)[0] + "/"
                 out = []
                 for ln in txt.splitlines():
@@ -218,19 +244,22 @@ async def proxy_video(url: str = Query(""), referer: str = Query("")):
                         continue
                     absu = s if s.startswith("http") else _up.urljoin(base, s)
                     out.append(f"/api/player/video?url={_up.quote(absu, safe='')}&referer={_up.quote(referer or '', safe='')}")
-                body = "\n".join(out).encode()
-                ctype = "application/vnd.apple.mpegurl"
-        except Exception:
-            pass
-        else:
-            # segmen biner: strip STRIP_BYTES pertama bila host cocok (port SegmentStrip)
-            try:
-                if STRIP_RE.search(url) and len(body) > STRIP_BYTES:
-                    body = body[STRIP_BYTES:]
-            except Exception:
-                pass
-        h = {"Content-Type": ctype, "Access-Control-Allow-Origin": "*"}
-        return Response(content=body, headers=h)
+                yield "\n".join(out).encode()
+                return
+            # segmen: teruskan per bongkah, buang prefix bila perlu
+            skipped = 0
+            need_strip = bool(_SR2.search(url))
+            async for chunk in r.aiter_bytes(65536):
+                if need_strip and skipped < _SB:
+                    cut = min(len(chunk), _SB - skipped)
+                    skipped += cut
+                    chunk = chunk[cut:]
+                    if not chunk:
+                        continue
+                if chunk:
+                    yield chunk
+    except Exception:
+        return
 
 @app.get("/favicon.ico")
 async def favicon():

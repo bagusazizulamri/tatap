@@ -415,6 +415,18 @@ function armAutohide() {
 function playUrl(url, referer, sub, subRef) {
   var v = $("vid");
   var prox = "/api/player/video?url=" + encodeURIComponent(url) + "&referer=" + encodeURIComponent(referer || "");
+  // pemanasan: 2 segmen berikutnya di-fetch paralel saat mulai
+  try {
+    var m = /^(.*\/)index-(f\d+-v\d+-a\d+)\.m3u8/.exec(url);
+    if (m) {
+      for (var wi = 1; wi <= 2; wi++) {
+        (function (n) {
+          var seg = m[1] + "seg-" + n + "-" + m[2] + ".jpg";
+          fetch("/api/player/video?url=" + encodeURIComponent(seg) + "&referer=" + encodeURIComponent(referer || ""), { mode: "no-cors" }).catch(function () {});
+        })(wi);
+      }
+    }
+  } catch (e) {}
   var old = v.querySelector("track");
   if (old) old.remove();
   if (sub) {
@@ -431,7 +443,7 @@ function playUrl(url, referer, sub, subRef) {
   setTimeout(function () { $("pm-spinner").classList.add("hidden"); }, 15000);
   if (window.Hls && window.Hls.isSupported() && url.indexOf(".m3u8") >= 0) {
     if (window._hls) { try { window._hls.destroy(); } catch (e) {} }
-    var h = new Hls({maxBufferLength: 60});
+    var h = new Hls({maxBufferLength: 90, maxMaxBufferLength: 180, maxBufferSize: 120 * 1000 * 1000, startLevel: -1, capLevelToPlayerSize: true, fragLoadingMaxRetry: 6, manifestLoadingMaxRetry: 4, levelLoadingMaxRetry: 4});
     window._hls = h;
     h.loadSource(prox);
     h.attachMedia(v);
