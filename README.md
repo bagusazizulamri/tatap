@@ -30,6 +30,13 @@ python3 -m venv venv
 - Riwayat tonton tersimpan di perangkatmu sendiri.
 - Jangan diumbar ke internet publik.
 
+## Batasan
+
+- Hanya untuk pemakaian pribadi di perangkat sendiri.
+- Ketersediaan tontonan bisa berubah sewaktu-waktu.
+- Subtitle mengikuti yang tersedia (umumnya Inggris).
+- Jangan dipasang di server publik atau dibagikan ulang aksesnya.
+
 ## Lisensi
 
 GPL-3.0. Untuk pemakaian pribadi dan edukasi.
