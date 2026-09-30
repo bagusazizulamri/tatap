@@ -79,35 +79,41 @@ def _parse_browse_cards(html: str):
         })
     return out
 
-def _warp_proxy():
+def _failover_proxies():
+    """Direct dulu, warp proxy hanya failover. Urutan: [tanpa proxy, warp proxy]."""
     import os
+    out = [None]
     host = os.getenv("WARP_PROXY", "").strip()
-    if not host:
-        return None
-    if "://" not in host:
-        host = "http://" + host
-    return {"http": host, "https": host}
+    if host:
+        if "://" not in host:
+            host = "http://" + host
+        out.append({"http": host, "https": host})
+    return out
 
 
 def _fetch(url, referer=None, timeout=15):
     last_err = ""
-    try:
-        from curl_cffi import requests as creq
+    for px in _failover_proxies():
         try:
-            px = _warp_proxy()
-            kw = dict(headers={"User-Agent": HI_UA, "Accept": "text/html,application/json,*/*", **({"Referer": referer} if referer else {})}, impersonate="chrome124", timeout=timeout)
-            if px:
-                kw["proxies"] = px
-            r = creq.get(url, **kw)
-            if r.status_code == 200:
-                return r.text
-            if "Just a moment" in r.text or "cf-challenge" in r.text:
-                raise RuntimeError("Blocked by cloudflare (cf-challenge). Coba lagi nanti.")
-            raise RuntimeError(f"HTTP {r.status_code} from {url}")
-        except Exception as e:
-            last_err = str(e)
-    except ImportError:
-        last_err = "curl_cffi missing"
+            from curl_cffi import requests as creq
+            try:
+                kw = dict(headers={"User-Agent": HI_UA, "Accept": "text/html,application/json,*/*", **({"Referer": referer} if referer else {})}, impersonate="chrome124", timeout=timeout)
+                if px:
+                    kw["proxies"] = px
+                r = creq.get(url, **kw)
+                if r.status_code == 200:
+                    return r.text
+                if "Just a moment" in r.text or "cf-challenge" in r.text:
+                    last_err = "Blocked by cloudflare (cf-challenge). Coba lagi nanti."
+                    continue
+                last_err = f"HTTP {r.status_code} from {url}"
+                continue
+            except Exception as e:
+                last_err = str(e)
+                continue
+        except ImportError:
+            last_err = "curl_cffi missing"
+            break
     try:
         import httpx
         with httpx.Client(follow_redirects=True, timeout=timeout, headers={"User-Agent": HI_UA}) as c:
