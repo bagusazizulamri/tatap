@@ -272,6 +272,17 @@ def _try_megaplay(embed: str):
             "referer": origin + "/", "mal_id": "",
             "tracks": subs}
 
+def _order_servers(servers):
+    def score(s):
+        n, e = s["name"].lower(), s["embed"].lower()
+        if "zokoanime" in n and "zokoanime.video" in e:
+            return 0
+        if "megaplay" in e:
+            return 5
+        return 9
+    return sorted(servers, key=score)
+
+
 def _try_embed_legacy(embed: str):
     referer = re.sub(r"^(https?://[^/]*).*", r"\1/", embed)
     page = _fetch(embed)
@@ -324,16 +335,16 @@ def hianime_m3u8(episode_maps, ep_no: int, mode: str = "sub"):
     if not ep_id:
         raise RuntimeError(f"Episode {ep_no} not released!")
     servers_html = _fetch(SERVERS_API.format(ep_id))
-    servers = _parse_servers(servers_html, mode)
+    servers = _order_servers(_parse_servers(servers_html, mode))
     if not servers:
         raise RuntimeError(f"No {mode} server found for ep {ep_no}")
     last_err = ""
     for srv in servers:
         try:
-            if "megaplay" in srv["embed"].lower():
-                got = _try_megaplay(srv["embed"])
-            else:
+            if "zokoanime.video" in srv["embed"].lower():
                 got = _try_embed_legacy(srv["embed"])
+            else:
+                got = _try_megaplay(srv["embed"])
             if got:
                 got["server"] = srv["name"]
                 return got
