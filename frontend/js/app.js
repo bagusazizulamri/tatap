@@ -443,8 +443,22 @@ function playUrl(url, referer, sub, subRef) {
   setTimeout(function () { $("pm-spinner").classList.add("hidden"); }, 15000);
   if (window.Hls && window.Hls.isSupported() && url.indexOf(".m3u8") >= 0) {
     if (window._hls) { try { window._hls.destroy(); } catch (e) {} }
-    var h = new Hls({maxBufferLength: 90, maxMaxBufferLength: 180, maxBufferSize: 120 * 1000 * 1000, startLevel: -1, capLevelToPlayerSize: true, fragLoadingMaxRetry: 6, manifestLoadingMaxRetry: 4, levelLoadingMaxRetry: 4});
+    var h = new Hls({maxBufferLength: 30, maxMaxBufferLength: 60, maxBufferSize: 40 * 1000 * 1000, startLevel: -1, capLevelToPlayerSize: true, fragLoadingMaxRetry: 6, manifestLoadingMaxRetry: 4, levelLoadingMaxRetry: 4, fragLoadingMaxRetryTimeout: 12000, backBufferLength: 30, liveSyncDurationCount: 2, maxFragLookUpTolerance: 0.5, testBandwidth: false, progressive: true, lowLatencyMode: false});
     window._hls = h;
+    h.on(Hls.Events.FRAG_BUFFERED, function () {
+      try {
+        var nxt = null;
+        if (h.levels && h.levelDetails && h.levelDetails.fragments) {
+          var fr = h.levelDetails.fragments;
+          for (var fi = 0; fi < fr.length; fi++) {
+            if (!fr[fi].loaded) { nxt = fr[fi]; break; }
+          }
+        }
+        if (nxt && nxt.url) {
+          fetch("/api/player/video?url=" + encodeURIComponent(nxt.url) + "&referer=" + encodeURIComponent(referer || ""), { mode: "no-cors", priority: "low" }).catch(function () {});
+        }
+      } catch (e) {}
+    });
     h.loadSource(prox);
     h.attachMedia(v);
     h.on(Hls.Events.ERROR, function (ev, d) { if (d && d.fatal) { $("pm-status").textContent = "player error: " + (d.type || "fatal"); } });
