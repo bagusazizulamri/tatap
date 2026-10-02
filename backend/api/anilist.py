@@ -69,3 +69,36 @@ def season_page(name, year, page=1, per_page=25):
     except Exception:
         return {"pageInfo": {"total": 0, "perPage": per_page, "currentPage": page,
                              "lastPage": 1, "hasNextPage": False}, "media": []}
+
+
+SCHEDULE_QUERY = """
+query ($now: Int, $end: Int, $perPage: Int) {
+  Page(perPage: $perPage) {
+    airingSchedules(airingAt_greater: $now, airingAt_lesser: $end, sort: TIME) {
+      id airingAt episode
+      media {
+        id title { romaji english }
+        season seasonYear format
+        coverImage { large medium }
+      }
+    }
+  }
+}
+"""
+
+
+
+def anilist_schedules(now_ts, end_ts, per_page=50):
+    """Episode yang tayang antara now_ts..end_ts (unix detik). Return list schedule.
+    Longgar: anime apapun, tidak difilter by season. Caller yang filter matched."""
+    try:
+        with httpx.Client(timeout=20) as c:
+            r = c.post(ANILIST_URL, json={
+                "query": SCHEDULE_QUERY,
+                "variables": {"now": now_ts, "end": end_ts, "perPage": per_page}
+            }, headers={"Content-Type": "application/json", "User-Agent": UA})
+            if r.status_code != 200:
+                return []
+            return r.json().get("data", {}).get("Page", {}).get("airingSchedules", []) or []
+    except Exception:
+        return []

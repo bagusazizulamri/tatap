@@ -20,7 +20,7 @@ var Tui = (function () {
   function saveCmdHist(h){try{localStorage.setItem("tatap_hist",JSON.stringify(h.slice(0,50)));}catch(e){}}
 
   function cmdUsage(){
-    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :filter [key=val...] | :filter reset\n  :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
+    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :terbaru | :filter [key=val...] | :filter reset\n  :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
   }
 
   function applyFilter(){
@@ -41,6 +41,7 @@ var Tui = (function () {
       case "musim":$("results-title").textContent="Tayang musim ini";break;
       case "lanjutan":$("results-title").textContent="Masih tayang (lanjut)";break;
       case "katalog":$("results-title").textContent="Katalog";break;
+      case "terbaru":$("results-title").textContent="Sedang rilis · episode terbaru";break;
     }
     $("sb-view").textContent="view: "+v;
     loadView();
@@ -51,6 +52,7 @@ var Tui = (function () {
       case "musim":return window.Tatap.seasonNow(S.page);
       case "lanjutan":return window.Tatap.stillAiring(S.page);
       case "katalog":return window.Tatap.browse(S.filter,S.page);
+      case "terbaru":return window.Tatap.upcoming(7);
       case "cari":return null;
     }
     return null;
@@ -89,15 +91,32 @@ var Tui = (function () {
 
   function renderResults(){
     var box=$("results");box.innerHTML="";
-    var isTxt = S.view==="cari";
+    var isTxt = S.view==="cari" || S.view==="terbaru";
     if(!S.items.length){box.innerHTML="<p class='dim'>Kosong.</p>";return;}
     if(isTxt){
+      var nowTs=Math.floor(Date.now()/1000);
       for(var i=0;i<S.items.length;i++){
         (function(a,idx){
-          var d=document.createElement("div");d.className="trow"+(idx===S.sel?" sel":"");
-          d.innerHTML='<span class="tr-num">'+(idx+1)+'</span><span class="tr-title">'+esc(a.title)+'</span><span class="tr-slug">'+esc(a.id)+'</span>';
-          d.addEventListener("click",function(){App.openTitle(a.id,a.title);});
-          box.appendChild(d);
+          if(S.view==="terbaru"){
+            var d=document.createElement("div");
+            var when="";
+            var aheadSec=(a.airing_at||0)-nowTs;
+            var cls="trow trow-up"+(idx===S.sel?" sel":"");
+            if(aheadSec>0&&aheadSec<86400) cls+=" today";
+            else if(aheadSec>=86400&&aheadSec<172800) cls+=" tomorrow";
+            d.className=cls;
+            when=(a.weekday||"")+" "+(a.date||"")+" · "+(a.time||"");
+            d.innerHTML='<span class="tr-day">'+esc(when)+'</span>'
+              +'<span class="tr-ep">ep '+esc(a.episode==null?"?":a.episode)+'</span>'
+              +'<span class="tr-title">'+esc(a.title)+'</span>';
+            d.addEventListener("click",function(){App.openTitle(a.id,a.title);});
+            box.appendChild(d);
+          } else {
+            var d2=document.createElement("div");d2.className="trow"+(idx===S.sel?" sel":"");
+            d2.innerHTML='<span class="tr-num">'+(idx+1)+'</span><span class="tr-title">'+esc(a.title)+'</span><span class="tr-slug">'+esc(a.id)+'</span>';
+            d2.addEventListener("click",function(){App.openTitle(a.id,a.title);});
+            box.appendChild(d2);
+          }
         })(S.items[i],i);
       }
     } else {
@@ -140,7 +159,7 @@ var Tui = (function () {
   }
   function renderSel(){
     var box=$("results");
-    var all=S.view==="cari"?box.querySelectorAll(".trow"):box.querySelectorAll(".poster-card");
+    var all=box.querySelectorAll(".trow");
     for(var i=0;i<all.length;i++){
       var isUnm=all[i].classList.contains("unmapped");
       all[i].classList.toggle("sel",i===S.sel&&!isUnm);
@@ -194,6 +213,7 @@ var Tui = (function () {
       case "musim":setView("musim");break;
       case "lanjutan":setView("lanjutan");break;
       case "katalog":setView("katalog");break;
+      case "terbaru":case "airing":setView("terbaru");break;
       case "filter":
         if(!args||args==="reset"){
           S.filter={};S.page=1;log("filter direset","ok");applyFilter();break;
@@ -293,7 +313,7 @@ var Tui = (function () {
     var inp=$("cmd");inp.selectionStart=inp.selectionEnd=inp.value.length;
   }
   function cycleView(){
-    var ord=["cari","musim","lanjutan","katalog"];
+    var ord=["cari","musim","terbaru","lanjutan","katalog"];
     var idx=ord.indexOf(S.view);setView(ord[(idx+1)%ord.length]);
   }
   function pagePrev(){if(S.page>1){S.page--;loadView();}}

@@ -68,6 +68,16 @@ main{width:100%;margin:0;padding:var(--pad-y) var(--pad-x) calc(var(--status-h) 
 .trow .tr-title{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trow.sel .tr-title{color:var(--acc)}
 .trow .tr-slug{color:var(--dim);font-size:10px;max-width:42%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
+.trow-up{display:grid;grid-template-columns:minmax(140px,18%)minmax(72px,8%)1fr;gap:10px;align-items:baseline}
+.trow-up .tr-day{color:var(--dim);font-size:11px;white-space:nowrap}
+.trow-up .tr-ep{color:var(--acc);font-weight:600;font-size:12px;white-space:nowrap}
+.trow-up .tr-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow-up.today{border-left:2px solid var(--ok);padding-left:6px}
+.trow-up.today .tr-day{color:var(--ok)}
+.trow-up.today .tr-ep{color:var(--ok)}
+.trow-up.tomorrow{border-left:2px solid var(--acc);padding-left:6px}
+.trow-up.tomorrow .tr-day{color:var(--acc)}
+.trow-up.tomorrow .tr-ep{color:var(--acc)}
 
 .poster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(110px,14vw,150px),1fr));gap:clamp(8px,1vw,10px)}
 .poster-card{background:transparent;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;position:relative;outline:none;min-width:0;transition:border-color .12s}
@@ -180,6 +190,9 @@ body.no-ambient #ambient,body.no-ambient #ambient-fallback{display:none}
   .poster-body b{font-size:11px}
   .trow{padding:3px 6px;gap:6px}
   .trow .tr-slug{display:none}
+  .trow-up{grid-template-columns:minmax(96px,32%)minmax(40px,16%)1fr;gap:6px}
+  .trow-up .tr-day{font-size:10px}
+  .trow-up .tr-ep{font-size:11px}
   .sheet-head h2{font-size:14px}
   .ep-grid{grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:5px}
   .ep{font-size:11px;padding:7px 2px;min-height:32px}

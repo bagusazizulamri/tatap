@@ -1,7 +1,7 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import asyncio, subprocess, tempfile
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import JSONResponse, FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
@@ -158,11 +158,74 @@ def _format_to_type(f):
             "ONA": "ONA", "SPECIAL": "Special", "MUSIC": "Music"}.get(f or "", "")
 
 
-def _slug_norm_match(title):
-    import re as _re
-    s = (title or "").lower()
-    s = _re.sub(r"[^\w\s]", " ", s)
-    return _re.sub(r"\s+", " ", s).strip()
+@app.get("/api/upcoming-episodes")
+async def upcoming_episodes(days: int = Query(7, ge=1, le=30)):
+    """Episode yang rilis dalam N hari ke depan (default 7), dari Page.airingSchedules.
+    Longgar: anime apapun yang matched ke hianime. Cache 1 jam."""
+    try:
+        import datetime as _dt
+        now = int(_dt.datetime.utcnow().timestamp())
+        end = now + days * 86400
+        key = f"upcoming|days={days}"
+        hit = await get_browse_cache(key, ttl=3600)
+        if hit:
+            hit["cached"] = True
+            return ok(hit)
+
+        loop = asyncio.get_running_loop()
+        schedules = await loop.run_in_executor(None, lambda: al.anilist_schedules(now, end, 50))
+
+        items_out = []
+        for s in schedules:
+            m = s.get("media") or {}
+            title = (m.get("title") or {}).get("english") or (m.get("title") or {}).get("romaji") or ""
+            if not title:
+                continue
+            slug = await get_slug_map(title)
+            if not slug:
+                try:
+                    res = await loop.run_in_executor(None, lambda t=title: hi.hianime_search(t, 5))
+                    if res:
+                        rn = _slug_norm_match(title)
+                        picked = None
+                        for c in res:
+                            if c.get("title", "").lower() == rn.lower():
+                                picked = c; break
+                        if not picked:
+                            picked = res[0]
+                        await set_slug_map(title, picked["id"])
+                        slug = picked["id"]
+                except Exception:
+                    slug = None
+            if not slug:
+                continue
+
+            airing_dt = _dt.datetime.fromtimestamp(s["airingAt"])
+            cover = (m.get("coverImage") or {})
+            items_out.append({
+                "id": slug,
+                "title": title,
+                "anilist_id": m.get("id"),
+                "poster": cover.get("large") or cover.get("medium") or "",
+                "episode": s.get("episode"),
+                "airing_at": int(s["airingAt"]),
+                "airing_at_iso": airing_dt.isoformat() + "Z",
+                "weekday": airing_dt.strftime("%a"),
+                "date": airing_dt.strftime("%d %b"),
+                "time": airing_dt.strftime("%H:%M"),
+                "matched": True,
+            })
+
+        result = {
+            "items": items_out,
+            "days": days,
+            "total": len(items_out),
+            "cached": False,
+        }
+        await set_browse_cache(key, result)
+        return ok(result)
+    except Exception as e:
+        return fail(str(e))
 
 @app.get("/api/browse")
 async def browse_ep(
@@ -229,6 +292,11 @@ async def proxy_video(url: str = Query(""), referer: str = Query("")):
     from fastapi.responses import StreamingResponse as _SR
     if not url.startswith("http"):
         return Response(status_code=400)
+    # Host yang terbukti RST dari region kita (Oct 2026) — tolak cepat agar HLS.js
+    # deteksi error dan user tidak lihat hang di "Buffering...".
+    if "dramahot.top" in url:
+        return Response(status_code=502, content=b"upstream unreachable (dramahot.top)",
+                        media_type="text/plain")
     from api.hianime import SEG_RE, SEG_KEY, SEG_IV, STRIP_BYTES, STRIP_RE
     import re as _re
     m = SEG_RE.search(url)
@@ -268,11 +336,19 @@ def _client():
 async def _pipe_video(url: str, referer: str):
     import urllib.parse as _up
     from api.hianime import STRIP_BYTES as _SB, STRIP_RE as _SR2
+    # Host yang terbukti RST dari region kita (Oct 2026) — tolak cepat agar HLS.js
+    # deteksi error dan fallback, daripada silently stream 0 byte.
+    if "dramahot.top" in url:
+        raise HTTPException(status_code=502, detail="upstream unreachable (dramahot.top)")
     c = _client()
+    upstream_status = None
     try:
         async with c.stream("GET", url,
                             headers={"User-Agent": HI_UA, **({"Referer": referer} if referer else {})}) as r:
+            upstream_status = r.status_code
             ctype = r.headers.get("content-type", "")
+            if upstream_status >= 400:
+                raise HTTPException(status_code=502, detail=f"upstream {upstream_status}")
             # playlist kecil: baca penuh + tulis ulang agar segmen tetap lewat proxy
             if "mpegurl" in ctype or url.endswith(".m3u8"):
                 body = await r.aread()
@@ -307,8 +383,12 @@ async def _pipe_video(url: str, referer: str):
                         continue
                 if chunk:
                     yield chunk
-    except Exception:
-        return
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Upstream error (RST, timeout, DNS) — surface ke client sebagai 502
+        # agar HLS.js deteksi networkError, bukan hang di buffering.
+        raise HTTPException(status_code=502, detail=f"upstream error: {type(e).__name__}")
 
 @app.get("/favicon.ico")
 async def favicon():

@@ -24,6 +24,7 @@ Status HTTP selalu 200 (lihat `ok()`/`fail()` di main.py).
 |---|---|---|
 | `GET /api/search?q=` | `{results:[{id,title}], cached}` | HANYA id+title. Tidak ada poster. |
 | `GET /api/seasonal?which=now\|prev&page=1` | `{season, year, items:[...], total_pages=1}` | Sumber: AniList GraphQL. Judul dicocokkan ke slug hianime via search; item tanpa match punya `id=""` & `matched:false`. Pagination dikunci 1 halaman (AniList over-reports). |
+| `GET /api/upcoming-episodes?days=7` | `{items:[{id,title,episode,airing_at,airing_at_iso,weekday,date,time,poster}], days, total, cached}` | Episode yang rilis dalam N hari ke depan (default 7, max 30). Filter ke anime matched hianime via `slug_map`. Cache 1 jam. |
 | `GET /api/catalog?page=` | `{items:[Anime], page, total_pages, cached}` | |
 | `GET /api/browse?{filter}&page=` | `{items:[Anime], page, total_pages, cached}` | |
 | `GET /api/season-now?page=` | sama browse + `season` | |
@@ -46,6 +47,15 @@ Objek `Anime` (dari browse): `{id, title, poster, sub, dub, eps, type, duration,
 - AniList `/seasons/{year}/{value}` sering kosong untuk season lampau. Lebih aman via GraphQL `Page(season:..., seasonYear:...)` di endpoint kita.
 - AniList `PageInfo` over-reports untuk query season-filter (contoh Fall 2026 mengembalikan `total:5000, lastPage:200`). Endpoint `/api/seasonal` memaksa `total_pages=1`.
 - Slug lookup ke hianime via `hianime_search(title, 5)`; hasil pertama dipakai kalau tidak ada exact match. Cache disimpan di tabel `slug_map` TTL 7 hari.
+- AniList `airingSchedules` harus via `Page.airingSchedules(...)` (bukan `AiringSchedule` sebagai satu item). `Page` adalah connection, `AiringSchedule` adalah satu entity.
+
+### Smart-fallback server (per Oktober 2026)
+- Tier urutan: `megaplay` (HD-1, Vidstream-2) → `vidtube.site` (VidPlay-1, juga pakai `window.__P`) → `zokoanime.video` (pakai CDN `hls.dramahot.top`).
+- `hls.dramahot.top` sering RST dari region kita — ditandai di `_DEAD_HOSTS` dan negative-cache 1 jam via `_mark_dead()`.
+- Tiap success path panggil `_probe_master()` (HEAD/GET kecil) sebelum return. Kalau probe gagal → raise → caller smart-fallback ke server berikutnya.
+- Megaplay sukses pakai CDN `fetch.nexabloom.top` + `fn5an.wintergrove.space` — routeable.
+- Proxy endpoint `/api/player/video` tolak upstream `dramahot.top` langsung dengan HTTP 502 (HLS.js deteksi `networkError`/`fragLoadError` daripada hang di buffering).
+- Backend tidak boleh return m3u8 dari host mati (`dramahot.top`) — probe di `_try_embed_legacy` raise exception agar caller skip server tersebut.
 
 ## 3. Model state frontend
 

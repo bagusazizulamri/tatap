@@ -1,5 +1,5 @@
 """Port alur browse-and-play hianime.at (terinspirasi cara kerja pemain CLI)."""
-import os, sys, re, json, base64, html as htmlmod
+import os, sys, re, json, base64, html as htmlmod, threading, time as _time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import HI_BASE, HI_UA, XOR_KEY
 
@@ -7,6 +7,76 @@ SEARCH_API = HI_BASE + "/search?keyword={}"
 EPISODES_API = HI_BASE + "/api/theme/episode/list/{}"
 SERVERS_API = HI_BASE + "/api/theme/episode/servers?episodeId={}"
 BROWSE_API = HI_BASE + "/browse"
+
+# Host CDN yang terbukti mati dari region kita (Oct 2026). Diblokir otomatis di
+# smart-fallback agar tidak menyita waktu probe di tiap request.
+_DEAD_HOSTS = {
+    "dramahot.top",         # ZokoAnime CDN (TLS RST)
+}
+
+# Negative cache per host: host terakhir gagal untuk episode tertentu. TTL 1 jam.
+_neg_lock = threading.Lock()
+_neg_cache = {}  # host -> expires_at_epoch
+
+
+def _is_dead_host(host):
+    base = (host or "").lower()
+    for d in _DEAD_HOSTS:
+        if d in base:
+            return True
+    with _neg_lock:
+        exp = _neg_cache.get(base)
+        if exp and exp > _time.time():
+            return True
+    return False
+
+
+def _mark_dead(host, ttl=3600):
+    base = (host or "").lower()
+    with _neg_lock:
+        _neg_cache[base] = int(_time.time()) + ttl
+
+
+def _host_from(url):
+    m = re.match(r"https?://([^/]+)", url or "", re.I)
+    return m.group(1).lower() if m else ""
+
+
+def _probe_master(master_url, referer):
+    """Probe cepat master.m3u8: TLS-RST / 4xx / 5xx raise. Sukses = dapat 1+ byte.
+    Pakai curl_cffi kalau tersedia, fallback ke httpx."""
+    if not master_url or not master_url.startswith("http"):
+        raise RuntimeError("invalid master url")
+    host = _host_from(master_url)
+    if _is_dead_host(host):
+        raise RuntimeError(f"host dead: {host}")
+    headers = {"User-Agent": HI_UA,
+               **({"Referer": referer} if referer else {})}
+    status, body = None, None
+    try:
+        from curl_cffi import requests as creq
+        kw = dict(headers=headers, impersonate="chrome124", timeout=10)
+        r = creq.get(master_url, **kw)
+        status, body = r.status_code, r.content
+    except ImportError:
+        # Fallback ke _fetch() yang sudah handle httpx fallback.
+        try:
+            text = _fetch(master_url, referer=referer, timeout=10)
+            status, body = 200, text.encode() if isinstance(text, str) else text
+        except Exception as e:
+            _mark_dead(host)
+            raise RuntimeError(f"probe fail {host}: {type(e).__name__}")
+    except Exception as e:
+        _mark_dead(host)
+        raise RuntimeError(f"probe fail {host}: {type(e).__name__}")
+    if status is None or status >= 400:
+        if status and status >= 500:
+            _mark_dead(host)
+        raise RuntimeError(f"upstream {status} for {host}")
+    if not body:
+        _mark_dead(host)
+        raise RuntimeError(f"empty response for {host}")
+    return body
 
 FILTERS = {
     "type": ["tv", "movie", "ova", "ona", "special", "music"],
@@ -273,6 +343,12 @@ def _try_megaplay(embed: str):
     variants.sort(key=lambda v: int(re.sub(r"\D", "", v["q"]) or 0), reverse=True)
     if not variants:
         variants = [{"q": "auto", "url": master}]
+    # Probe master — kalau host mati, return None (bukan raise) supaya caller
+    # smart-fallback ke server berikutnya.
+    try:
+        _probe_master(master, referer=origin + "/")
+    except Exception as e:
+        raise RuntimeError(f"megaplay probe: {e}")
     return {"master": master, "variants": variants,
             "sub": (default.get("src") or default.get("file")) if default else None,
             "sub_lang": (default.get("label") or default.get("lang")) if default else None,
@@ -296,7 +372,7 @@ def _order_servers(servers):
 def _try_embed_legacy(embed: str):
     referer = re.sub(r"^(https?://[^/]*).*", r"\1/", embed)
     page = _fetch(embed)
-    m = re.search(r'window\.__P="([^"]*)"', page)
+    m = re.search(r'window\.__P\s*=\s*"([^"]*)"', page)
     if not m:
         raise RuntimeError("window.__P not found")
     try:
@@ -308,27 +384,16 @@ def _try_embed_legacy(embed: str):
         master = cfg["sources"][0].get("src", "")
     if ".m3u8" not in master:
         return None
+    # Probe master — kalau host mati, return None agar caller fall-through.
+    try:
+        _probe_master(master, referer=referer)
+    except Exception as e:
+        raise RuntimeError(f"zokoanime probe: {e}")
+    # Pakai host CDN host-driven resolution (HD-1 pakai nexabloom.wintergrove).
+    # Subs & variants benerin tanpa parse playlist (hanya BFS master).
     subs = cfg.get("subtitles") or []
     default = next((s for s in subs if s.get("default")), subs[0] if subs else None)
-    variants = []
-    try:
-        text = _fetch(master, referer=referer)
-        base = master.rsplit("/", 1)[0] + "/"
-        lines = text.splitlines()
-        for i, ln in enumerate(lines):
-            if ln.startswith("#EXT-X-STREAM-INF"):
-                rm = re.search(r"RESOLUTION=\d+x(\d+)", ln)
-                q = (rm.group(1) + "p") if rm else "auto"
-                url = (lines[i + 1].strip() if i + 1 < len(lines) else "")
-                if url and not url.startswith("#"):
-                    if not url.startswith("http"):
-                        url = base + url
-                    variants.append({"q": q, "url": url})
-    except Exception:
-        pass
-    variants.sort(key=lambda v: int(re.sub(r"\D", "", v["q"]) or 0), reverse=True)
-    if not variants:
-        variants = [{"q": "auto", "url": master}]
+    variants = [{"q": "auto", "url": master}]
     mal_id = ""
     mm = re.search(r"/mal/([0-9]+)/", embed)
     if mm:
@@ -348,19 +413,46 @@ def hianime_m3u8(episode_maps, ep_no: int, mode: str = "sub"):
     servers = _order_servers(_parse_servers(servers_html, mode))
     if not servers:
         raise RuntimeError(f"No {mode} server found for ep {ep_no}")
+
+    # Smart-fallback tier: megaplay dulu (HD-1, Vidstream-2), kalau gagal ke VidToglap
+    # (vidtube.site), terakhir ke ZokoAnime.
+    def tier_of(srv):
+        e = srv["embed"].lower()
+        if "megaplay" in e:
+            return 0
+        if "vidtube.site" in e:
+            return 1
+        if "zokoanime.video" in e:
+            return 2
+        return 3
+
+    servers_sorted = sorted(servers, key=lambda sr: (tier_of(sr), sr["name"]))
     last_err = ""
-    for srv in servers:
+    for srv in servers_sorted:
+        # Skip host mati (negative cache) tanpa re-fetch.
+        if _is_dead_host(_host_from(srv["embed"])):
+            last_err = f"skip {srv['name']} (dead host)"
+            continue
         try:
-            if "zokoanime.video" in srv["embed"].lower():
+            embed_low = srv["embed"].lower()
+            if "zokoanime.video" in embed_low:
+                got = _try_embed_legacy(srv["embed"])
+            elif "vidtube.site" in embed_low or "vidplay" in srv["name"].lower():
+                # VidPlay-1 (vidtube.site) juga pakai pola window.__P.
                 got = _try_embed_legacy(srv["embed"])
             else:
                 got = _try_megaplay(srv["embed"])
             if got:
                 got["server"] = srv["name"]
                 return got
-            last_err = f"embed {srv['name']} gave no m3u8"
+            last_err = f"{srv['name']} gave no m3u8"
         except Exception as e:
-            last_err = str(e)
+            last_err = f"{srv['name']}: {e}"
+            # Tandai host mati kalau error-nya network (RST, ConnectError, probe fail).
+            msg = str(e).lower()
+            if any(t in msg for t in ("rst", "reset", "connect", "timeout", "dead", "upstream", "probe fail")):
+                _mark_dead(_host_from(srv["embed"]))
+            continue
     raise RuntimeError(last_err or "m3u8 not found")
 
 def select_quality(variants, quality: str = "best"):

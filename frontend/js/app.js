@@ -168,7 +168,21 @@ function playUrl(url,referrer,sub,subRef){
     });
     h.loadSource(prox);
     h.attachMedia(v);
-    h.on(Hls.Events.ERROR,function(ev,d){if(d&&d.fatal){$("pm-status").textContent="player error: "+(d.type||"fatal");}});
+    h.on(Hls.Events.ERROR,function(ev,d){
+      if(!d)return;
+      if(d.fatal){
+        $("pm-status").textContent="player error: "+(d.type||"fatal")+" — "+(d.details||"");
+        try{h.destroy();}catch(_){}
+        return;
+      }
+      // Non-fatal: fragLoadError / manifestLoadError / networkError — kalau host
+      // mati (dramahot.top RST), proxy return 502; HLS.js fire ini. Beri pesan
+      // jelas di spinner & stop setelah beberapa retry agar user tidak hang.
+      var n=(h.config&&h.config.fragLoadingMaxRetry)||4;
+      if(d.details==="fragLoadError"||d.details==="manifestLoadError"||d.details==="networkError"){
+        $("pm-status").textContent="gagal load: "+(d.details||"network");
+      }
+    });
   }else{
     v.src=url.indexOf(".m3u8")>=0?prox:url;
   }
