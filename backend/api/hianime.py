@@ -180,13 +180,14 @@ def _parse_servers(html: str, mode: str):
             continue
         servers.append({"name": mn.group(1) if mn else "unknown", "embed": embed})
     def score(s):
-        if "zokoanime" in s["name"].lower():
+        n, e = s["name"].lower(), s["embed"].lower()
+        if "megaplay" in e:
             return 0
-        if "zokoanime.video" in s["embed"]:
-            return 1
-        if "megaplay" in s["embed"].lower():
-            return 9
-        return 5
+        if "zokoanime.video" in e:
+            return 5
+        if "zokoanime" in n:
+            return 6
+        return 9
     servers.sort(key=score)
     return servers
 
@@ -281,10 +282,13 @@ def _try_megaplay(embed: str):
 def _order_servers(servers):
     def score(s):
         n, e = s["name"].lower(), s["embed"].lower()
-        if "zokoanime" in n and "zokoanime.video" in e:
-            return 0
+        # Megaplay dulu: lebih stabil & tidak bergantung CDN dramahot.top.
         if "megaplay" in e:
+            return 0
+        if "zokoanime.video" in e:
             return 5
+        if "zokoanime" in n:
+            return 6
         return 9
     return sorted(servers, key=score)
 

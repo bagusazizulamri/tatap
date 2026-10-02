@@ -6,8 +6,9 @@ from fastapi.responses import JSONResponse, FileResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from config import APP_PORT, APP_HOST, HI_BASE, HI_UA
-from database import init_db, get_search_cache, set_search_cache, get_episode_cache, set_episode_cache, add_history, get_history, clear_history, get_setting, set_setting, get_browse_cache, set_browse_cache
+from database import init_db, get_search_cache, set_search_cache, get_episode_cache, set_episode_cache, add_history, get_history, clear_history, get_setting, set_setting, get_browse_cache, set_browse_cache, get_slug_map, set_slug_map
 from api import hianime as hi
+from api import anilist as al
 import httpx
 
 frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend")
@@ -72,51 +73,96 @@ async def catalog(page: int = Query(1, ge=1, le=100)):
     except Exception as e:
         return fail(str(e))
 
-@app.get("/api/season-now")
-async def season_now(page: int = Query(1, ge=1, le=100)):
-    """Sedang tayang musim ini."""
+@app.get("/api/seasonal")
+async def seasonal(which: str = Query("now", pattern="^(now|prev)$"),
+                   page: int = Query(1, ge=1, le=1)):
+    """Daftar anime musim saat ini (now) atau satu musim sebelumnya (prev),
+    diambil dari AniList. Judul dicocokkan ke slug hianime via search.
+    AniList pagination over-reports setelah page 1, jadi endpoint dikunci 1 halaman."""
     try:
         import datetime as _dt
-        m = _dt.date.today().month
-        season = "winter" if m in (1, 2, 3) else "spring" if m in (4, 5, 6) else "summer" if m in (7, 8, 9) else "fall"
-        key = f"season-now|{season}|page={page}"
+        year_cur, name_cur = al.current_season()
+        if which == "now":
+            season_name, season_year = name_cur, year_cur
+        else:
+            season_year, season_name = al.prev_season(name_cur, year_cur)
+
+        key = f"seasonal|{which}|page={page}"
         hit = await get_browse_cache(key)
         if hit:
             hit["cached"] = True
-            hit["season"] = season
+            hit["season"] = season_name
+            hit["year"] = season_year
             return ok(hit)
+
         loop = asyncio.get_running_loop()
-        res = await loop.run_in_executor(None, lambda: hi.browse({"status": "releasing", "season": season}, page))
-        res["season"] = season
-        await set_browse_cache(key, res)
-        res["cached"] = False
-        return ok(res)
+        page_data = await loop.run_in_executor(
+            None, lambda: al.season_page(season_name, season_year, page, 25))
+
+        items_out = []
+        for m in page_data.get("media", []):
+            title = (m.get("title") or {}).get("english") or (m.get("title") or {}).get("romaji") or ""
+            if not title:
+                continue
+            slug = await get_slug_map(title)
+            if slug is None:
+                try:
+                    res = await loop.run_in_executor(None, lambda t=title: hi.hianime_search(t, 5))
+                    picked = None
+                    if res:
+                        rn = _slug_norm_match(title)
+                        for c in res:
+                            if c.get("title", "").lower() == rn.lower():
+                                picked = c; break
+                        if not picked and res:
+                            picked = res[0]
+                        if picked:
+                            await set_slug_map(title, picked["id"])
+                            slug = picked["id"]
+                except Exception:
+                    slug = None
+            cover = (m.get("coverImage") or {})
+            items_out.append({
+                "id": slug or "",
+                "title": title,
+                "poster": cover.get("large") or cover.get("medium") or "",
+                "type": _format_to_type(m.get("format")),
+                "eps": m.get("episodes") or 0,
+                "duration": (str(m.get("duration") or "") + "m") if m.get("duration") else "",
+                "score": (m.get("averageScore") or 0) / 10.0 if m.get("averageScore") else 0,
+                "anilist_id": m.get("id"),
+                "site": m.get("siteUrl") or "",
+                "matched": bool(slug),
+            })
+
+        page_info = page_data.get("pageInfo") or {}
+        result = {
+            "season": season_name,
+            "year": season_year,
+            "which": which,
+            "items": items_out,
+            "page": 1,
+            "total_pages": 1,
+            "total_items": len(items_out),
+            "has_next": False,
+            "cached": False,
+        }
+        await set_browse_cache(key, result)
+        return ok(result)
     except Exception as e:
         return fail(str(e))
 
-@app.get("/api/still-airing")
-async def still_airing(page: int = Query(1, ge=1, le=100)):
-    """Masih tayang tapi mulai musim lalu (lanjutan)."""
-    try:
-        import datetime as _dt
-        order = ["winter", "spring", "summer", "fall"]
-        m = _dt.date.today().month
-        cur = 0 if m in (1, 2, 3) else 1 if m in (4, 5, 6) else 2 if m in (7, 8, 9) else 3
-        prev = order[(cur - 1) % 4]
-        key = f"still-airing|{prev}|page={page}"
-        hit = await get_browse_cache(key)
-        if hit:
-            hit["cached"] = True
-            hit["season"] = prev
-            return ok(hit)
-        loop = asyncio.get_running_loop()
-        res = await loop.run_in_executor(None, lambda: hi.browse({"status": "releasing", "season": prev}, page))
-        res["season"] = prev
-        await set_browse_cache(key, res)
-        res["cached"] = False
-        return ok(res)
-    except Exception as e:
-        return fail(str(e))
+
+def _format_to_type(f):
+    return {"TV": "TV", "TV_SHORT": "TV", "MOVIE": "Movie", "OVA": "OVA",
+            "ONA": "ONA", "SPECIAL": "Special", "MUSIC": "Music"}.get(f or "", "")
+
+
+def _slug_norm_match(title):
+    import re as _re
+    s = (title or "").lower()
+    s = _re.sub(r"[^\w\s]", " ", s)
+    return _re.sub(r"\s+", " ", s).strip()
 
 @app.get("/api/browse")
 async def browse_ep(

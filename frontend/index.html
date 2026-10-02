@@ -1,85 +1,78 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#08090c">
 <title>Tatap — nonton santai di lokal</title>
 <link rel="stylesheet" href="/css/style.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230e7490'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='monospace'>T</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='12' fill='%230e7490'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='monospace'>T</text></svg>">
 </head>
 <body>
 <div id="crt" aria-hidden="true"></div>
 <div id="bg-glow" aria-hidden="true"></div>
 
-<header class="topbar">
-  <div class="brand" id="brand-home" title="Home">
-    <span class="brand-mark">▶</span>
-    <span class="brand-name">TATAP</span>
-    <span class="brand-tag">lokal</span>
-  </div>
-  <div class="search-wrap">
-    <span class="search-icon">⌕</span>
-    <input id="q" placeholder="Cari anime…  (cth: frieren, solo leveling)" autocomplete="off" spellcheck="false">
-    <button id="q-clear" class="icon-btn hidden" title="Bersihkan">✕</button>
-    <kbd>/</kbd>
-  </div>
-  <div class="top-actions">
-    <label class="switch" title="Efek CRT scanlines"><input type="checkbox" id="tgl-crt" checked><span class="sw"></span>CRT</label>
-    <label class="switch" title="Ambient light di belakang player"><input type="checkbox" id="tgl-ambient" checked><span class="sw"></span>AMBIENT</label>
-    <span id="health" class="health" title="Status hianime.at">…</span>
-  </div>
+<header class="tui-head">
+  <span class="brand-name">TATAP</span>
+  <span class="brand-ver">v1.0</span>
+  <span class="dim tui-sep">·</span>
+  <span class="dim tui-tag">nonton santai di lokal</span>
+  <span class="head-gap"></span>
+  <span id="health" class="health">…</span>
 </header>
 
 <main>
-  <nav class="tabs" id="tabs">
-    <button data-tab="home" class="active">Cari</button>
-    <button data-tab="season">Tayang Musim Ini</button>
-    <button data-tab="still">Masih Tayang</button>
-    <button data-tab="catalog">Katalog</button>
-  </nav>
-
   <section id="continue-sec" class="hidden">
     <div class="sec-head"><h2>Lanjutkan menonton</h2><button class="link-btn" id="clear-hist">hapus</button></div>
     <div id="continue-row" class="hscroll"></div>
   </section>
 
   <section id="lane-season-sec" class="hidden">
-    <div class="sec-head"><h2 id="lane-season-title">Tayang musim ini</h2><button class="link-btn" data-goto="season">lihat semua</button></div>
+    <div class="sec-head"><h2 id="lane-season-title">Tayang musim ini</h2></div>
     <div id="lane-season" class="hscroll"></div>
   </section>
 
   <section id="lane-still-sec" class="hidden">
-    <div class="sec-head"><h2>Masih tayang (mulai musim lalu)</h2><button class="link-btn" data-goto="still">lihat semua</button></div>
+    <div class="sec-head"><h2>Masih tayang (lanjut)</h2></div>
     <div id="lane-still" class="hscroll"></div>
   </section>
 
   <section id="search-sec">
+    <div id="log" class="log hidden"></div>
     <div class="sec-head">
-      <h2 id="results-title">Mulai pencarian di atas</h2>
-      <span id="results-meta" class="dim"></span>
+      <h2 id="results-title">siap</h2>
+      <span id="results-meta" class="dim small"></span>
     </div>
-    <div id="recent-chips" class="chips"></div>
-    <div id="filter-bar" class="hidden">
-      <select id="f-type"><option value="">Tipe: semua</option><option value="tv">TV</option><option value="movie">Movie</option><option value="ova">OVA</option><option value="ona">ONA</option><option value="special">Special</option><option value="music">Music</option></select>
-      <select id="f-status"><option value="">Status: semua</option><option value="releasing">Sedang tayang</option><option value="completed">Tamat</option><option value="not_yet_aired">Belum tayang</option></select>
-      <select id="f-season"><option value="">Musim: semua</option><option value="winter">Winter</option><option value="spring">Spring</option><option value="summer">Summer</option><option value="fall">Fall</option></select>
-      <select id="f-language"><option value="">Bahasa: semua</option><option value="sub">SUB</option><option value="dub">DUB</option></select>
-      <select id="f-sort"><option value="">Urut: populer</option><option value="popularity">Populer</option><option value="trending">Trending</option><option value="score">Skor</option><option value="latest">Terbaru</option><option value="az">A-Z</option><option value="most_favorite">Favorit</option></select>
-      <select id="f-score"><option value="">Skor: semua</option><option value="9">9+</option><option value="8">8+</option><option value="7">7+</option><option value="6">6+</option></select>
-      <button id="f-apply">Terapkan</button>
-      <button id="f-reset" class="icon-btn">Reset</button>
-    </div>
-    <div id="results" class="grid"></div>
+    <div id="results"></div>
     <div id="pager" class="pager hidden">
-      <button id="pg-prev">Sebelumnya</button>
       <span id="pg-info" class="dim small"></span>
-      <button id="pg-next">Berikutnya</button>
     </div>
     <div id="empty-state" class="empty">
       <div class="empty-art">[ ]</div>
-      <p>Ketik judul anime lalu tekan <b>Enter</b>.<br><span class="dim">Navigasi: atas bawah pilih, Enter buka, Esc tutup</span></p>
+      <p>ketik judul lalu <b>Enter</b>. <span class="dim">(:bantuan untuk daftar perintah)</span></p>
     </div>
   </section>
 </main>
+
+<div id="help-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+  <div class="help-sheet">
+    <div class="sec-head"><h2>perintah</h2><button class="link-btn" id="help-close">tutup</button></div>
+    <pre id="help-body" class="help-body"></pre>
+  </div>
+</div>
+
+<div class="prompt-line">
+  <span class="prompt-ps1">tatap$</span>
+  <input id="cmd" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="cari judul, atau :perintah">
+  <span class="caret" aria-hidden="true"></span>
+</div>
+<div class="statusbar">
+  <span><b>↑↓</b> pilih</span>
+  <span><b>enter</b> buka</span>
+  <span><b>tab</b> ganti tampilan</span>
+  <span><b>[ ]</b> halaman</span>
+  <span><b>esc</b> reset</span>
+  <span><b>:bantuan</b> perintah</span>
+  <span id="sb-view" class="sb-view"></span>
+</div>
 
 <!-- TITLE / EPISODE MODAL -->
 <div id="title-modal" class="overlay hidden" role="dialog" aria-modal="true">
@@ -135,6 +128,7 @@
 
 <script src="/js/vendor/hls.min.js"></script>
 <script src="/js/api.js"></script>
+<script src="/js/term.js"></script>
 <script src="/js/app.js"></script>
 </body>
 </html>

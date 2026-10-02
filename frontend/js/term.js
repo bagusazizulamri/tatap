@@ -1,0 +1,330 @@
+var Tui = (function () {
+  var S = {view:"cari",items:[],sel:-1,page:1,total:1,filter:{},promptFoc:false};
+  var MAXLOG = 200;
+
+  function $(id){return document.getElementById(id);}
+  function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+  function isModalOpen(){return !$("title-modal").classList.contains("hidden") || !$("player-modal").classList.contains("hidden");}
+
+  function log(msg,kind){
+    var box=$("log");box.classList.remove("hidden");
+    var d=document.createElement("div");d.className="log-line"+(kind?" log-"+kind:"");
+    d.textContent=msg;box.appendChild(d);
+    while(box.children.length>MAXLOG) box.removeChild(box.firstChild);
+    box.scrollTop=box.scrollHeight;
+  }
+  function clearLog(){$("log").classList.add("hidden");$("log").innerHTML="";}
+
+  function loadRecents(){try{return JSON.parse(localStorage.getItem("tatap_recent")||"[]");}catch(e){return [];}}
+  function loadCmdHist(){try{return JSON.parse(localStorage.getItem("tatap_hist")||"[]");}catch(e){return [];}}
+  function saveCmdHist(h){try{localStorage.setItem("tatap_hist",JSON.stringify(h.slice(0,50)));}catch(e){}}
+
+  function cmdUsage(){
+    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :filter [key=val...] | :filter reset\n  :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
+  }
+
+  function applyFilter(){
+    if(S.view!=="katalog"){log("filter hanya di katalog","err");return;}
+    S.page=1;loadView();
+  }
+
+  function setView(v){
+    S.view=v;S.page=1;S.sel=-1;S.items=[];clearLog();
+    $("empty-state").style.display="none";
+    $("results").innerHTML="";$("results-title").textContent="memuat...";$("results-meta").textContent="";
+    $("pager").classList.add("hidden");
+    $("lane-season-sec").classList.toggle("hidden",v!=="musim");
+    $("lane-still-sec").classList.toggle("hidden",v!=="lanjutan");
+    $("continue-sec").classList.add("hidden");
+    switch(v){
+      case "cari":$("results-title").textContent="cari judul";$("empty-state").style.display="";break;
+      case "musim":$("results-title").textContent="Tayang musim ini";break;
+      case "lanjutan":$("results-title").textContent="Masih tayang (lanjut)";break;
+      case "katalog":$("results-title").textContent="Katalog";break;
+    }
+    $("sb-view").textContent="view: "+v;
+    loadView();
+  }
+
+  function apiCall(name){
+    switch(name){
+      case "musim":return window.Tatap.seasonNow(S.page);
+      case "lanjutan":return window.Tatap.stillAiring(S.page);
+      case "katalog":return window.Tatap.browse(S.filter,S.page);
+      case "cari":return null;
+    }
+    return null;
+  }
+
+  async function loadView(){
+    if(S.view==="cari"){renderRecents();return;}
+    try{
+      var r=await apiCall(S.view);
+      if(!r||!r.success){log("gagal load: "+(r&&r.error||"??"),"err");return;}
+      var d=r.data||{};
+      S.items=d.items||[];S.page=d.page||1;S.total=d.total_pages||1;S.sel=-1;
+      var label=$("results-title").textContent;
+      if(d.season) label+=" · "+String(d.season).toUpperCase();
+      $("results-title").textContent=label;
+      $("results-meta").textContent=S.items.length+" item"+(d.cached?" · cached":"");
+      renderResults();renderPager();
+    }catch(e){log("err: "+e.message,"err");}
+  }
+
+  function renderRecents(){
+    S.items=[];S.sel=-1;var r=loadRecents();
+    var box=$("results");box.innerHTML="";
+    if(!r.length){$("empty-state").style.display="";$("results-title").textContent="siap";$("results-meta").textContent="";$("pager").classList.add("hidden");return;}
+    $("empty-state").style.display="none";
+    $("results-title").textContent="saran pencarian";$("results-meta").textContent=r.length+" recent";
+    for(var i=0;i<r.length;i++){
+      (function(q){
+        var d=document.createElement("div");d.className="trow";
+        d.innerHTML='<span class="tr-num">'+(i+1)+'</span><span class="tr-title">'+esc(q)+'</span>';
+        d.addEventListener("click",function(){startSearch(q);});
+        box.appendChild(d);
+      })(r[i]);
+    }
+  }
+
+  function renderResults(){
+    var box=$("results");box.innerHTML="";
+    var isTxt = S.view==="cari";
+    if(!S.items.length){box.innerHTML="<p class='dim'>Kosong.</p>";return;}
+    if(isTxt){
+      for(var i=0;i<S.items.length;i++){
+        (function(a,idx){
+          var d=document.createElement("div");d.className="trow"+(idx===S.sel?" sel":"");
+          d.innerHTML='<span class="tr-num">'+(idx+1)+'</span><span class="tr-title">'+esc(a.title)+'</span><span class="tr-slug">'+esc(a.id)+'</span>';
+          d.addEventListener("click",function(){App.openTitle(a.id,a.title);});
+          box.appendChild(d);
+        })(S.items[i],i);
+      }
+    } else {
+      var grid=document.createElement("div");grid.className="poster-grid";
+      for(var j=0;j<S.items.length;j++){
+        (function(a,idx){
+          var isUnavail=!a.id;
+          var d=document.createElement("div");
+          d.className="poster-card"+(idx===S.sel?" sel":"")+(isUnavail?" unmapped":"");
+          d.tabIndex=0;
+          var idxSpan=document.createElement("span");idxSpan.className="pc-idx";idxSpan.textContent=String(idx+1).padStart(2,"0");d.appendChild(idxSpan);
+          if(isUnavail){var bad=document.createElement("span");bad.className="pc-bad";bad.textContent="?";bad.title="Tidak ada di hianime";d.appendChild(bad);}
+          if(a.poster){var im=document.createElement("img");im.loading="lazy";im.alt=a.title;im.src=a.poster;im.onerror=function(){this.style.display="none";};d.appendChild(im);}
+          var body=document.createElement("div");body.className="poster-body";
+          var b=document.createElement("b");b.textContent=a.title;body.appendChild(b);
+          var meta=document.createElement("div");meta.className="poster-meta";
+          var m=[];if(a.type)m.push(a.type);if(a.eps)m.push(a.eps+" ep");if(a.sub)m.push("SUB "+a.sub);if(a.dub)m.push("DUB "+a.dub);if(a.duration)m.push(a.duration);if(a.score)m.push(a.score.toFixed(1));meta.textContent=m.join(" · ");body.appendChild(meta);
+          d.appendChild(body);
+          if(!isUnavail){
+            d.addEventListener("click",function(){App.openTitle(a.id,a.title);});
+          }
+          grid.appendChild(d);
+        })(S.items[j],j);
+      }
+      box.appendChild(grid);
+    }
+  }
+
+  function renderPager(){
+    var show=S.view!=="cari";
+    $("pager").classList.toggle("hidden",!show);
+    if(!show)return;
+    $("pg-info").textContent=S.total>1?("hal "+S.page+"/"+S.total+" · ["+"] halaman"):(S.items.length+" item");
+  }
+
+  function moveSel(d){
+    if(!S.items.length)return;
+    S.sel=(S.sel+d+S.items.length)%S.items.length;
+    renderSel();
+  }
+  function renderSel(){
+    var box=$("results");
+    var all=S.view==="cari"?box.querySelectorAll(".trow"):box.querySelectorAll(".poster-card");
+    for(var i=0;i<all.length;i++){
+      var isUnm=all[i].classList.contains("unmapped");
+      all[i].classList.toggle("sel",i===S.sel&&!isUnm);
+    }
+    if(all[S.sel])all[S.sel].scrollIntoView({block:"nearest"});
+  }
+  function openSelected(){
+    if(!S.items.length)return;
+    var a=S.items[S.sel];
+    if(!a||!a.id){log("judul ini belum tersedia di hianime","err");return;}
+    App.openTitle(a.id,a.title);
+  }
+
+  function startSearch(q){
+    q=q.trim();if(!q)return;
+    var recent=loadRecents().filter(function(x){return x!==q;});recent.unshift(q);
+    try{localStorage.setItem("tatap_recent",JSON.stringify(recent.slice(0,6)));}catch(e){}
+    setViewSilent("cari");
+    $("empty-state").style.display="none";
+    $("results-title").textContent="Mencari "+q+"...";$("results-meta").textContent="";
+    doSearch(q);
+  }
+
+  async function doSearch(q){
+    var t0=Date.now();
+    try{
+      var r=await window.Tatap.search(q);
+      if(!r||!r.success){log("search error: "+(r&&r.error||"??"),"err");return;}
+      S.items=r.data.results||[];S.sel=-1;S.total=1;
+      $("results-title").textContent=S.items.length?"Hasil untuk \""+q+"\"":"Tidak ketemu \""+q+"\"";
+      $("results-meta").textContent=S.items.length+" judul · "+(Date.now()-t0)+"ms"+(r.data.cached?" · cached":"");
+      renderResults();renderPager();
+    }catch(e){log("err: "+e.message,"err");}
+  }
+
+  function setViewSilent(v){
+    S.view=v;S.page=1;
+    $("pager").classList.add("hidden");
+    $("continue-sec").classList.add("hidden");
+    $("lane-season-sec").classList.add("hidden");
+    $("lane-still-sec").classList.add("hidden");
+  }
+
+  async function handleCommand(raw){
+    var s=raw.trim();if(!s)return;
+    var parts=s.split(/\s+/);
+    var cmd=parts[0].toLowerCase();
+    var args=parts.slice(1).join(" ");
+    switch(cmd){
+      case "cari":if(!args){log("usage: cari <judul>","err");}else{startSearch(args);}break;
+      case "musim":setView("musim");break;
+      case "lanjutan":setView("lanjutan");break;
+      case "katalog":setView("katalog");break;
+      case "filter":
+        if(!args||args==="reset"){
+          S.filter={};S.page=1;log("filter direset","ok");applyFilter();break;
+        }
+        var f={};
+        for(var i=0;i<parts.length-1;i++){
+          var kv=parts[i+1].split("=");
+          if(kv.length===2)f[kv[0]]=kv[1];
+        }
+        S.filter=f;S.page=1;log("filter: "+JSON.stringify(f),"ok");applyFilter();break;
+      case "crt":
+        if(!args){log("usage: crt on|off|toggle","err");break;}
+        var v1=args==="on"?"on":args==="off"?"off":null;
+        if(v1===null&&args!=="toggle"){log("usage: crt on|off|toggle","err");break;}
+        var cur=localStorage.getItem("tatap_crt")||"on";
+        var nxt=v1||(cur==="on"?"off":"on");
+        try{localStorage.setItem("tatap_crt",nxt);}catch(e){}
+        document.body.classList.toggle("no-crt",nxt==="off");
+        log("crt "+(nxt==="on"?"ON":"OFF"),"ok");break;
+      case "ambient":
+        if(!args){log("usage: ambient on|off|toggle","err");break;}
+        var v2=args==="on"?"on":args==="off"?"off":null;
+        if(v2===null&&args!=="toggle"){log("usage: ambient on|off|toggle","err");break;}
+        var cur2=localStorage.getItem("tatap_ambient")||"on";
+        var nxt2=v2||(cur2==="on"?"off":"on");
+        try{localStorage.setItem("tatap_ambient",nxt2);}catch(e){}
+        document.body.classList.toggle("no-ambient",nxt2==="off");
+        log("ambient "+(nxt2==="on"?"ON":"OFF"),"ok");break;
+      case "riwayat":
+        try{await fetch("/api/history",{method:"DELETE"});log("riwayat dihapus","ok");}catch(e){log("err: "+e.message,"err");}break;
+      case "status":
+        log("view="+S.view+" page="+S.page+"/"+S.total+" items="+S.items.length+(S.sel>=0?" sel="+S.sel:""),"ok");break;
+      case "bantuan":case "help":case "?":
+        $("help-overlay").classList.remove("hidden");
+        $("help-body").textContent=cmdUsage();
+        break;
+      case "q":case "clear":
+        $("cmd").value="";clearLog();break;
+      default:
+        if(cmd.indexOf(":")===0){log("perintah tak dikenal: "+cmd+"  (ketik :bantuan)","err");}
+        else{startSearch(s);}
+    }
+  }
+
+  function onKey(e){
+    var t=(e.target.tagName||"");
+    var typing = t==="INPUT"||t==="SELECT"||t==="TEXTAREA";
+    if(e.key==="Escape"){
+      if(isModalOpen()){App.onKeyPlayer(e);return;}
+      if(typing){$("cmd").blur();S.promptFoc=false;return;}
+      $("cmd").value="";clearLog();e.preventDefault();return;
+    }
+    if(isModalOpen()){App.onKeyPlayer(e);return;}
+    if(e.key==="/"){e.preventDefault();focusPrompt();return;}
+    if(typing){if(e.key==="Escape"){$("cmd").blur();S.promptFoc=false;}return;}
+    if(e.key==="Escape"){$("cmd").value="";clearLog();e.preventDefault();return;}
+    if(e.key==="Tab"){e.preventDefault();cycleView();return;}
+    if(e.key==="ArrowUp"){
+      e.preventDefault();
+      if(!S.items.length){cmdHistory(-1);}else{moveSel(-1);}
+      return;
+    }
+    if(e.key==="ArrowDown"){
+      e.preventDefault();
+      if(!S.items.length){cmdHistory(1);}else{moveSel(1);}
+      return;
+    }
+    if(e.key==="Enter"){
+      e.preventDefault();
+      if(S.promptFoc){submitPrompt();}else{focusPrompt();}
+      return;
+    }
+    if(e.key==="["||e.key===","){e.preventDefault();pagePrev();return;}
+    if(e.key==="]"||e.key==="."){e.preventDefault();pageNext();return;}
+    if(!typing&&e.key.length===1&&!e.ctrlKey&&!e.metaKey){focusPrompt();}
+  }
+
+  function focusPrompt(){
+    S.promptFoc=true;
+    var inp=$("cmd");inp.focus();
+  }
+  function submitPrompt(){
+    var inp=$("cmd");var raw=inp.value.trim();inp.value="";
+    if(!raw)return;
+    log("tatap$ "+raw);
+    if(raw.indexOf(":")===0){handleCommand(raw.slice(1));}
+    else{handleCommand("cari "+raw);}
+  }
+
+  var _hIdx=0,_hPos=0;
+  function cmdHistory(dir){
+    var h=loadCmdHist();if(!h.length)return;
+    _hPos+=dir;
+    if(_hPos<0)_hPos=0;
+    if(_hPos>=h.length)_hPos=h.length-1;
+    $("cmd").value=h[_hPos]||"";
+    var inp=$("cmd");inp.selectionStart=inp.selectionEnd=inp.value.length;
+  }
+  function cycleView(){
+    var ord=["cari","musim","lanjutan","katalog"];
+    var idx=ord.indexOf(S.view);setView(ord[(idx+1)%ord.length]);
+  }
+  function pagePrev(){if(S.page>1){S.page--;loadView();}}
+  function pageNext(){if(S.page<S.total){S.page++;loadView();}}
+
+  function onPromptFocus(){S.promptFoc=true;$("cmd").classList.add("focus");}
+  function onPromptBlur(){S.promptFoc=false;$("cmd").classList.remove("focus");setTimeout(function(){if($("cmd").value.trim()&&S.items.length){/* keep sel visible */}},50);}
+
+  function boot(){
+    var inp=$("cmd");
+    inp.addEventListener("keydown",function(e){
+      if(e.key==="Enter"){e.preventDefault();_hPos=loadCmdHist().length;submitPrompt();}
+      else if(e.key==="Escape"){inp.blur();}
+      else if(e.key==="ArrowUp"&&!S.items.length){e.preventDefault();cmdHistory(-1);}
+      else if(e.key==="ArrowDown"&&!S.items.length){e.preventDefault();cmdHistory(1);}
+      else if(e.key==="Tab"){e.preventDefault();cycleView();}
+      else if(e.key==="/"){e.preventDefault();}
+    });
+    inp.addEventListener("focus",onPromptFocus);
+    inp.addEventListener("blur",onPromptBlur);
+    inp.addEventListener("input",function(){if(inp.value.indexOf(":")===0){/* could show command hints */}});
+    document.addEventListener("keydown",onKey);
+    $("help-close").addEventListener("click",function(){$("help-overlay").classList.add("hidden");});
+    $("help-overlay").addEventListener("click",function(e){if(e.target===$("help-overlay"))$("help-overlay").classList.add("hidden");});
+    $("clear-hist").addEventListener("click",async function(){
+      try{await fetch("/api/history",{method:"DELETE"});}catch(e){}
+      App.renderContinue();log("riwayat dihapus","ok");
+    });
+    $("sb-view").textContent="view: "+S.view;
+    renderRecents();
+  }
+
+  return {boot:boot,log:log,clearLog:clearLog,setView:setView,loadView:loadView,moveSel:moveSel,renderSel:renderSel,openSelected:openSelected,startSearch:startSearch,doSearch:doSearch,renderResults:renderResults,renderPager:renderPager,renderRecents:renderRecents,cmdUsage:cmdUsage,view:function(){return S.view;},state:function(){return S;}};
+})();

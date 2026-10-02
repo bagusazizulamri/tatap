@@ -25,6 +25,8 @@ async def init_db():
             key TEXT PRIMARY KEY, value TEXT)""")
         await db.execute("""CREATE TABLE IF NOT EXISTS browse_cache(
             key TEXT PRIMARY KEY, payload TEXT, fetched_at INTEGER)""")
+        await db.execute("""CREATE TABLE IF NOT EXISTS slug_map(
+            title TEXT PRIMARY KEY, slug TEXT, fetched_at INTEGER)""")
         await db.commit()
 
 def _now():
@@ -122,4 +124,37 @@ async def get_setting(key, default=""):
 async def set_setting(key, value):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)", (key, str(value)))
+        await db.commit()
+
+
+def _slug_norm(title):
+    import re as _re
+    s = (title or "").lower()
+    s = _re.sub(r"[^\w\s]", " ", s)
+    s = _re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+async def get_slug_map(title, ttl=7*24*3600):
+    key = _slug_norm(title)
+    if not key:
+        return None
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT slug, fetched_at FROM slug_map WHERE title=?", (key,)) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return None
+            if _now() - row["fetched_at"] > ttl:
+                return None
+            return row["slug"]
+
+
+async def set_slug_map(title, slug):
+    key = _slug_norm(title)
+    if not key or not slug:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("INSERT OR REPLACE INTO slug_map(title,slug,fetched_at) VALUES(?,?,?)",
+                         (key, slug, _now()))
         await db.commit()

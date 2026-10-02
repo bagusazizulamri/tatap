@@ -3,8 +3,8 @@ async function jpost(u,b){var r=await fetch(u,{method:"POST",headers:{"Content-T
 window.Tatap={
 search:function(q){return jget("/api/search?q="+encodeURIComponent(q));},
 catalog:function(p){return jget("/api/catalog?page="+(p||1));},
-seasonNow:function(p){return jget("/api/season-now?page="+(p||1));},
-stillAiring:function(p){return jget("/api/still-airing?page="+(p||1));},
+seasonNow:function(p){return jget("/api/seasonal?which=now&page="+(p||1));},
+stillAiring:function(p){return jget("/api/seasonal?which=prev&page="+(p||1));},
 filters:function(){return jget("/api/filters");},
 browse:function(params,page){
   var qs = "";
