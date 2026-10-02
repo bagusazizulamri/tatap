@@ -24,7 +24,7 @@ Status HTTP selalu 200 (lihat `ok()`/`fail()` di main.py).
 |---|---|---|
 | `GET /api/search?q=` | `{results:[{id,title}], cached}` | HANYA id+title. Tidak ada poster. |
 | `GET /api/seasonal?which=now\|prev&page=1` | `{season, year, items:[...], total_pages=1}` | Sumber: AniList GraphQL. Judul dicocokkan ke slug hianime via search; item tanpa match punya `id=""` & `matched:false`. Pagination dikunci 1 halaman (AniList over-reports). |
-| `GET /api/upcoming-episodes?days=7` | `{items:[{id,title,episode,airing_at,airing_at_iso,weekday,date,time,poster}], days, total, cached}` | Episode yang rilis dalam N hari ke depan (default 7, max 30). Filter ke anime matched hianime via `slug_map`. Cache 1 jam. |
+| `GET /api/upcoming-episodes?days=7` | `{items:[{id,title,episode,airing_at,airing_at_iso,weekday,date,time,poster}], days, total, current_season, previous_season, current_year, cached}` | Episode yang rilis dalam N hari ke depan (default 7, max 30). Filter musim akurat: hanya anime dengan `seasonYear=current` & `season=current OR previous` (case-insensitive), atau `season=null` (ongoing lama). Cache 1 jam. |
 | `GET /api/catalog?page=` | `{items:[Anime], page, total_pages, cached}` | |
 | `GET /api/browse?{filter}&page=` | `{items:[Anime], page, total_pages, cached}` | |
 | `GET /api/season-now?page=` | sama browse + `season` | |

@@ -161,10 +161,17 @@ def _format_to_type(f):
 @app.get("/api/upcoming-episodes")
 async def upcoming_episodes(days: int = Query(7, ge=1, le=30)):
     """Episode yang rilis dalam N hari ke depan (default 7), dari Page.airingSchedules.
-    Longgar: anime apapun yang matched ke hianime. Cache 1 jam."""
+    Filter musim akurat: hanya anime yang season-nya cocok dengan bulan rilis (atau
+    masih ongoing = season=null). Lalu matched ke hianime. Cache 1 jam."""
     try:
         import datetime as _dt
         now = int(_dt.datetime.utcnow().timestamp())
+        # Tentukan season release-window yang relevan.
+        cur_year, cur_season = al.current_season()
+        order = ["winter", "spring", "summer", "fall"]
+        idx = order.index(cur_season)
+        prev_season = order[(idx - 1) % 4]
+        prev_year = cur_year if idx > 0 else cur_year - 1
         end = now + days * 86400
         key = f"upcoming|days={days}"
         hit = await get_browse_cache(key, ttl=3600)
@@ -173,11 +180,27 @@ async def upcoming_episodes(days: int = Query(7, ge=1, le=30)):
             return ok(hit)
 
         loop = asyncio.get_running_loop()
-        schedules = await loop.run_in_executor(None, lambda: al.anilist_schedules(now, end, 50))
+        # perPage 100 — AniList 50-100 item 7 hari tetap manageable (max 4 req / hari
+        # dari cache 1 jam, ~16 episode/matched). Filter musim di Python.
+        schedules = await loop.run_in_executor(None, lambda: al.anilist_schedules(now, end, 100))
 
         items_out = []
+        seen = set()
+        cur_season_up = cur_season.upper()
+        prev_season_up = prev_season.upper()
         for s in schedules:
             m = s.get("media") or {}
+            sy = m.get("seasonYear")
+            se = m.get("season")
+            if se is not None:
+                if sy != cur_year and sy != prev_year:
+                    continue
+                if se not in (cur_season_up, prev_season_up):
+                    continue
+            mid = m.get("id")
+            if mid in seen:
+                continue
+            seen.add(mid)
             title = (m.get("title") or {}).get("english") or (m.get("title") or {}).get("romaji") or ""
             if not title:
                 continue
@@ -220,6 +243,9 @@ async def upcoming_episodes(days: int = Query(7, ge=1, le=30)):
             "items": items_out,
             "days": days,
             "total": len(items_out),
+            "current_season": cur_season,
+            "previous_season": prev_season,
+            "current_year": cur_year,
             "cached": False,
         }
         await set_browse_cache(key, result)

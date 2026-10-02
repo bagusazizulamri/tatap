@@ -70,7 +70,7 @@ var Tui = (function () {
       $("results-title").textContent=label;
       $("results-meta").textContent=S.items.length+" item"+(d.cached?" · cached":"");
       renderResults();renderPager();
-    }catch(e){log("err: "+e.message,"err");}
+    }catch(e){log("err: "+(e&&e.message||e),"err");}
   }
 
   function renderRecents(){
@@ -99,22 +99,29 @@ var Tui = (function () {
         (function(a,idx){
           if(S.view==="terbaru"){
             var d=document.createElement("div");
-            var when="";
             var aheadSec=(a.airing_at||0)-nowTs;
             var cls="trow trow-up"+(idx===S.sel?" sel":"");
             if(aheadSec>0&&aheadSec<86400) cls+=" today";
             else if(aheadSec>=86400&&aheadSec<172800) cls+=" tomorrow";
             d.className=cls;
-            when=(a.weekday||"")+" "+(a.date||"")+" · "+(a.time||"");
-            d.innerHTML='<span class="tr-day">'+esc(when)+'</span>'
-              +'<span class="tr-ep">ep '+esc(a.episode==null?"?":a.episode)+'</span>'
-              +'<span class="tr-title">'+esc(a.title)+'</span>';
-            d.addEventListener("click",function(){App.openTitle(a.id,a.title);});
+            var when=(a.weekday||"")+" "+(a.date||"")+" · "+(a.time||"");
+            // Fallback: gunakan textContent kalau ada masalah template; build spans manual.
+            var spanDay=document.createElement("span");spanDay.className="tr-day";spanDay.textContent=when;
+            var spanEp=document.createElement("span");spanEp.className="tr-ep";spanEp.textContent="ep "+(a.episode==null||a.episode==undefined?"?":a.episode);
+            var spanTitle=document.createElement("span");spanTitle.className="tr-title";spanTitle.textContent=a.title||"";
+            d.appendChild(spanDay);d.appendChild(spanEp);d.appendChild(spanTitle);
+            d.addEventListener("click",function(){
+              if(typeof App==="undefined"){log("App belum siap, coba lagi","err");return;}
+              App.openTitle(a.id,a.title);
+            });
             box.appendChild(d);
           } else {
             var d2=document.createElement("div");d2.className="trow"+(idx===S.sel?" sel":"");
             d2.innerHTML='<span class="tr-num">'+(idx+1)+'</span><span class="tr-title">'+esc(a.title)+'</span><span class="tr-slug">'+esc(a.id)+'</span>';
-            d2.addEventListener("click",function(){App.openTitle(a.id,a.title);});
+            d2.addEventListener("click",function(){
+              if(typeof App==="undefined"){log("App belum siap, coba lagi","err");return;}
+              App.openTitle(a.id,a.title);
+            });
             box.appendChild(d2);
           }
         })(S.items[i],i);

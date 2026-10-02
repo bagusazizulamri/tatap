@@ -68,10 +68,10 @@ main{width:100%;margin:0;padding:var(--pad-y) var(--pad-x) calc(var(--status-h) 
 .trow .tr-title{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trow.sel .tr-title{color:var(--acc)}
 .trow .tr-slug{color:var(--dim);font-size:10px;max-width:42%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
-.trow-up{display:grid;grid-template-columns:minmax(140px,18%)minmax(72px,8%)1fr;gap:10px;align-items:baseline}
-.trow-up .tr-day{color:var(--dim);font-size:11px;white-space:nowrap}
+.trow-up{display:grid!important;grid-template-columns:auto auto minmax(0,1fr);gap:clamp(6px,1vw,12px);align-items:baseline;min-width:0;min-height:24px;visibility:visible!important}
+.trow-up .tr-day{color:var(--dim);font-size:11px;white-space:nowrap;min-width:0}
 .trow-up .tr-ep{color:var(--acc);font-weight:600;font-size:12px;white-space:nowrap}
-.trow-up .tr-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow-up .tr-title{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trow-up.today{border-left:2px solid var(--ok);padding-left:6px}
 .trow-up.today .tr-day{color:var(--ok)}
 .trow-up.today .tr-ep{color:var(--ok)}
