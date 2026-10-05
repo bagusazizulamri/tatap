@@ -315,6 +315,108 @@ def _mega_decrypt(enc: str) -> str:
     return pt.decode("utf-8", errors="strict")
 
 
+def _normalize_subtitles(raw_tracks, referer: str = ""):
+    """Normalisasi track subtitle mentah (Megaplay 'tracks[]' / ZokoAnime 'subtitles')
+    menjadi list[{label, lang, url, default}] yang siap kirim ke client.
+
+    - Filter track yang bukan subtitle (kind=thumbnails, kind=video, dsb.).
+    - Kalau ada track kind=subtitle tanpa URL (referensi internal), pakai default.
+    - Field 'label' diprioritaskan, fallback ke 'lang', fallback ke "Subtitle N".
+    - Hanya track yang punya URL http(s) masuk output.
+    - Validasi ringan: kalau ada URL, biarkan apa adanya (soft-validate oleh caller).
+    Soft validate subtitle tidak dilakukan di sini supaya tidak menambah latency
+    saat scrape multi-track; validasi per-track dilakukan saat user memilihnya.
+    """
+    out = []
+    if not raw_tracks or not isinstance(raw_tracks, list):
+        return out
+    # Helper: ubah URL relatif jadi absolut terhadap referer.
+    def _abs(u):
+        u = (u or "").strip()
+        if not u:
+            return ""
+        if u.startswith("//"):
+            # protocol-relative → pakai scheme dari referer (biasanya https).
+            return "https:" + u
+        if u.startswith("/") and referer:
+            m = re.match(r"^(https?://[^/]+)", referer)
+            if m:
+                return m.group(1) + u
+        return u
+    for i, t in enumerate(raw_tracks):
+        if not isinstance(t, dict):
+            continue
+        # Skip non-subtitle tracks (thumbnail, video, audio descriptions, dll.).
+        kind = (t.get("kind") or "").lower()
+        if kind and kind not in ("subtitles", "subtitle", "captions", "caption"):
+            continue
+        # Megaplay/Zokoanime kadang pakai 'src' atau 'file' untuk URL subtitle.
+        url = _abs(t.get("src") or t.get("file") or t.get("url") or "")
+        if not url or not url.startswith("http"):
+            continue
+        label = (t.get("label") or t.get("lang") or t.get("language")
+                 or f"Subtitle {i + 1}").strip()
+        # Kalau label = kode bahasa (id, en), ganti jadi nama readable.
+        if len(label) <= 3 and label.lower() in _LANG_NAME:
+            label = _LANG_NAME[label.lower()]
+        lang = (t.get("lang") or t.get("language") or t.get("srclang") or "").strip().lower()
+        if not lang and label:
+            # Infer dari label kalau ada (English → en).
+            lang = _label_to_lang(label)
+        is_def = bool(t.get("default")) or bool(t.get("is_default")) or False
+        out.append({
+            "label": label,
+            "lang": lang,
+            "url": url,
+            "default": is_def,
+        })
+    # Pastikan tepat satu track 'default'. Kalau tidak ada, tandai track pertama.
+    has_def = any(o["default"] for o in out)
+    if out and not has_def:
+        out[0]["default"] = True
+    return out
+
+
+# Peta kode bahasa 2-3 char → nama readable (untuk label dropdown).
+_LANG_NAME = {
+    "en": "English", "eng": "English",
+    "id": "Indonesian", "ind": "Indonesian",
+    "ja": "Japanese", "jpn": "Japanese",
+    "es": "Spanish", "spa": "Spanish",
+    "pt": "Portuguese", "por": "Portuguese",
+    "fr": "French", "fra": "French", "fre": "French",
+    "de": "German", "deu": "German", "ger": "German",
+    "it": "Italian", "ita": "Italian",
+    "ko": "Korean", "kor": "Korean",
+    "zh": "Chinese", "chi": "Chinese", "zho": "Chinese",
+    "ar": "Arabic", "ara": "Arabic",
+    "ru": "Russian", "rus": "Russian",
+    "th": "Thai", "tha": "Thai",
+    "vi": "Vietnamese", "vie": "Vietnamese",
+    "tr": "Turkish", "tur": "Turkish",
+    "hi": "Hindi", "hin": "Hindi",
+}
+
+
+def _label_to_lang(label):
+    """Infer kode bahasa dari label (case-insensitive exact match).
+    Dipakai sebagai fallback kalau track tidak punya field lang/srclang."""
+    if not label:
+        return ""
+    lab = label.strip()
+    # Cek exact match nama readable.
+    for code, name in _LANG_NAME.items():
+        if len(code) == 2 and name.lower() == lab.lower():
+            return code
+    # Cek 3-letter prefix (misal "English (US)" → "eng"/"en").
+    low = lab.lower()
+    for code in ("en", "id", "ja", "es", "pt", "fr", "de", "it", "ko", "zh",
+                 "ar", "ru", "th", "vi", "tr", "hi"):
+        if low.startswith(code + " ") or low.startswith(code + "(") or low == code:
+            return code
+    return ""
+
+
 def _try_megaplay(embed: str):
     """embed = https://megaplay.buzz/stream/s-2/{realid}/{sub|dub}.
     Flow (from newclient.min.js): GET embed page -> data-id -> GET
@@ -381,11 +483,14 @@ def _try_megaplay(embed: str):
     sub_url = (default.get("src") or default.get("file")) if default else None
     if sub_url:
         sub_url = _validate_sub_url(sub_url, referer=origin + "/")
+    # Multi-subtitle: normalisasi seluruh tracks Megaplay untuk dropdown.
+    subtitles = _normalize_subtitles(subs, referer=origin + "/")
     return {"master": master, "variants": variants,
             "sub": sub_url,
             "sub_lang": (default.get("label") or default.get("lang")) if default else None,
             "referer": origin + "/", "mal_id": "",
-            "tracks": subs}
+            "tracks": subs,
+            "subtitles": subtitles}
 
 def _order_servers(servers):
     def score(s):
@@ -498,10 +603,13 @@ def _try_embed_legacy(embed: str):
     sub_url = (default.get("src") or default.get("file")) if default else None
     if sub_url:
         sub_url = _validate_sub_url(sub_url, referer=referer)
+    # Multi-subtitle: normalisasi seluruh tracks ZokoAnime untuk dropdown.
+    subtitles = _normalize_subtitles(subs, referer=referer)
     return {"master": master, "variants": variants,
             "sub": sub_url,
             "sub_lang": (default.get("label") or default.get("lang")) if default else None,
-            "referer": referer, "mal_id": mal_id}
+            "referer": referer, "mal_id": mal_id,
+            "subtitles": subtitles}
 
 def hianime_m3u8(episode_maps, ep_no: int, mode: str = "sub", slug: str = ""):
     mode = "dub" if str(mode).lower() == "dub" else "sub"
