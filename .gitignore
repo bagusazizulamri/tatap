@@ -8,3 +8,9 @@ cache/*
 server.pid
 dist/
 .build_cache/
+
+# Internal/local-only — tidak di-share:
+# - tools/build_windows_portable.py: script build internal (mungkin proprietary)
+# - plan.md: working doc pribadi
+tools/build_windows_portable.py
+plan.md
