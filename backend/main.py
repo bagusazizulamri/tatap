@@ -310,13 +310,21 @@ async def resolve(slug: str = Query(""), ep: int = Query(1), mode: str = Query("
             picked = hi.select_quality(hit["variants"], q)
             hit["picked"] = picked
             hit["cached"] = True
+            # Pastikan 'subtitles' selalu list (bukan None) di response — UI
+            # bisa render dropdown tanpa null-check tambahan.
+            hit["subtitles"] = hit.get("subtitles") or []
             return ok(hit)
         loop = asyncio.get_running_loop()
         maps = await loop.run_in_executor(None, lambda: hi.hianime_episodes(slug))
         got = await loop.run_in_executor(None, lambda: hi.hianime_m3u8(maps, ep, mode))
-        await set_episode_cache(slug, ep, mode, got["master"], got["variants"], got.get("sub"), got.get("sub_lang"), got.get("referer"), got.get("server"))
+        # Simpan subtitle list (default []) ke cache agar subsequent request langsung baca.
+        await set_episode_cache(slug, ep, mode, got["master"], got["variants"],
+                                got.get("sub"), got.get("sub_lang"),
+                                got.get("referer"), got.get("server"),
+                                subtitles=got.get("subtitles") or [])
         got["picked"] = hi.select_quality(got["variants"], q)
         got["cached"] = False
+        got["subtitles"] = got.get("subtitles") or []
         return ok(got)
     except Exception as e:
         return fail(str(e))
@@ -479,6 +487,10 @@ async def play_mpv(body: dict = None):
     body = body or {}
     slug, ep, mode = body.get("slug", ""), int(body.get("ep", 1)), body.get("mode", "sub")
     quality = body.get("quality", await get_setting("quality", "best"))
+    # Opsional: user pilih subtitle spesifik via UI ("sub_url" berisi URL track
+    # yang aktif). Backend tetap attach seluruh subtitles[] ke MPV (--sub-file
+    # bisa lebih dari satu) supaya user bisa cycle lewat tombol 'j'.
+    preferred_sub_url = body.get("sub_url") or ""
     try:
         mpv_bin = find_mpv_binary()
         if not mpv_bin:
@@ -493,23 +505,67 @@ async def play_mpv(body: dict = None):
             got = await loop.run_in_executor(None, lambda: hi.hianime_m3u8(maps, ep, mode, slug))
         picked = hi.select_quality(got["variants"], quality)
         cmd = [mpv_bin, f"--referer={got.get('referer','')}", picked["url"]]
-        if got.get("sub"):
+        # Kumpulkan subtitle files. Prioritas:
+        #   1) preferred_sub_url (kalau client pilih spesifik), atau default 'sub'
+        #   2) SELURUH subtitles[] dari cache/result, agar semua track terpasang
+        #      dan user bisa cycle via 'j' di MPV.
+        # File VTT didownload ke tempdir (mpv butuh path lokal). File yang gagal
+        # didownload di-skip agar tidak menggagalkan playback.
+        # Catatan: subs_all mengandung tracks unik saja — kalau 'sub' (default)
+        # sudah ada di subtitles[] dengan URL sama, skip supaya tidak duplikat.
+        subs_all = []
+        seen_urls = set()
+        for s in (got.get("subtitles") or []):
+            url = (s or {}).get("url")
+            if url and url not in seen_urls:
+                subs_all.append(s)
+                seen_urls.add(url)
+        if preferred_sub_url and preferred_sub_url not in seen_urls:
+            subs_all.append({"label": "Selected", "url": preferred_sub_url,
+                             "lang": "", "default": False})
+            seen_urls.add(preferred_sub_url)
+        elif got.get("sub") and got["sub"] not in seen_urls:
+            # Pakai default 'sub' hanya kalau belum ada di subtitles[].
+            subs_all.append({"label": got.get("sub_lang") or "Default",
+                             "url": got["sub"], "lang": "", "default": True})
+            seen_urls.add(got["sub"])
+
+        # Helper download async; return None kalau gagal (skip track).
+        async def _download_sub(url):
             try:
                 async with httpx.AsyncClient(timeout=15) as c:
-                    sr = await c.get(got["sub"], headers={"User-Agent": HI_UA, "Referer": got.get("referer","")})
-                    fp = os.path.join(tempfile.gettempdir(), f"{slug}-ep{ep}.vtt")
+                    sr = await c.get(url, headers={"User-Agent": HI_UA,
+                                                    "Referer": got.get("referer", "")})
+                    if sr.status_code != 200 or not sr.text:
+                        return None
+                    fp = os.path.join(tempfile.gettempdir(),
+                                      f"{slug}-ep{ep}-{abs(hash(url)) % 10**8}.vtt")
                     open(fp, "w").write(sr.text)
-                    cmd.insert(2, f"--sub-file={fp}")
+                    return fp
             except Exception:
-                pass
-        
+                return None
+
+        downloaded = []
+        for s in subs_all:
+            url = (s or {}).get("url")
+            if not url:
+                continue
+            fp = await _download_sub(url)
+            if fp:
+                downloaded.append(fp)
+
+        # Masukkan --sub-file sebelum URL. mpv izinkan multiple --sub-file.
+        # Sisip di posisi 2 (setelah mpv_bin + --referer=) agar tidak geser posisi URL.
+        for fp in downloaded:
+            cmd.insert(2, f"--sub-file={fp}")
+
         creationflags = 0
         if sys.platform == "win32":
             creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creationflags)
         await add_history(slug, body.get("title", slug), ep, mode)
-        return ok({"cmd": cmd, "picked": picked})
+        return ok({"cmd": cmd, "picked": picked, "subs_attached": len(downloaded)})
     except Exception as e:
         return fail(str(e))
 
@@ -540,12 +596,21 @@ async def del_hist():
 
 @app.get("/api/settings")
 async def get_set():
-    return ok({"quality": await get_setting("quality","best"), "mode": await get_setting("mode","sub"), "player": await get_setting("player","browser")})
+    return ok({
+        "quality": await get_setting("quality", "best"),
+        "mode": await get_setting("mode", "sub"),
+        "player": await get_setting("player", "browser"),
+        # Preferensi bahasa subtitle user. Default "English" karena sebagian besar
+        # sumber (Megaplay, ZokoAnime) punya English sebagai track default. Kalau
+        # user pernah pilih bahasa lain, disimpan di sini dan dipakai frontend
+        # untuk auto-select track di episode berikutnya.
+        "sub_lang": await get_setting("sub_lang", "English"),
+    })
 
 @app.post("/api/settings")
 async def set_set(body: dict = None):
     body = body or {}
-    for k in ("quality","mode","player"):
+    for k in ("quality", "mode", "player", "sub_lang"):
         if k in body:
             await set_setting(k, body[k])
     return await get_set()
