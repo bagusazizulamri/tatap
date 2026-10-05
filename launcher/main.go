@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -10,6 +11,9 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/jchv/go-webview2"
+	"golang.org/x/sys/windows"
 )
 
 var (
@@ -43,7 +47,6 @@ func isServerRunning(url string) bool {
 }
 
 func killPortOccupant(port int) {
-	// Jalankan netstat untuk mencari PID yang memakai port
 	out, err := exec.Command("cmd", "/c", fmt.Sprintf("netstat -ano | findstr :%d | findstr LISTENING", port)).Output()
 	if err != nil || len(out) == 0 {
 		return
@@ -60,25 +63,6 @@ func killPortOccupant(port int) {
 	}
 }
 
-func findEdge() string {
-	candidates := []string{
-		os.Getenv("ProgramFiles(x86)") + `\Microsoft\Edge\Application\msedge.exe`,
-		os.Getenv("ProgramFiles") + `\Microsoft\Edge\Application\msedge.exe`,
-		os.Getenv("LocalAppData") + `\Microsoft\Edge\Application\msedge.exe`,
-	}
-	for _, c := range candidates {
-		if c != "" {
-			if _, err := os.Stat(c); err == nil {
-				return c
-			}
-		}
-	}
-	if p, err := exec.LookPath("msedge.exe"); err == nil {
-		return p
-	}
-	return ""
-}
-
 func getLastLogLines(logPath string, maxLines int) string {
 	b, err := os.ReadFile(logPath)
 	if err != nil {
@@ -91,24 +75,51 @@ func getLastLogLines(logPath string, maxLines int) string {
 	return strings.Join(lines, "\n")
 }
 
-func openUI(appURL, appDir string) {
-	edgePath := findEdge()
-	if edgePath != "" {
-		edgeArgs := []string{
-			fmt.Sprintf("--app=%s", appURL),
-			"--new-window",
-		}
-		cmd := exec.Command(edgePath, edgeArgs...)
-		cmd.Dir = appDir
-		if err := cmd.Start(); err == nil {
-			return
-		}
+func acquireSingleInstance() (release func(), ok bool) {
+	name, _ := windows.UTF16PtrFromString(`Local\TatapSingleInstance_v2`)
+	h, err := windows.CreateMutex(nil, false, name)
+	if err != nil {
+		return func() {}, false
 	}
-	// Fallback ke browser default
-	_ = exec.Command("cmd", "/c", "start", appURL).Start()
+	if windows.GetLastError() == windows.ERROR_ALREADY_EXISTS {
+		windows.CloseHandle(h)
+		return func() {}, false
+	}
+	return func() { windows.CloseHandle(h) }, true
+}
+
+func runWebView(appURL, dataPath string) {
+	w := webview2.NewWithOptions(webview2.WebViewOptions{
+		Debug:     false,
+		AutoFocus: true,
+		DataPath:  dataPath,
+		WindowOptions: webview2.WindowOptions{
+			Title:  "Tatap - Nonton Santai di Lokal",
+			Width:  1280,
+			Height: 800,
+			Center: true,
+		},
+	})
+	if w == nil {
+		showMessage("Tatap - Kesalahan",
+			"WebView2 runtime tidak ditemukan.\n\nInstall Microsoft Edge WebView2 Runtime dari:\nhttps://developer.microsoft.com/microsoft-edge/webview2/",
+			MB_OK|MB_ICONERROR)
+		return
+	}
+	defer w.Destroy()
+	w.Navigate(appURL)
+	w.Run()
 }
 
 func main() {
+	log.SetOutput(os.Stderr)
+
+	release, single := acquireSingleInstance()
+	if !single {
+		return
+	}
+	defer release()
+
 	exePath, err := os.Executable()
 	if err != nil {
 		exePath, _ = filepath.Abs(os.Args[0])
@@ -117,90 +128,99 @@ func main() {
 	appURL := "http://127.0.0.1:8767"
 	pingURL := appURL + "/api/ping"
 
+	var pyCmd *exec.Cmd
+
 	// 1. Cek apakah server sudah aktif dan sehat
-	if isServerRunning(pingURL) {
-		openUI(appURL, appDir)
-		return
-	}
+	if !isServerRunning(pingURL) {
+		// 2. Bersihkan zombie di port 8767
+		killPortOccupant(8767)
+		time.Sleep(300 * time.Millisecond)
 
-	// 2. Jika port 8767 sedang diduduki zombie process (tidak merespons ping), bersihkan dulu
-	killPortOccupant(8767)
-	time.Sleep(300 * time.Millisecond)
-
-	// 3. Tentukan path python.exe dan backend/main.py
-	pythonExe := filepath.Join(appDir, "runtime", "python.exe")
-	if _, err := os.Stat(pythonExe); os.IsNotExist(err) {
-		p, errLook := exec.LookPath("python.exe")
-		if errLook != nil {
-			p, errLook = exec.LookPath("python")
+		// 3. Tentukan path python.exe dan backend/main.py
+		pythonExe := filepath.Join(appDir, "runtime", "python.exe")
+		if _, err := os.Stat(pythonExe); os.IsNotExist(err) {
+			p, errLook := exec.LookPath("python.exe")
+			if errLook != nil {
+				p, errLook = exec.LookPath("python")
+			}
+			if errLook != nil {
+				showMessage("Tatap - Kesalahan", "Runtime Python tidak ditemukan di folder 'runtime\\python.exe' atau di sistem.", MB_OK|MB_ICONERROR)
+				return
+			}
+			pythonExe = p
 		}
-		if errLook != nil {
-			showMessage("Tatap - Kesalahan", "Runtime Python tidak ditemukan di folder 'runtime\\python.exe' atau di sistem.", MB_OK|MB_ICONERROR)
+
+		backendMain := filepath.Join(appDir, "backend", "main.py")
+		if _, err := os.Stat(backendMain); os.IsNotExist(err) {
+			showMessage("Tatap - Kesalahan", fmt.Sprintf("File backend tidak ditemukan:\n%s", backendMain), MB_OK|MB_ICONERROR)
 			return
 		}
-		pythonExe = p
-	}
 
-	backendMain := filepath.Join(appDir, "backend", "main.py")
-	if _, err := os.Stat(backendMain); os.IsNotExist(err) {
-		showMessage("Tatap - Kesalahan", fmt.Sprintf("File backend tidak ditemukan:\n%s", backendMain), MB_OK|MB_ICONERROR)
-		return
-	}
+		// Siapkan folder cache untuk log
+		cacheDir := filepath.Join(appDir, "cache")
+		_ = os.MkdirAll(cacheDir, 0755)
+		logPath := filepath.Join(cacheDir, "server.log")
+		logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 
-	// Siapkan folder cache untuk log
-	cacheDir := filepath.Join(appDir, "cache")
-	_ = os.MkdirAll(cacheDir, 0755)
-	logPath := filepath.Join(cacheDir, "server.log")
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-
-	// 4. Jalankan backend Python
-	pyCmd := exec.Command(pythonExe, backendMain)
-	pyCmd.Dir = appDir
-	pyCmd.SysProcAttr = &syscall.SysProcAttr{
-		HideWindow:    true,
-		CreationFlags: CREATE_NO_WINDOW,
-	}
-	if err == nil {
-		pyCmd.Stdout = logFile
-		pyCmd.Stderr = logFile
-		defer logFile.Close()
-	}
-
-	if err := pyCmd.Start(); err != nil {
-		showMessage("Tatap - Gagal Start", fmt.Sprintf("Gagal menyalakan proses backend: %v", err), MB_OK|MB_ICONERROR)
-		return
-	}
-
-	// 5. Polling hingga /api/ping merespons (maksimal 15 detik)
-	ready := false
-	for i := 0; i < 75; i++ {
-		time.Sleep(200 * time.Millisecond)
-		if isServerRunning(pingURL) {
-			ready = true
-			break
+		// 4. Jalankan backend Python
+		pyCmd = exec.Command(pythonExe, backendMain)
+		pyCmd.Dir = appDir
+		pyCmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow:    true,
+			CreationFlags: CREATE_NO_WINDOW,
+		}
+		if err == nil {
+			pyCmd.Stdout = logFile
+			pyCmd.Stderr = logFile
+			defer logFile.Close()
 		}
 
-		// Cek apakah proses python mati di tengah jalan
-		if pyCmd.Process != nil {
-			// Menggunakan FindProcess atau cek status
-			var status uint32
-			handle := syscall.Handle(pyCmd.Process.Pid)
-			if syscall.GetExitCodeProcess(handle, &status) == nil && status != 259 { // 259 = STILL_ACTIVE
+		if err := pyCmd.Start(); err != nil {
+			showMessage("Tatap - Gagal Start", fmt.Sprintf("Gagal menyalakan proses backend: %v", err), MB_OK|MB_ICONERROR)
+			return
+		}
+
+		// 5. Polling hingga /api/ping merespons (maksimal 15 detik)
+		ready := false
+		for i := 0; i < 75; i++ {
+			time.Sleep(200 * time.Millisecond)
+			if isServerRunning(pingURL) {
+				ready = true
 				break
 			}
+
+			if pyCmd.Process != nil {
+				var status uint32
+				handle := syscall.Handle(pyCmd.Process.Pid)
+				if syscall.GetExitCodeProcess(handle, &status) == nil && status != 259 { // 259 = STILL_ACTIVE
+					break
+				}
+			}
+		}
+
+		if !ready {
+			if pyCmd.Process != nil {
+				_ = pyCmd.Process.Kill()
+			}
+			logSnippet := getLastLogLines(logPath, 10)
+			msg := "Server backend tidak dapat berjalan atau gagal merespons dalam 15 detik."
+			if strings.TrimSpace(logSnippet) != "" {
+				msg += "\n\nLog Kesalahan Terakhir:\n" + logSnippet
+			}
+			showMessage("Tatap - Gagal Memulai", msg, MB_OK|MB_ICONERROR)
+			return
 		}
 	}
 
-	if !ready {
-		logSnippet := getLastLogLines(logPath, 10)
-		msg := "Server backend tidak dapat berjalan atau gagal merespons dalam 15 detik."
-		if strings.TrimSpace(logSnippet) != "" {
-			msg += "\n\nLog Kesalahan Terakhir:\n" + logSnippet
-		}
-		showMessage("Tatap - Gagal Memulai", msg, MB_OK|MB_ICONERROR)
-		return
+	// 6. Window close -> kill backend yang kita spawn
+	if pyCmd != nil && pyCmd.Process != nil {
+		defer func() {
+			_ = pyCmd.Process.Kill()
+		}()
 	}
 
-	// 6. Buka jendela aplikasi UI
-	openUI(appURL, appDir)
+	// 7. Jendela native WebView2
+	dataPath := filepath.Join(appDir, "cache", "webview2-data")
+	_ = os.MkdirAll(dataPath, 0755)
+	runWebView(appURL, dataPath)
 }
