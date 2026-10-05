@@ -4,8 +4,16 @@
 
 CARA MENGGUNAKAN:
 1. Cukup klik ganda "Tatap.exe".
-2. Aplikasi akan langsung membuka jendela player Tatap (Edge App Mode / browser).
-3. Untuk mematikan server secara manual kapan saja, jalankan "Stop-Tatap.bat".
+2. Aplikasi akan langsung membuka jendela native Tatap (WebView2, bukan tab Edge).
+3. Syarat: Microsoft Edge WebView2 Runtime terinstall (sudah bawaan Windows 10/11).
+   Jika belum ada, Tatap menampilkan pesan berisi link unduhan resmi.
+4. Tutup jendela untuk keluar; backend ikut dimatikan otomatis.
+5. Untuk mematikan server secara manual kapan saja, jalankan "Stop-Tatap.bat".
+
+DATA & LOG:
+- Data riwayat tontonan dan bookmark tersimpan di "backend\anime.db".
+- Log server tersimpan di "cache\server.log" (ditimpa tiap start).
+- Data WebView2 tersimpan di "cache\webview2-data\".
 
 PEMUTAR EKSTERNAL MPV (OPSIONAL):
 - Secara default, video diputar langsung di dalam browser/app window.
