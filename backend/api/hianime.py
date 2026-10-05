@@ -8,15 +8,21 @@ EPISODES_API = HI_BASE + "/api/theme/episode/list/{}"
 SERVERS_API = HI_BASE + "/api/theme/episode/servers?episodeId={}"
 BROWSE_API = HI_BASE + "/browse"
 
-# Host CDN yang terbukti mati dari region kita (Oct 2026). Diblokir otomatis di
-# smart-fallback agar tidak menyita waktu probe di tiap request.
-_DEAD_HOSTS = {
-    "dramahot.top",         # ZokoAnime CDN (TLS RST)
-}
+# Negative cache:
+#   _neg_cache        : host -> expires_at_epoch (host mati global, skip semua)
+#   _neg_pair_cache   : (host|slug|ep) -> expires_at_epoch (host mati untuk episode
+#                       spesifik, misal zokoanime 404 untuk anime baru)
+# TTL default 1 jam. Per-(host,slug,ep) cache bikin request berikut langsung skip
+# server yang tidak punya episode tsb, tanpa biaya probe network.
+# Catatan: per Oct 2026, hls.dramahot.top (CDN ZokoAnime) sudah bisa dijangkau
+# lagi (TLS handshake sukses, HTTP 404 untuk path dummy). Tidak masuk _DEAD_HOSTS.
+# Kalau host mati lagi nanti, _mark_dead() akan menambahkannya otomatis via
+# negative cache (lihat _probe_master()).
+_DEAD_HOSTS = set()  # daftar host yang SELALU dianggap mati (skip probe).
 
-# Negative cache per host: host terakhir gagal untuk episode tertentu. TTL 1 jam.
 _neg_lock = threading.Lock()
-_neg_cache = {}  # host -> expires_at_epoch
+_neg_cache = {}        # host -> expires_at_epoch
+_neg_pair_cache = {}   # "host|slug|ep" -> expires_at_epoch
 
 
 def _is_dead_host(host):
@@ -31,10 +37,27 @@ def _is_dead_host(host):
     return False
 
 
+def _is_dead_pair(host, slug, ep):
+    """Cek negative cache per-(host, slug, ep)."""
+    base = (host or "").lower()
+    key = f"{base}|{slug or ''}|{ep}"
+    with _neg_lock:
+        exp = _neg_pair_cache.get(key)
+        return bool(exp and exp > _time.time())
+
+
 def _mark_dead(host, ttl=3600):
     base = (host or "").lower()
     with _neg_lock:
         _neg_cache[base] = int(_time.time()) + ttl
+
+
+def _mark_dead_pair(host, slug, ep, ttl=3600):
+    """Tandai (host, slug, ep) gagal. Request berikut skip tanpa probe."""
+    base = (host or "").lower()
+    key = f"{base}|{slug or ''}|{ep}"
+    with _neg_lock:
+        _neg_pair_cache[key] = int(_time.time()) + ttl
 
 
 def _host_from(url):
@@ -349,8 +372,17 @@ def _try_megaplay(embed: str):
         _probe_master(master, referer=origin + "/")
     except Exception as e:
         raise RuntimeError(f"megaplay probe: {e}")
+    # Validasi playlist: minimal ada 1 segment/variant URL agar HLS.js tidak hang.
+    try:
+        variants = _validate_master_playlist(master, referer=origin + "/", variants=variants)
+    except Exception as e:
+        raise RuntimeError(f"megaplay playlist: {e}")
+    # Soft-validasi subtitle (tidak memblokir kalau invalid).
+    sub_url = (default.get("src") or default.get("file")) if default else None
+    if sub_url:
+        sub_url = _validate_sub_url(sub_url, referer=origin + "/")
     return {"master": master, "variants": variants,
-            "sub": (default.get("src") or default.get("file")) if default else None,
+            "sub": sub_url,
             "sub_lang": (default.get("label") or default.get("lang")) if default else None,
             "referer": origin + "/", "mal_id": "",
             "tracks": subs}
@@ -369,9 +401,71 @@ def _order_servers(servers):
     return sorted(servers, key=score)
 
 
+def _validate_master_playlist(master_url: str, referer: str, variants: list):
+    """Validasi master playlist: harus (a) mulainya #EXTM3U, (b) minimal ada 1
+    URL segment/variant pada body. Return list variants yang sudah tervalidasi:
+    - Kalau caller sudah punya variants dan minimal 1 URL absolute → pakai itu.
+    - Kalau tidak, fallback ke single-variant dari master playlist.
+    Raise RuntimeError kalau playlist tidak punya konten yang bisa diputar."""
+    if not master_url or not master_url.startswith("http"):
+        raise RuntimeError("invalid master url")
+    body = _fetch(master_url, referer=referer, timeout=10)
+    txt = body if isinstance(body, str) else body.decode("utf-8", errors="ignore")
+    if "#EXTM3U" not in txt:
+        raise RuntimeError("master playlist: not m3u8")
+    # Hitung jumlah stream-inf / segment lines yang valid.
+    base = master_url.rsplit("/", 1)[0] + "/"
+    valid_count = 0
+    lines = txt.splitlines()
+    for i, ln in enumerate(lines):
+        s = ln.strip()
+        if not s or s.startswith("#"):
+            continue
+        # Absolute atau relative URL ke segment/variant playlist.
+        if s.startswith("http") or "/" in s or s.endswith(".m3u8") or s.endswith(".ts"):
+            valid_count += 1
+    if valid_count == 0:
+        raise RuntimeError("master playlist: no segments")
+    # Caller punya variants (misal multi-bitrate dari megaplay) → filter URL valid.
+    if variants:
+        out = [v for v in variants if v.get("url", "").startswith("http")]
+        if out:
+            return out
+    # Single-variant fallback: pakai master playlist langsung.
+    return [{"q": "auto", "url": master_url}]
+
+
+def _validate_sub_url(sub_url: str, referer: str):
+    """Soft-validasi subtitle URL: HEAD/GET kecil, kalau 4xx/5xx atau body
+    kosong → return None. Kalau 200 → return URL apa adanya.
+    Subtitle yang invalid jangan memblokir playback."""
+    if not sub_url or not sub_url.startswith("http"):
+        return None
+    try:
+        from curl_cffi import requests as creq
+        kw = dict(headers={"User-Agent": HI_UA,
+                           **({"Referer": referer} if referer else {})},
+                  impersonate="chrome124", timeout=8)
+        r = creq.get(sub_url, **kw)
+        if r.status_code != 200:
+            return None
+        # Pastikan body minimal 10 byte (signature VTT minimal: "WEBVTT\n").
+        if not r.content or len(r.content) < 10:
+            return None
+        return sub_url
+    except Exception:
+        return None
+
+
 def _try_embed_legacy(embed: str):
     referer = re.sub(r"^(https?://[^/]*).*", r"\1/", embed)
     page = _fetch(embed)
+    # Deteksi halaman 404 ZokoAnime (server return HTML page, bukan markdown())
+    # Page signature: ada "<title>Player</title>" + "Not" + "found." pada body.
+    # Skip regex window.__P kalau 404 — raise sebagai "anime not on server"
+    # sehingga caller skip server ini (jangan fallback dalam loop yang sama).
+    if "<title>Player</title>" in page and "Not " in page and "found." in page:
+        raise RuntimeError("404 page (anime not on server)")
     m = re.search(r'window\.__P\s*=\s*"([^"]*)"', page)
     if not m:
         raise RuntimeError("window.__P not found")
@@ -389,18 +483,27 @@ def _try_embed_legacy(embed: str):
         _probe_master(master, referer=referer)
     except Exception as e:
         raise RuntimeError(f"zokoanime probe: {e}")
-    # Pakai host CDN host-driven resolution (HD-1 pakai nexabloom.wintergrove).
-    # Subs & variants benerin tanpa parse playlist (hanya BFS master).
+    # Validasi playlist: minimal ada 1 segment/variant URL agar HLS.js tidak hang.
     subs = cfg.get("subtitles") or []
     default = next((s for s in subs if s.get("default")), subs[0] if subs else None)
-    variants = [{"q": "auto", "url": master}]
+    try:
+        variants = _validate_master_playlist(master, referer=referer, variants=[])
+    except Exception as e:
+        raise RuntimeError(f"zokoanime playlist: {e}")
     mal_id = ""
     mm = re.search(r"/mal/([0-9]+)/", embed)
     if mm:
         mal_id = mm.group(1)
-    return {"master": master, "variants": variants, "sub": (default.get("src") or default.get("file")) if default else None, "sub_lang": (default.get("label") or default.get("lang")) if default else None, "referer": referer, "mal_id": mal_id}
+    # Soft-validasi subtitle (tidak memblokir kalau invalid).
+    sub_url = (default.get("src") or default.get("file")) if default else None
+    if sub_url:
+        sub_url = _validate_sub_url(sub_url, referer=referer)
+    return {"master": master, "variants": variants,
+            "sub": sub_url,
+            "sub_lang": (default.get("label") or default.get("lang")) if default else None,
+            "referer": referer, "mal_id": mal_id}
 
-def hianime_m3u8(episode_maps, ep_no: int, mode: str = "sub"):
+def hianime_m3u8(episode_maps, ep_no: int, mode: str = "sub", slug: str = ""):
     mode = "dub" if str(mode).lower() == "dub" else "sub"
     ep_id = None
     for e in episode_maps:
@@ -429,9 +532,15 @@ def hianime_m3u8(episode_maps, ep_no: int, mode: str = "sub"):
     servers_sorted = sorted(servers, key=lambda sr: (tier_of(sr), sr["name"]))
     last_err = ""
     for srv in servers_sorted:
-        # Skip host mati (negative cache) tanpa re-fetch.
-        if _is_dead_host(_host_from(srv["embed"])):
+        host = _host_from(srv["embed"])
+        # Skip host mati (global negative cache) tanpa re-fetch.
+        if _is_dead_host(host):
             last_err = f"skip {srv['name']} (dead host)"
+            continue
+        # Skip per-(host, slug, ep): anime ini memang tidak ada di server ini
+        # (misal ZokoAnime 404 untuk judul baru). Negative cache TTL 1 jam.
+        if slug and _is_dead_pair(host, slug, ep_no):
+            last_err = f"skip {srv['name']} (404 cached for ep {ep_no})"
             continue
         try:
             embed_low = srv["embed"].lower()
@@ -447,11 +556,16 @@ def hianime_m3u8(episode_maps, ep_no: int, mode: str = "sub"):
                 return got
             last_err = f"{srv['name']} gave no m3u8"
         except Exception as e:
-            last_err = f"{srv['name']}: {e}"
+            err_msg = str(e)
+            last_err = f"{srv['name']}: {err_msg}"
+            msg = err_msg.lower()
             # Tandai host mati kalau error-nya network (RST, ConnectError, probe fail).
-            msg = str(e).lower()
             if any(t in msg for t in ("rst", "reset", "connect", "timeout", "dead", "upstream", "probe fail")):
-                _mark_dead(_host_from(srv["embed"]))
+                _mark_dead(host)
+            # Tandai per-(host, slug, ep) kalau anime tidak ada di server ini.
+            if any(t in msg for t in ("404 page", "not on server", "window.__p not found", "data-id not found")):
+                if slug:
+                    _mark_dead_pair(host, slug, ep_no)
             continue
     raise RuntimeError(last_err or "m3u8 not found")
 

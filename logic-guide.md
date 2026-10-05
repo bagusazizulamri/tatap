@@ -51,11 +51,10 @@ Objek `Anime` (dari browse): `{id, title, poster, sub, dub, eps, type, duration,
 
 ### Smart-fallback server (per Oktober 2026)
 - Tier urutan: `megaplay` (HD-1, Vidstream-2) → `vidtube.site` (VidPlay-1, juga pakai `window.__P`) → `zokoanime.video` (pakai CDN `hls.dramahot.top`).
-- `hls.dramahot.top` sering RST dari region kita — ditandai di `_DEAD_HOSTS` dan negative-cache 1 jam via `_mark_dead()`.
+- `hls.dramahot.top` awalnya ditandai RST dari region kita (disimpan di `_DEAD_HOSTS` + negative-cache 1 jam via `_mark_dead()`). Per Oct 2026 host sudah pulih (TLS handshake & HTTP 404 sukses) sehingga nama host dihapus dari `_DEAD_HOSTS`; kalau RST lagi nanti, `_mark_dead()` akan menambahkannya ke negative cache dan smart-fallback otomatis skip server ZokoAnime.
 - Tiap success path panggil `_probe_master()` (HEAD/GET kecil) sebelum return. Kalau probe gagal → raise → caller smart-fallback ke server berikutnya.
 - Megaplay sukses pakai CDN `fetch.nexabloom.top` + `fn5an.wintergrove.space` — routeable.
-- Proxy endpoint `/api/player/video` tolak upstream `dramahot.top` langsung dengan HTTP 502 (HLS.js deteksi `networkError`/`fragLoadError` daripada hang di buffering).
-- Backend tidak boleh return m3u8 dari host mati (`dramahot.top`) — probe di `_try_embed_legacy` raise exception agar caller skip server tersebut.
+- Proxy endpoint `/api/player/video` tidak lagi memblokir upstream `dramahot.top` langsung; kalau upstream kembali RST, error disurfacing sebagai HTTP 502 dari httpx dan HLS.js deteksi `networkError`/`fragLoadError` untuk fallback.
 
 ## 3. Model state frontend
 

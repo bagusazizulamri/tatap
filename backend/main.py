@@ -25,6 +25,10 @@ def ok(data):
 def fail(msg):
     return JSONResponse({"success": False, "error": msg}, status_code=200)
 
+@app.get("/api/ping")
+async def ping():
+    return ok({"status": "running"})
+
 @app.get("/api/health")
 async def health():
     try:
@@ -156,6 +160,13 @@ async def seasonal(which: str = Query("now", pattern="^(now|prev)$"),
 def _format_to_type(f):
     return {"TV": "TV", "TV_SHORT": "TV", "MOVIE": "Movie", "OVA": "OVA",
             "ONA": "ONA", "SPECIAL": "Special", "MUSIC": "Music"}.get(f or "", "")
+
+
+def _slug_norm_match(title):
+    """Normalisasi judul untuk perbandingan dengan hasil hianime_search.
+    Import dari database agar konsisten dengan key yang dipakai slug_map."""
+    from database import _slug_norm
+    return _slug_norm(title)
 
 
 @app.get("/api/upcoming-episodes")
@@ -318,11 +329,10 @@ async def proxy_video(url: str = Query(""), referer: str = Query("")):
     from fastapi.responses import StreamingResponse as _SR
     if not url.startswith("http"):
         return Response(status_code=400)
-    # Host yang terbukti RST dari region kita (Oct 2026) — tolak cepat agar HLS.js
-    # deteksi error dan user tidak lihat hang di "Buffering...".
-    if "dramahot.top" in url:
-        return Response(status_code=502, content=b"upstream unreachable (dramahot.top)",
-                        media_type="text/plain")
+    # Catatan: dramahot.top dulu diblokir karena TLS-RST dari region kita.
+    # Per Oct 2026 host sudah bisa dijangkau (TLS handshake sukses) sehingga
+    # blokir di-hapus; kalau mati lagi, _mark_dead() di hianime.py akan masukkan
+    # ke negative cache dan smart-fallback skip server ZokoAnime secara otomatis.
     from api.hianime import SEG_RE, SEG_KEY, SEG_IV, STRIP_BYTES, STRIP_RE
     import re as _re
     m = SEG_RE.search(url)
@@ -340,6 +350,29 @@ async def proxy_video(url: str = Query(""), referer: str = Query("")):
             url = real if real.startswith("http") else url
         except Exception:
             pass
+    # Probe status cepat sebelum StreamingResponse — kalau 4xx/5xx, return
+    # langsung 502 agar HLS.js deteksi fragLoadError. (StreamingResponse swallows
+    # HTTPException dari dalam generator, jadi probe wajib sebelum spawn _SR.)
+    try:
+        c = _client()
+        async with c.stream("GET", url,
+                            headers={"User-Agent": HI_UA, **({"Referer": referer} if referer else {})}) as r:
+            if r.status_code >= 400:
+                # Drain sebelum close agar connection kembali ke pool.
+                try:
+                    await r.aread()
+                except Exception:
+                    pass
+                return Response(status_code=502,
+                                content=f"upstream {r.status_code}".encode(),
+                                media_type="text/plain")
+    except HTTPException as e:
+        return Response(status_code=e.status_code, content=str(e.detail).encode(),
+                        media_type="text/plain")
+    except Exception as e:
+        return Response(status_code=502,
+                        content=f"upstream error: {type(e).__name__}".encode(),
+                        media_type="text/plain")
     return _SR(_pipe_video(url, referer), media_type="application/octet-stream",
                headers={"Access-Control-Allow-Origin": "*"})
 
@@ -362,10 +395,10 @@ def _client():
 async def _pipe_video(url: str, referer: str):
     import urllib.parse as _up
     from api.hianime import STRIP_BYTES as _SB, STRIP_RE as _SR2
-    # Host yang terbukti RST dari region kita (Oct 2026) — tolak cepat agar HLS.js
-    # deteksi error dan fallback, daripada silently stream 0 byte.
-    if "dramahot.top" in url:
-        raise HTTPException(status_code=502, detail="upstream unreachable (dramahot.top)")
+    # Catatan: dramahot.top dulu diblokir karena TLS-RST dari region kita.
+    # Per Oct 2026 host sudah bisa dijangkau (TLS handshake sukses) sehingga
+    # blokir di-hapus; kalau mati lagi, _mark_dead() di hianime.py akan masukkan
+    # ke negative cache dan smart-fallback skip server ZokoAnime secara otomatis.
     c = _client()
     upstream_status = None
     try:
@@ -428,21 +461,38 @@ async def proxy_sub(url: str = Query(""), referer: str = Query("")):
         r = await c.get(url, headers={"User-Agent": HI_UA, **({"Referer": referer} if referer else {})})
         return Response(content=r.text, media_type="text/vtt")
 
+def find_mpv_binary():
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    candidates = [
+        os.path.join(root_dir, "bin", "mpv.exe"),
+        os.path.join(root_dir, "bin", "mpv"),
+        os.path.join(root_dir, "mpv", "mpv.exe"),
+    ]
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    import shutil
+    return shutil.which("mpv.exe" if sys.platform == "win32" else "mpv")
+
 @app.post("/api/play-mpv")
 async def play_mpv(body: dict = None):
     body = body or {}
     slug, ep, mode = body.get("slug", ""), int(body.get("ep", 1)), body.get("mode", "sub")
     quality = body.get("quality", await get_setting("quality", "best"))
     try:
+        mpv_bin = find_mpv_binary()
+        if not mpv_bin:
+            return fail("mpv tidak ditemukan. Taruh mpv.exe di folder 'bin/' atau install mpv ke sistem.")
+
         loop = asyncio.get_running_loop()
         hit = await get_episode_cache(slug, ep, mode)
         if hit:
             got = dict(hit)
         else:
             maps = await loop.run_in_executor(None, lambda: hi.hianime_episodes(slug))
-            got = await loop.run_in_executor(None, lambda: hi.hianime_m3u8(maps, ep, mode))
+            got = await loop.run_in_executor(None, lambda: hi.hianime_m3u8(maps, ep, mode, slug))
         picked = hi.select_quality(got["variants"], quality)
-        cmd = ["mpv", f"--referer={got.get('referer','')}", picked["url"]]
+        cmd = [mpv_bin, f"--referer={got.get('referer','')}", picked["url"]]
         if got.get("sub"):
             try:
                 async with httpx.AsyncClient(timeout=15) as c:
@@ -452,13 +502,26 @@ async def play_mpv(body: dict = None):
                     cmd.insert(2, f"--sub-file={fp}")
             except Exception:
                 pass
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        creationflags = 0
+        if sys.platform == "win32":
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creationflags)
         await add_history(slug, body.get("title", slug), ep, mode)
         return ok({"cmd": cmd, "picked": picked})
-    except FileNotFoundError:
-        return fail("mpv tidak ditemukan. Install: sudo apt install mpv")
     except Exception as e:
         return fail(str(e))
+
+@app.post("/api/shutdown")
+async def shutdown():
+    def _do_exit():
+        import time
+        time.sleep(0.3)
+        os._exit(0)
+    import threading
+    threading.Thread(target=_do_exit, daemon=True).start()
+    return ok({"message": "Server shutting down..."})
 
 @app.get("/api/history")
 async def history():
