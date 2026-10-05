@@ -17,6 +17,14 @@ async def init_db():
             slug TEXT, ep INTEGER, mode TEXT, master TEXT, variants TEXT,
             sub TEXT, sub_lang TEXT, referer TEXT, server TEXT, fetched_at INTEGER,
             PRIMARY KEY(slug, ep, mode))""")
+        # Migrasi ringan: tambah kolom 'subtitles' (TEXT JSON array) untuk multi-track.
+        # Gunakan pragma_table_info agar idempotent — kalau kolom sudah ada, skip.
+        # Tidak ANDa ALTER TABLE di try/except supaya DB lama ter-upgrade otomatis.
+        try:
+            await db.execute("ALTER TABLE episode_cache ADD COLUMN subtitles TEXT DEFAULT '[]'")
+        except Exception:
+            # Duplicate column name → kolom sudah ada, aman di-skip.
+            pass
         await db.execute("""CREATE TABLE IF NOT EXISTS watch_history(
             id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT, title TEXT,
             episode INTEGER, mode TEXT DEFAULT 'sub', progress INTEGER DEFAULT 0,
@@ -67,15 +75,35 @@ async def get_episode_cache(slug: str, ep: int, mode: str, ttl=12*3600):
                 d["variants"] = json.loads(d["variants"] or "[]")
             except Exception:
                 d["variants"] = []
+            # Multi-subtitle: parse kolom 'subtitles' (TEXT JSON array).
+            # Fallback: kalau DB lama belum punya kolom (atau nil), dan 'sub' ada,
+            # buat list 1-element dari 'sub' + 'sub_lang' agar client tetap punya
+            # track untuk dropdown (kompatibel mundur dengan cache lama).
+            try:
+                d["subtitles"] = json.loads(d.get("subtitles") or "[]")
+                if not isinstance(d["subtitles"], list):
+                    d["subtitles"] = []
+            except Exception:
+                d["subtitles"] = []
+            if not d["subtitles"] and d.get("sub"):
+                d["subtitles"] = [{
+                    "label": d.get("sub_lang") or "English",
+                    "lang": "",
+                    "url": d["sub"],
+                    "default": True,
+                }]
             return d
 
-async def set_episode_cache(slug, ep, mode, master, variants, sub, sub_lang, referer, server):
+async def set_episode_cache(slug, ep, mode, master, variants, sub, sub_lang, referer, server,
+                          subtitles=None):
+    """Simpan cache episode. subtitles=list[{label,lang,url,default}], default []."""
+    subs_json = json.dumps(subtitles or [])
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""INSERT OR REPLACE INTO episode_cache
-            (slug,ep,mode,master,variants,sub,sub_lang,referer,server,fetched_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?)""",
+            (slug,ep,mode,master,variants,sub,sub_lang,referer,server,subtitles,fetched_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
             (slug, ep, mode, master, json.dumps(variants), sub or "", sub_lang or "",
-             referer or "", server or "", _now()))
+             referer or "", server or "", subs_json, _now()))
         await db.commit()
 
 async def add_history(slug, title, episode, mode="sub", progress=0):
