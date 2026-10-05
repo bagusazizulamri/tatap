@@ -1,4 +1,7 @@
-var cur = {slug:"", title:"", ep:1, mode:"sub", quality:"best", res:null, eps:[], watched:{}};
+var cur = {slug:"", title:"", ep:1, mode:"sub", quality:"best", res:null, eps:[], watched:{},
+            subLang:"English",    // preferensi bahasa user dari /api/settings
+            activeSub:null        // URL track subtitle yang sedang aktif (live switch)
+           };
 function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function toast(msg,ms){
@@ -76,7 +79,11 @@ function openPlayer(ep){
     var picked=r.data.picked||r.data.variants[0];
     $("pm-meta").textContent="ep "+ep+" · "+cur.mode.toUpperCase()+" · "+picked.q+" · "+(r.data.server||"")+(r.data.cached?" · cached":" · "+(Date.now()-t0)+"ms");
     renderVariants();
-    playUrl(picked.url,r.data.referer,r.data.sub,r.data.referer);
+    // Render dropdown subtitle: pilih track yang cocok dengan preferensi user
+    // (cur.subLang) atau default: true. Simpan URL track yang aktif.
+    cur.activeSub = pickSubtitleUrl(r.data.subtitles || [], cur.subLang);
+    renderSubtitles(r.data.subtitles || [], cur.activeSub);
+    playUrl(picked.url,r.data.referer,cur.activeSub,r.data.referer);
     window.Tatap.saveHist({slug:cur.slug,title:cur.title,episode:ep,mode:cur.mode}).then(function(){renderContinue();});
   });
 }
@@ -93,6 +100,125 @@ function renderVariants(){
       box.appendChild(b);
     })(vs[i]);
   }
+}
+
+// ==== Multi-subtitle dropdown ====
+
+function pickSubtitleUrl(subtitles, preferLang){
+  // Pilih URL track subtitle yang cocok. Prioritas:
+  //   1) Track dengan label == preferLang (case-insensitive).
+  //   2) Track dengan lang code == preferLang (misal "English" → "en").
+  //   3) Track dengan default: true.
+  //   4) Track pertama kalau tidak ada yang match.
+  // Return null kalau subtitles kosong (UI akan sembunyikan dropdown).
+  if(!subtitles||!subtitles.length)return null;
+  if(preferLang){
+    var low=String(preferLang).toLowerCase();
+    for(var i=0;i<subtitles.length;i++){
+      var s=subtitles[i];
+      if((s.label||"").toLowerCase()===low)return s.url;
+    }
+    // Partial match di label (misal "Indonesian" cocok "Indonesian (Bahasa)").
+    for(var j=0;j<subtitles.length;j++){
+      if(((subtitles[j].label)||"").toLowerCase().indexOf(low)===0)return subtitles[j].url;
+    }
+    // Match kode bahasa (English → en/id/ja).
+    var langMap={"english":"en","indonesian":"id","japanese":"ja","spanish":"es","portuguese":"pt",
+                 "french":"fr","german":"de","italian":"it","korean":"ko","chinese":"zh","arabic":"ar",
+                 "russian":"ru","thai":"th","vietnamese":"vi","turkish":"tr","hindi":"hi"};
+    var code=langMap[low];
+    if(code){
+      for(var k=0;k<subtitles.length;k++){
+        if((subtitles[k].lang||"").toLowerCase()===code)return subtitles[k].url;
+      }
+    }
+  }
+  // Fallback: default:true → first track.
+  for(var m=0;m<subtitles.length;m++){
+    if(subtitles[m].default)return subtitles[m].url;
+  }
+  return subtitles[0].url;
+}
+
+function renderSubtitles(subtitles, activeUrl){
+  var wrap=$("pm-subs-wrap");
+  var sel=$("pm-subs");
+  if(!wrap||!sel)return;
+  // Dropdown hanya tampil kalau ada minimal 1 track subtitle.
+  // Kalau 0 → sembunyikan wrap (UI tetap clean).
+  if(!subtitles||!subtitles.length){
+    wrap.classList.add("hidden");
+    sel.innerHTML="";
+    return;
+  }
+  wrap.classList.remove("hidden");
+  sel.innerHTML="";
+  // Opsi pertama: "Off" (matikan subtitle).
+  var offOpt=document.createElement("option");
+  offOpt.value="";
+  offOpt.textContent="Off";
+  sel.appendChild(offOpt);
+  for(var i=0;i<subtitles.length;i++){
+    (function(s){
+      var o=document.createElement("option");
+      o.value=s.url||"";
+      o.textContent=s.label||("Subtitle "+(i+1));
+      if(s.default)o.textContent+=" (Default)";
+      if(activeUrl&&s.url===activeUrl)o.selected=true;
+      sel.appendChild(o);
+    })(subtitles[i]);
+  }
+  // Set value juga kalau match dari default tidak ketemu (URL di pickSubtitleUrl).
+  if(activeUrl){
+    sel.value=activeUrl;
+  }else{
+    sel.value="";  // Off
+  }
+  // Event listener: ganti track aktif seketika + simpan preferensi.
+  sel.onchange=function(){
+    var url=sel.value;
+    cur.activeSub=url||null;
+    // Update <track> live tanpa pause/reload video.
+    switchSubtitleTrack(url);
+    // Cari label untuk disimpan ke settings (server-side preference).
+    var label="";
+    if(url){
+      for(var j=0;j<subtitles.length;j++){
+        if(subtitles[j].url===url){label=subtitles[j].label||"";break;}
+      }
+    }
+    if(label){
+      cur.subLang=label;
+      window.Tatap.setSetting({sub_lang:label}).then(function(){}).catch(function(){});
+      toast("Subtitle: "+label);
+    }else{
+      cur.subLang="";
+      window.Tatap.setSetting({sub_lang:""}).then(function(){}).catch(function(){});
+      toast("Subtitle: Off");
+    }
+  };
+}
+
+function switchSubtitleTrack(url){
+  // Ganti <track> pada <video> secara live. URL kosong = Off (hapus semua track).
+  var v=$("vid");
+  if(!v)return;
+  var oldTracks=v.querySelectorAll("track");
+  for(var i=0;i<oldTracks.length;i++)oldTracks[i].parentNode.removeChild(oldTracks[i]);
+  if(!url)return;
+  var t=document.createElement("track");
+  t.kind="subtitles";
+  // Pakai label bahasa aktif untuk label track, fallback ke "Subtitle".
+  t.label=cur.subLang||"Subtitle";
+  t.srclang=cur.subLang==="English"?"en":(cur.subLang==="Indonesian"?"id":"");
+  try{t["default"]=true;}catch(e){t.setAttribute("default","");}
+  // Proxy subtitle lewat backend agar Referer otomatis di-inject.
+  var ref=cur.res&&cur.res.referer||"";
+  t.src="/api/player/sub?url="+encodeURIComponent(url)+"&referer="+encodeURIComponent(ref);
+  v.appendChild(t);
+  // Force refresh mode (HTML5 video butuh trigger mode change agar track baru aktif).
+  var mode=v.textTracks&&v.textTracks.length?v.textTracks[0].mode:null;
+  if(mode){v.textTracks[0].mode="hidden";v.textTracks[0].mode="showing";}
 }
 function armAutohide(){
   var stage=document.querySelector(".ambient-stage");
@@ -136,15 +262,9 @@ function playUrl(url,referrer,sub,subRef){
       }
     }
   }catch(e){}
-  var old=v.querySelector("track");
-  if(old)old.remove();
-  if(sub){
-    var t=document.createElement("track");
-    t.kind="subtitles";t.label="English";t.srclang="en";
-    try{t["default"]=true;}catch(e){t.setAttribute("default","");}
-    t.src="/api/player/sub?url="+encodeURIComponent(sub)+"&referer="+encodeURIComponent(subRef||"");
-    v.appendChild(t);
-  }
+  // Bersihkan <track> lama lalu pasang track subtitle aktif (live switch).
+  // Fungsi switchSubtitleTrack() menhandle Off (hapus semua) dan replace.
+  switchSubtitleTrack(sub || null);
   $("pm-spinner").classList.remove("hidden");
   $("pm-status").textContent="buffering...";
   var onCan=function(){$("pm-spinner").classList.add("hidden");};
@@ -316,6 +436,17 @@ App = {
 
 function init(){
   loadPrefs();
+  // Muat preferensi subtitle dari server (sub_lang). Kalau server gagal,
+  // fallback ke default 'English' yang sudah di-set di var cur.
+  if(window.Tatap&&window.Tatap.getSettings){
+    window.Tatap.getSettings().then(function(r){
+      if(r&&r.success&&r.data){
+        if(r.data.sub_lang) cur.subLang=r.data.sub_lang;
+        if(r.data.quality) cur.quality=r.data.quality;
+        if(r.data.mode) {cur.mode=r.data.mode; syncSeg();}
+      }
+    }).catch(function(){});
+  }
   document.querySelectorAll("#mode-seg button").forEach(function(b){
     b.addEventListener("click",function(){
       document.querySelectorAll("#mode-seg button").forEach(function(x){x.classList.remove("active");});

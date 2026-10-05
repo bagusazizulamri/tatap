@@ -166,6 +166,17 @@ body.no-ambient #ambient,body.no-ambient #ambient-fallback{display:none}
 .variants{display:flex;gap:6px;flex:1 1 auto;flex-wrap:wrap;min-width:0}
 .variants button{background:var(--panel2);border:1px solid var(--line);color:var(--dim);border-radius:var(--r);padding:6px 12px;cursor:pointer;font:inherit;font-size:11px}
 .variants button.active{background:var(--acc);color:#04121f;border-color:var(--acc)}
+/* Subtitle picker dropdown di player foot. Selaras dengan tema UI Tatap:
+   panel2 background + line border. Icon 💬 + native <select> dengan optik monospace. */
+.sub-picker{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:4px 8px}
+.sub-picker.hidden{display:none}
+.sub-picker .sub-icon{font-size:13px;line-height:1;color:var(--dim);user-select:none}
+.sub-picker select{background:transparent;border:0;color:var(--txt);font:inherit;font-size:11px;cursor:pointer;padding:3px 4px;outline:none;min-width:96px;max-width:160px}
+.sub-picker select:focus{outline:1px solid var(--acc);outline-offset:-1px;border-radius:var(--r)}
+.sub-picker select option{background:var(--panel);color:var(--txt);font-family:inherit}
+.player-foot{padding:8px 4px}
+.player-foot>.variants{flex:0 1 auto;max-width:55%}
+.player-foot>.sub-picker{flex:0 0 auto}
 .player-hint{margin-top:8px;text-align:center;font-size:clamp(10px,0.3vw + 0.55rem,11px)}
 .toast{position:fixed;bottom:calc(var(--status-h) + 60px);left:50%;transform:translateX(-50%);z-index:200;background:var(--panel);border:1px solid var(--acc);color:var(--txt);padding:9px 16px;border-radius:var(--r);font-size:12px;max-width:92vw;text-align:center}
 .toast.hidden{display:none}
@@ -201,6 +212,9 @@ body.no-ambient #ambient,body.no-ambient #ambient-fallback{display:none}
   .player-foot{gap:6px}
   .player-foot>button{padding:7px 10px;font-size:12px}
   .variants button{padding:5px 9px;font-size:10px}
+  .sub-picker{padding:3px 6px}
+  .sub-picker .sub-icon{font-size:12px}
+  .sub-picker select{min-width:80px;font-size:10px;padding:2px 2px}
   .player-hint{font-size:10px}
   #ambient,#ambient-fallback{left:-20px;right:-20px;top:-20px;bottom:-20px;width:calc(100% + 40px);height:calc(100% + 40px);filter:blur(40px)}
   .toast{bottom:calc(var(--status-h) + 56px)}

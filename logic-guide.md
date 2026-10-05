@@ -30,13 +30,13 @@ Status HTTP selalu 200 (lihat `ok()`/`fail()` di main.py).
 | `GET /api/season-now?page=` | sama browse + `season` | |
 | `GET /api/still-airing?page=` | sama browse + `season` | |
 | `GET /api/anime/{slug}/episodes` | `{slug, episodes:[{ep,ep_id}], total}` | |
-| `GET /api/stream/resolve?slug=&ep=&mode=&q=` | `{variants:[{q,url}], picked, sub, referer, server, cached}` | |
+| `GET /api/stream/resolve?slug=&ep=&mode=&q=` | `{variants:[{q,url}], picked, sub, referer, server, subtitles:[{label,lang,url,default}], cached}` | `subtitles` = seluruh track subtitle hasil scrape (normalisasi). `sub` = URL track default (backward compat). |
 | `GET /api/player/video?url=&referer=` | stream | proxy segmen/playlist |
 | `GET /api/player/sub?url=&referer=` | VTT | |
-| `POST /api/play-mpv` | `{cmd, picked}` | spawn mpv lokal |
+| `POST /api/play-mpv` | `{cmd, picked, subs_attached}` | spawn mpv lokal. Body opsional `sub_url` (track yang sedang aktif di UI). Backend attach SELURUH `subtitles[]` via multi-arg `--sub-file=` (dedupe by URL). `subs_attached` = jumlah track yang berhasil di-download. |
 | `GET/POST/DELETE /api/history` | list history | |
 | `GET /api/filters` | `FILTERS` dari hianime.py | Otoritatif untuk opsi filter. |
-| `GET/POST /api/settings` | `{quality,mode,player}` | Belum dipakai frontend. |
+| `GET/POST /api/settings` | `{quality,mode,player,sub_lang}` | `sub_lang` (default "English") = preferensi bahasa subtitle user yang persistent. Disimpan saat user pilih track di dropdown; dipakai frontend untuk auto-select track di episode berikutnya. |
 
 Objek `Anime` (dari browse): `{id, title, poster, sub, dub, eps, type, duration, synopsis}`.
 `id` selalu = slug. `openTitle(id, title)` memakai slug ini.
@@ -48,6 +48,13 @@ Objek `Anime` (dari browse): `{id, title, poster, sub, dub, eps, type, duration,
 - AniList `PageInfo` over-reports untuk query season-filter (contoh Fall 2026 mengembalikan `total:5000, lastPage:200`). Endpoint `/api/seasonal` memaksa `total_pages=1`.
 - Slug lookup ke hianime via `hianime_search(title, 5)`; hasil pertama dipakai kalau tidak ada exact match. Cache disimpan di tabel `slug_map` TTL 7 hari.
 - AniList `airingSchedules` harus via `Page.airingSchedules(...)` (bukan `AiringSchedule` sebagai satu item). `Page` adalah connection, `AiringSchedule` adalah satu entity.
+
+### Multi-subtitle (plan: Opsi Multi-Subtitle Tatap)
+- Backend ekstrak & normalisasi seluruh track subtitle lewat `_normalize_subtitles()` di `backend/api/hianime.py`. Filter track non-subtitle (`kind != subtitles/captions`), resolve URL relatif terhadap `referer`, expand label kode bahasa 2-char (`ja` → `Japanese`), auto-mark `default:true` kalau tak ada.
+- DB schema: kolom `episode_cache.subtitles TEXT DEFAULT '[]'` (JSON array). Migrasi idempotent — `ALTER TABLE` di `init_db()` di-try/except agar DB lama auto-upgrade tanpa error.
+- Frontend (`#pm-subs-wrap` di `.player-foot`, sebelah `pm-variants`): dropdown `💬 SUB: [English ▾]` berisi opsi `Off` + daftar bahasa. Pilih track → ganti `<track>` di `<video>` secara live (tanpa reload), simpan label ke `sub_lang` di `/api/settings`.
+- Episode berikutnya: `cur.subLang` dibaca dari `/api/settings` di `init()`; `pickSubtitleUrl()` cocokkan label/partial/code → fallback ke `default:true`.
+- MPV: `POST /api/play-mpv` accept `sub_url` (track aktif). Backend tetap attach SELURUH `subtitles[]` (multi-arg `--sub-file`) supaya user bisa cycle via tombol `j` di MPV. Dedupe by URL agar `sub` default tidak dobel kalau sudah ada di `subtitles[]`.
 
 ### Smart-fallback server (per Oktober 2026)
 - Tier urutan: `megaplay` (HD-1, Vidstream-2) → `vidtube.site` (VidPlay-1, juga pakai `window.__P`) → `zokoanime.video` (pakai CDN `hls.dramahot.top`).
@@ -117,8 +124,8 @@ Elemen berikut tidak boleh di-rename / dihapus. app.js meng-query dengan ID ini:
 title-modal, tm-eyebrow, tm-title, tm-sub, tm-count, tm-eps, tm-close,
 ep-filter, mode-seg, quality-seg
 player-modal, pm-title, pm-meta, pm-close, pm-mpv, pm-prev, pm-next,
-pm-variants, pm-spinner, pm-status, vid, ambient, ambient-fallback,
-.ambient-stage, .player-shell, .player-foot, .player-hint
+pm-variants, pm-subs-wrap, pm-subs, pm-spinner, pm-status, vid, ambient,
+ambient-fallback, .ambient-stage, .player-shell, .player-foot, .player-hint
 ```
 Modal hanya boleh di-restyle (font/border/radius). Struktur & behavior playback tidak diubah.
 

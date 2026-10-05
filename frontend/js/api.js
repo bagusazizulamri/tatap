@@ -17,6 +17,9 @@ resolve:function(slug,ep,mode,q){return jget("/api/stream/resolve?slug="+encodeU
 health:function(){return jget("/api/health");},
 history:function(){return jget("/api/history");},
 saveHist:function(b){return jpost("/api/history",b);},
-playMPV:function(b){return jpost("/api/play-mpv",b);}
+playMPV:function(b){return jpost("/api/play-mpv",b);},
+// Settings (termasuk sub_lang).
+getSettings:function(){return jget("/api/settings");},
+setSetting:function(b){return jpost("/api/settings",b);}
 };
 
