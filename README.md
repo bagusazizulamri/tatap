@@ -7,10 +7,38 @@
 - Pencarian judul dengan saran pencarian terakhir.
 - Pilih judul, lalu pilih episode dari daftar.
 - Player 16:9 dengan pilihan kualitas, subtitle multi-bahasa (atau Off), dan preferensi bahasa tersimpan.
+- **Auto-Translate Subtitle Indonesia (AI 3-Tier — BYOK)**: terjemahkan subtitle English ke Indonesia secara instan menggunakan AI.
 - Cahaya ambient + efek layar tabung (bisa dimatikan).
 - Lanjut menonton, shortcut keyboard, riwayat lokal.
 - Opsi pemutar eksternal MPV (kalau `mpv` terpasang).
 - Windows: `Tatap.exe` native (WebView2), tutup jendela = backend ikut mati.
+
+## Auto-Translate Subtitle AI (BYOK — Bring Your Own Key)
+
+Tatap menyediakan fitur auto-translate subtitle dari track English ke Bahasa Indonesia menggunakan arsitektur **Multi-Tier Fallback**:
+
+> [!NOTE]
+> **BYOK (Bring Your Own Key)**: Tatap tidak menyediakan server LLM terpusat. Untuk mendapatkan terjemahan episode penuh secara cepat dan tanpa batas kuota harian, **kamu membawa API Key kamu sendiri** (gratis via Groq atau OpenAI).
+
+### Tier Penerjemahan:
+1. **Tier 1 (Utama & Direkomendasikan): LLM API (BYOK)**
+   - Mendukung **Groq** (sangat cepat & gratis) atau **OpenAI**-compatible endpoint.
+   - Cara pakai di web app / TUI:
+     - Masukkan API key langsung di command bar / terminal Tatap:
+       - `:apikey gsk_...` → otomatis mendeteksi Groq (apiurl & model terset otomatis).
+       - `:apikey sk-...` → otomatis mendeteksi OpenAI (`gpt-4o-mini`).
+     - Periksa status: `:apikey`
+     - Ubah model/endpoint custom: `:model <nama_model>` atau `:apiurl <url>`
+     - Hapus API key: `:apikey clear`
+   - *Keamanan*: Kunci API disimpan 100% lokal di database SQLite komputermu (`anime.db`) dan hanya dikirim langsung ke provider API pilihanmu.
+2. **Tier 2 (Fallback Publik): MyMemory Translation**
+   - Aktif otomatis jika API key belum disetel. Kuota publik gratis ~5.000 karakter per hari per IP.
+3. **Tier 3 (Fallback Sumber): English Original**
+   - Jika kuota publik habis atau terjadi kegagalan jaringan, subtitle tetap menampilkan teks asli bahasa Inggris tanpa terputus.
+
+### Cara Mengaktifkan di Player:
+- Klik tombol **🌐 ID** di player control bar, atau
+- Pilih opsi **"Indonesian (AI)"** langsung dari dropdown subtitle (💬). Track akan otomatis diterjemahkan dan waktu cue subtitle tetap sinkron presisi.
 
 ## Mulai cepat
 
