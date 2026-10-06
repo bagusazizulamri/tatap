@@ -21,6 +21,10 @@ var (
 	procMessageBoxW = user32.NewProc("MessageBoxW")
 	dwmapi          = syscall.NewLazyDLL("dwmapi.dll")
 	procDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
+	kernel32          = syscall.NewLazyDLL("kernel32.dll")
+	procGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
+	procLoadImageW    = user32.NewProc("LoadImageW")
+	procSendMessageW  = user32.NewProc("SendMessageW")
 )
 
 const (
@@ -125,6 +129,21 @@ func setDarkMode(hwnd uintptr, dark bool) {
 	}
 }
 
+func setWindowIcons(hwnd uintptr) {
+	// Load icon dari RT_GROUP_ICON id 1 (lihat launcher/winres/winres.json).
+	// Kirim WM_SETICON ICON_SMALL/BIG agar Windows pakai untuk taskbar/alt-tab.
+	hInstance, _, _ := procGetModuleHandleW.Call()
+	hIcon, _, _ := procLoadImageW.Call(
+		hInstance, 1 /*resource id*/, 1 /*IMAGE_ICON*/, 0, 0,
+		0x00000040 /*LR_DEFAULTSIZE=0x40*/|0x00008000 /*LR_SHARED=0x8000*/)
+	if hIcon == 0 {
+		return
+	}
+	// ICON_SMALL=0, ICON_BIG=1
+	procSendMessageW.Call(hwnd, 0x00000080 /*WM_SETICON*/, 0, hIcon)
+	procSendMessageW.Call(hwnd, 0x00000080 /*WM_SETICON*/, 1, hIcon)
+}
+
 func runWebView(appURL, dataPath string) {
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		Debug:     false,
@@ -135,6 +154,10 @@ func runWebView(appURL, dataPath string) {
 			Width:  1280,
 			Height: 800,
 			Center: true,
+			// IconId 1 cocok dengan RT_GROUP_ICON "#1" di launcher/winres/winres.json.
+			// Library panggil LoadImageW(hinstance, MAKEINTRESOURCE(1), ...)
+			// yang otomatis load dari resource RT_GROUP_ICON id 1 (lihat PNG).
+			IconId: 1,
 		},
 	})
 	if w == nil {
@@ -144,7 +167,11 @@ func runWebView(appURL, dataPath string) {
 		return
 	}
 	defer w.Destroy()
-	setDarkMode(uintptr(w.Window()), isSystemDarkMode())
+	hwnd := uintptr(w.Window())
+	setDarkMode(hwnd, isSystemDarkMode())
+	// Backup: pastikan icon tampil di taskbar/alt-tab dengan WM_SETICON
+	// (beberapa Windows theme abaikan HIconSm dari WNDCLASSEX).
+	setWindowIcons(hwnd)
 	w.Navigate(appURL)
 	w.Run()
 }
