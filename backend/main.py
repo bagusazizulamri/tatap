@@ -557,8 +557,10 @@ async def proxy_sub(url: str = Query(""),
     except Exception:
         new_text = text
         tier = {"cues": None, "level": "source"}
-    # Cache hasil (termasuk source fallback agar tidak translate ulang).
-    await set_subtitle_cache(cache_key, new_text)
+    # Cache hasil hanya jika berhasil diterjemahkan (tier1 / tier2).
+    # Jangan cache jika jatuh ke source fallback agar user bisa retry saat set apikey.
+    if tier.get("level") in ("tier1", "tier2"):
+        await set_subtitle_cache(cache_key, new_text)
     resp = Response(content=new_text, media_type="text/vtt")
     resp.headers["X-Translate-Tier"] = tier["level"]
     return resp

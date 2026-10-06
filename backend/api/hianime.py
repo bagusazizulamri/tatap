@@ -386,10 +386,14 @@ def _normalize_subtitles(raw_tracks, referer: str = ""):
             "url": url,
             "default": is_def,
         })
-    # Pastikan tepat satu track 'default'. Kalau tidak ada, tandai track pertama.
+    # Pastikan tepat satu track 'default'. Kalau tidak ada, prioritaskan English, fallback ke track pertama.
     has_def = any(o["default"] for o in out)
     if out and not has_def:
-        out[0]["default"] = True
+        en_track = next((o for o in out if (o.get("lang") or "").lower() == "en" or (o.get("label") or "").lower().startswith("english")), None)
+        if en_track:
+            en_track["default"] = True
+        else:
+            out[0]["default"] = True
     return out
 
 
@@ -464,7 +468,9 @@ def _try_megaplay(embed: str):
     if master.startswith("/"):
         master = origin + master
     subs = cfg.get("tracks") or []
-    default = next((s for s in subs if s.get("default")), subs[0] if subs else None)
+    default = next((s for s in subs if s.get("default") or s.get("is_default")), None)
+    if not default and subs:
+        default = next((s for s in subs if (s.get("lang") or "").lower() == "en" or (s.get("label") or "").lower().startswith("english")), subs[0])
     variants = []
     try:
         text = _fetch(master, referer=origin + "/")
@@ -606,7 +612,9 @@ def _try_embed_legacy(embed: str):
         raise RuntimeError(f"zokoanime probe: {e}")
     # Validasi playlist: minimal ada 1 segment/variant URL agar HLS.js tidak hang.
     subs = cfg.get("subtitles") or []
-    default = next((s for s in subs if s.get("default")), subs[0] if subs else None)
+    default = next((s for s in subs if s.get("default") or s.get("is_default")), None)
+    if not default and subs:
+        default = next((s for s in subs if (s.get("lang") or "").lower() == "en" or (s.get("label") or "").lower().startswith("english")), subs[0])
     try:
         variants = _validate_master_playlist(master, referer=referer, variants=[])
     except Exception as e:

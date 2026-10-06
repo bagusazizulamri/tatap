@@ -92,48 +92,100 @@ def _fmt_ts(seconds):
     return f"{h:02d}:{m:02d}:{s:06.3f}"
 
 
+LANG_NAMES = {
+    "en": "English",
+    "id": "Indonesian",
+    "ja": "Japanese",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "pt": "Portuguese",
+    "ko": "Korean",
+    "zh": "Chinese",
+    "ar": "Arabic",
+    "ru": "Russian",
+    "th": "Thai",
+    "vi": "Vietnamese",
+    "tr": "Turkish",
+    "hi": "Hindi",
+}
+
+
 async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=60.0):
-    """Translate via OpenAI-compatible /chat/completions.
+    """Translate via OpenAI-compatible /chat/completions with chunked batches.
     cues: list[{start,end,text}]. Returns translated cues (text replaced, timing preserved)."""
     if not cues:
         return cues
     apiurl = (apiurl or "https://api.openai.com/v1").rstrip("/")
     model = model or "openai/gpt-oss-20b"
-    lines = [c["text"] for c in cues]
-    body_text = "\n".join(lines)
-    prompt = (
-        f"Translate each subtitle line below from {src} to {tgt}. "
-        f"Preserve line breaks exactly — return one translation per line, "
-        f"in the same order. Output only the translations, no numbering or commentary."
-    )
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "You are a professional subtitle translator."},
-            {"role": "user", "content": prompt + "\n\n" + body_text},
-        ],
-        "temperature": 0.3,
-    }
+    src_name = LANG_NAMES.get((src or "").lower(), src or "English")
+    tgt_name = LANG_NAMES.get((tgt or "").lower(), tgt or "Indonesian")
+    
     headers = {
         "Authorization": "Bearer " + apikey,
         "Content-Type": "application/json",
     }
-    async with _httpx.AsyncClient(timeout=timeout) as c:
-        r = await c.post(apiurl + "/chat/completions", json=payload, headers=headers)
-        r.raise_for_status()
-        d = r.json()
-    content = (d.get("choices") or [{}])[0].get("message", {}).get("content", "")
-    translated = [x for x in content.split("\n") if x.strip() != ""]
-    # Heuristic: pad/truncate to match cue count
-    if len(translated) < len(lines):
-        # pad dengan source lines
-        translated = translated + lines[len(translated):]
-    elif len(translated) > len(lines):
-        translated = translated[: len(lines)]
+    
+    BATCH_SIZE = 40
+    batches = [cues[i:i + BATCH_SIZE] for i in range(0, len(cues), BATCH_SIZE)]
+    all_translated = []
+    
+    timeout_cfg = _httpx.Timeout(timeout, connect=15.0)
+    async with _httpx.AsyncClient(timeout=timeout_cfg, trust_env=True) as c:
+        for batch in batches:
+            lines = [cue["text"].replace("\n", " ").strip() for cue in batch]
+            body_text = "\n".join(lines)
+            prompt = (
+                f"Translate each subtitle line below from {src_name} to {tgt_name}.\n"
+                f"Return exactly one translated line per input line, in the same order.\n"
+                f"Output only the translations in {tgt_name}, no numbering, explanations, or commentary."
+            )
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": f"You are a professional subtitle translator translating into natural, fluent {tgt_name}."},
+                    {"role": "user", "content": prompt + "\n\n" + body_text},
+                ],
+                "temperature": 0.3,
+                "max_tokens": 4096,
+            }
+            if "groq.com" in apiurl:
+                payload["reasoning_format"] = "hidden"
+            
+            translated = []
+            for attempt in range(2):
+                try:
+                    r = await c.post(apiurl + "/chat/completions", json=payload, headers=headers)
+                    if r.status_code == 400 and "reasoning_format" in payload:
+                        payload.pop("reasoning_format", None)
+                        r = await c.post(apiurl + "/chat/completions", json=payload, headers=headers)
+                    r.raise_for_status()
+                    d = r.json()
+                    msg = (d.get("choices") or [{}])[0].get("message", {})
+                    content = msg.get("content", "").strip()
+                    translated = [x.strip() for x in content.split("\n") if x.strip() != ""]
+                    if translated:
+                        break
+                except Exception:
+                    translated = []
+            
+            # Pad / truncate to match batch cue count
+            if len(translated) < len(lines):
+                translated = translated + lines[len(translated):]
+            elif len(translated) > len(lines):
+                translated = translated[:len(lines)]
+            
+            all_translated.extend(translated)
+    
+    # Validasi: pastikan ada baris yang berhasil diterjemahkan
+    changed_count = sum(1 for i, c in enumerate(cues) if i < len(all_translated) and all_translated[i] != c["text"])
+    if changed_count == 0:
+        raise RuntimeError("Translation returned no translated lines")
+    
     out = []
     for i, c in enumerate(cues):
-        new_c = {"start": c["start"], "end": c["end"], "text": translated[i]}
-        out.append(new_c)
+        tr_text = all_translated[i] if i < len(all_translated) else c["text"]
+        out.append({"start": c["start"], "end": c["end"], "text": tr_text})
     return out
 
 
