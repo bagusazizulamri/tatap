@@ -35,6 +35,12 @@ async def init_db():
             key TEXT PRIMARY KEY, payload TEXT, fetched_at INTEGER)""")
         await db.execute("""CREATE TABLE IF NOT EXISTS slug_map(
             title TEXT PRIMARY KEY, slug TEXT, fetched_at INTEGER)""")
+        # Cache translated VTT — key: hash(src_url+referer+lang). TTL 30 hari.
+        await db.execute("""CREATE TABLE IF NOT EXISTS subtitle_cache(
+            key TEXT PRIMARY KEY, payload TEXT, fetched_at INTEGER)""")
+        # Quota counter MyMemory per-day (Tier 2). Soft limit 4500/5000 char/day per-IP.
+        await db.execute("""CREATE TABLE IF NOT EXISTS mychar_counts(
+            day TEXT PRIMARY KEY, total INTEGER DEFAULT 0)""")
         await db.commit()
 
 def _now():
@@ -186,3 +192,48 @@ async def set_slug_map(title, slug):
         await db.execute("INSERT OR REPLACE INTO slug_map(title,slug,fetched_at) VALUES(?,?,?)",
                          (key, slug, _now()))
         await db.commit()
+
+
+async def get_subtitle_cache(key, ttl=30 * 24 * 3600):
+    """Return cached translated VTT TEXT atau None. TTL 30 hari."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT payload, fetched_at FROM subtitle_cache WHERE key=?",
+                              (key,)) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return None
+            if _now() - row[1] > ttl:
+                return None
+            return row[0]
+
+
+async def set_subtitle_cache(key, payload):
+    """Cache translated VTT TEXT."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO subtitle_cache(key,payload,fetched_at) VALUES(?,?,?)",
+            (key, payload, _now()),
+        )
+        await db.commit()
+
+
+async def get_today_char_count(day):
+    """Return MyMemory char count for today (UTC day string). 0 jika row missing."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT total FROM mychar_counts WHERE day=?", (day,)) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else 0
+
+
+async def add_today_char_count(day, n):
+    """Atomically add n to today's count. Return new total."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO mychar_counts(day,total) VALUES(?,?) "
+            "ON CONFLICT(day) DO UPDATE SET total=total+?",
+            (day, n, n),
+        )
+        await db.commit()
+        async with db.execute("SELECT total FROM mychar_counts WHERE day=?", (day,)) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else n

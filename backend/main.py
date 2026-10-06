@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse, FileResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from config import APP_PORT, APP_HOST, HI_BASE, HI_UA
-from database import init_db, get_search_cache, set_search_cache, get_episode_cache, set_episode_cache, add_history, get_history, clear_history, get_setting, set_setting, get_browse_cache, set_browse_cache, get_slug_map, set_slug_map
+from database import init_db, get_search_cache, set_search_cache, get_episode_cache, set_episode_cache, add_history, get_history, clear_history, get_setting, set_setting, get_browse_cache, set_browse_cache, get_slug_map, set_slug_map, get_subtitle_cache, set_subtitle_cache, get_today_char_count, add_today_char_count
 from api import hianime as hi
 from api import anilist as al
 import httpx
@@ -519,12 +519,80 @@ async def favicon():
     return Response(status_code=204)
 
 @app.get("/api/player/sub")
-async def proxy_sub(url: str = Query(""), referer: str = Query("")):
+async def proxy_sub(url: str = Query(""),
+                   referer: str = Query(""),
+                   lang: str = Query("", pattern="^(en|id|ja|es|fr|de|pt|ko|zh)$|^$"),
+                   src: str = Query("en", pattern="^(en|ja|es|fr|de|pt|ko|zh)$")):
+    """Proxy subtitle VTT. Jika `lang` diisi dan berbeda dari source, jalankan
+    multi-tier fallback translate (Tier 1 OpenAI API → Tier 2 MyMemory → Tier 3 source)."""
     if not url.startswith("http"):
         return Response(status_code=400)
-    async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as c:
-        r = await c.get(url, headers={"User-Agent": HI_UA, **({"Referer": referer} if referer else {})})
+    # Lang kosong → return source apa adanya.
+    if not lang or lang == src:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as c:
+            r = await c.get(url, headers={"User-Agent": HI_UA,
+                                            **({"Referer": referer} if referer else {})})
         return Response(content=r.text, media_type="text/vtt")
+    # Cache key: hash dari URL+referer+lang (deterministic).
+    import hashlib
+    cache_key = "sub|" + hashlib.sha1(
+        (url + "|" + (referer or "") + "|" + lang).encode("utf-8")
+    ).hexdigest()
+    hit = await get_subtitle_cache(cache_key)
+    if hit is not None:
+        return Response(content=hit, media_type="text/vtt")
+    # Fetch source subtitle.
+    async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as c:
+        r = await c.get(url, headers={"User-Agent": HI_UA,
+                                        **({"Referer": referer} if referer else {})})
+    text = r.text
+    # Multi-tier translate.
+    try:
+        from api.translate import parse_vtt, build_vtt, call_openai_translate, call_mymemory_translate
+        cues = parse_vtt(text)
+        if not cues:
+            return Response(content=text, media_type="text/vtt")
+        tier = await _translate_with_fallback(cues, src, lang)
+        new_text = build_vtt(tier["cues"])
+    except Exception:
+        new_text = text
+        tier = {"cues": None, "level": "source"}
+    # Cache hasil (termasuk source fallback agar tidak translate ulang).
+    await set_subtitle_cache(cache_key, new_text)
+    resp = Response(content=new_text, media_type="text/vtt")
+    resp.headers["X-Translate-Tier"] = tier["level"]
+    return resp
+
+
+async def _translate_with_fallback(cues, src, tgt):
+    """Multi-tier translate: OpenAI API → MyMemory → source English fallback.
+    Return {"cues": [...], "level": "tier1|tier2|tier3|source"}."""
+    from api.translate import call_openai_translate, call_mymemory_translate, estimate_chars
+    import datetime as _dt
+    # Tier 1: OpenAI-compatible API (kalau user isi API key).
+    apikey = await get_setting("translate_apikey", "")
+    if apikey:
+        model = await get_setting("translate_model", "openai/gpt-oss-20b")
+        apiurl = await get_setting("translate_apiurl", "https://api.openai.com/v1")
+        try:
+            translated = await call_openai_translate(cues, src, tgt, apikey, model, apiurl)
+            return {"cues": translated, "level": "tier1"}
+        except Exception:
+            pass  # lanjut Tier 2
+    # Tier 2: MyMemory dengan soft-limit per-IP per-day.
+    day = _dt.datetime.utcnow().strftime("%Y-%m-%d")
+    used = await get_today_char_count(day)
+    needed = estimate_chars(cues)
+    SOFT_LIMIT = 4500
+    if used + needed <= SOFT_LIMIT:
+        try:
+            translated = await call_mymemory_translate(cues, src, tgt)
+            await add_today_char_count(day, needed)
+            return {"cues": translated, "level": "tier2"}
+        except Exception:
+            pass
+    # Tier 3: source fallback (return cues asli dengan label source).
+    return {"cues": cues, "level": "source"}
 
 def find_mpv_binary():
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -662,12 +730,18 @@ async def get_set():
         # user pernah pilih bahasa lain, disimpan di sini dan dipakai frontend
         # untuk auto-select track di episode berikutnya.
         "sub_lang": await get_setting("sub_lang", "English"),
+        # Translate API (opsional). User isi via settings panel. Fallback ke
+        # MyMemory kalau kosong. translate_apikey tidak pernah di-log.
+        "translate_apikey": await get_setting("translate_apikey", ""),
+        "translate_model": await get_setting("translate_model", "openai/gpt-oss-20b"),
+        "translate_apiurl": await get_setting("translate_apiurl", "https://api.openai.com/v1"),
     })
 
 @app.post("/api/settings")
 async def set_set(body: dict = None):
     body = body or {}
-    for k in ("quality", "mode", "player", "sub_lang"):
+    for k in ("quality", "mode", "player", "sub_lang",
+              "translate_apikey", "translate_model", "translate_apiurl"):
         if k in body:
             await set_setting(k, body[k])
     return await get_set()

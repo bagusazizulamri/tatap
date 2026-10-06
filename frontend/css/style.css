@@ -187,6 +187,8 @@ body.no-ambient #ambient,body.no-ambient #ambient-fallback{display:none}
 .sub-size{display:flex;gap:4px}
 .sub-size button{background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:var(--r);padding:2px 7px;cursor:pointer;font:inherit;font-size:10px}
 .sub-size button.active{background:var(--acc);color:#04121f;border-color:var(--acc)}
+.sub-translate{background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:var(--r);padding:2px 7px;cursor:pointer;font:inherit;font-size:10px;display:inline-flex;align-items:center;gap:3px;line-height:1}
+.sub-translate[data-on="1"]{background:var(--acc);color:#04121f;border-color:var(--acc)}
 /* Overlay subtitle milik app: posisi di atas video, pointer tembus.
    Style tetap milik Tatap, tidak mengikuti setting caption Windows. */
 .subs-overlay{position:absolute;left:0;right:0;bottom:6%;z-index:4;display:flex;justify-content:center;pointer-events:none;padding:0 8%}
@@ -242,6 +244,7 @@ video::cue{color:#fff;background:rgba(0,0,0,.7);font-family:inherit}
   .sub-picker .sub-icon{font-size:12px}
   .sub-picker select{min-width:80px;font-size:10px;padding:2px 2px}
   .sub-size button{padding:2px 6px;font-size:9px}
+.sub-translate{padding:2px 6px;font-size:9px}
   .subs-overlay{bottom:9%;padding:0 4%}
   .player-hint{font-size:10px}
   #ambient,#ambient-fallback{left:-20px;right:-20px;top:-20px;bottom:-20px;width:calc(100% + 40px);height:calc(100% + 40px);filter:blur(40px)}

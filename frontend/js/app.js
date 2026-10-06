@@ -2,7 +2,8 @@ var cur = {slug:"", title:"", ep:1, mode:"sub", quality:"best", res:null, eps:[]
             subLang:"English",    // preferensi bahasa user dari /api/settings
             activeSub:null,       // URL track subtitle yang sedang aktif (live switch)
             cues:[],              // cue subtitle hasil parse VTT (render overlay milik app)
-            subSize:"m"           // ukuran subtitle overlay: s|m|l
+            subSize:"m",          // ukuran subtitle overlay: s|m|l
+            translate:false        // toggle translate subtitle Indonesia (persist localStorage)
            };
 function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
@@ -160,6 +161,8 @@ function renderSubtitles(subtitles, activeUrl){
   offOpt.value="";
   offOpt.textContent="Off";
   sel.appendChild(offOpt);
+  // Tambah opsi "Indonesian (AI)" kalau translate on + ada track English.
+  var englishTrack=null;
   for(var i=0;i<subtitles.length;i++){
     (function(s){
       var o=document.createElement("option");
@@ -168,7 +171,25 @@ function renderSubtitles(subtitles, activeUrl){
       if(s.default)o.textContent+=" (Default)";
       if(activeUrl&&s.url===activeUrl)o.selected=true;
       sel.appendChild(o);
+      // deteksi track English untuk AI-translate source
+      if(!englishTrack){
+        var lab=(s.label||"").toLowerCase();
+        var lcode=(s.lang||"").toLowerCase();
+        if(lcode==="en"||lab.indexOf("english")===0||lab==="en"){
+          englishTrack=s;
+        }
+      }
     })(subtitles[i]);
+  }
+  if(cur.translate&&englishTrack&&englishTrack.url){
+    var aiOpt=document.createElement("option");
+    aiOpt.value="ai:"+englishTrack.url;
+    aiOpt.textContent="Indonesian (AI)";
+    aiOpt.setAttribute("data-ai-source",englishTrack.url);
+    if(activeUrl&&activeUrl.indexOf("ai:")===0&&activeUrl.slice(3)===englishTrack.url){
+      aiOpt.selected=true;
+    }
+    sel.appendChild(aiOpt);
   }
   // Set value juga kalau match dari default tidak ketemu (URL di pickSubtitleUrl).
   if(activeUrl){
@@ -180,6 +201,15 @@ function renderSubtitles(subtitles, activeUrl){
   sel.onchange=function(){
     var url=sel.value;
     cur.activeSub=url||null;
+    // Track AI: synthetic URL "ai:<url>". Extract realUrl + panggil translate.
+    if(url&&url.indexOf("ai:")===0){
+      var realUrl=url.slice(3);
+      switchSubtitleTrack(realUrl,"id");
+      cur.subLang="Indonesian";
+      window.Tatap.setSetting({sub_lang:"Indonesian"}).then(function(){}).catch(function(){});
+      toast("Subtitle: Indonesian (AI)");
+      return;
+    }
     // Update <track> live tanpa pause/reload video.
     switchSubtitleTrack(url);
     // Cari label untuk disimpan ke settings (server-side preference).
@@ -256,9 +286,10 @@ function paintCue(){
   }
   if(s._last!==html){s.innerHTML=html;s._last=html;}
 }
-function switchSubtitleTrack(url){
+function switchSubtitleTrack(url, langCode){
   // Render subtitle milik app (overlay div), bukan <track> native.
   // Style tidak lagi mengikuti setting caption Windows.
+  // langCode opsional ("id", "ja", dst.) — backend akan translate kalau beda.
   var v=$("vid");
   if(!v)return;
   // Bersihkan <track> lama kalau ada (legacy), lalu kosongkan overlay.
@@ -268,7 +299,9 @@ function switchSubtitleTrack(url){
   clearOverlay();
   if(!url)return;
   var ref=cur.res&&cur.res.referer||"";
-  var prox="/api/player/sub?url="+encodeURIComponent(url)+"&referer="+encodeURIComponent(ref);
+  var qs="url="+encodeURIComponent(url)+"&referer="+encodeURIComponent(ref);
+  if(langCode) qs+="&lang="+encodeURIComponent(langCode);
+  var prox="/api/player/sub?"+qs;
   fetch(prox).then(function(r){
     if(!r.ok)throw new Error("sub "+r.status);
     return r.text();
@@ -508,6 +541,22 @@ function setSubSize(sz){
   syncSubSize();
 }
 
+function syncTranslate(){
+  var btn=$("pm-translate");
+  if(!btn)return;
+  btn.setAttribute("data-on",cur.translate?"1":"0");
+  btn.title="Translate ID: "+(cur.translate?"on":"off")+" (butuh track English sebagai source)";
+}
+function setTranslate(on){
+  cur.translate=!!on;
+  try{localStorage.setItem("tatap_translate",cur.translate?"1":"0");}catch(e){}
+  syncTranslate();
+  // Re-render dropdown agar opsi Indonesian (AI) muncul/hilang.
+  var subs=(cur.res&&cur.res.subtitles)||[];
+  renderSubtitles(subs, cur.activeSub);
+  toast("Translate: "+(cur.translate?"ON":"OFF"));
+}
+
 App = {
   openTitle:openTitle, openPlayer:openPlayer, playMPV:playMPV,
   renderContinue:renderContinue, onKeyPlayer:onKeyPlayer,
@@ -525,6 +574,14 @@ function init(){
     if(sz==="s"||sz==="m"||sz==="l")cur.subSize=sz;
   }catch(e){}
   syncSubSize();
+  // Toggle translate ID (persist localStorage tat_translate).
+  try{
+    var tr=localStorage.getItem("tatap_translate");
+    if(tr==="1")cur.translate=true;
+  }catch(e){}
+  syncTranslate();
+  var trBtn=$("pm-translate");
+  if(trBtn) trBtn.addEventListener("click",function(){setTranslate(!cur.translate);});
   document.querySelectorAll(".sub-size button").forEach(function(b){
     b.addEventListener("click",function(){setSubSize(b.getAttribute("data-subsize"));});
   });
