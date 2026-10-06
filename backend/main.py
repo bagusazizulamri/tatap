@@ -128,31 +128,27 @@ async def seasonal(which: str = Query("", pattern="^(now|prev)$|^$"),
         page_data = await loop.run_in_executor(
             None, lambda: al.season_page(season_name, season_year, page, 25))
 
-        items_out = []
-        for m in page_data.get("media", []):
+        # Kumpulkan judul dulu, lalu batch-match slug paralel.
+        media_list = page_data.get("media") or []
+        titles = []
+        media_by_title = {}
+        for m in media_list:
             title = (m.get("title") or {}).get("english") or (m.get("title") or {}).get("romaji") or ""
             if not title:
                 continue
-            slug = await get_slug_map(title)
-            if slug is None:
-                try:
-                    res = await loop.run_in_executor(None, lambda t=title: hi.hianime_search(t, 5))
-                    picked = None
-                    if res:
-                        rn = _slug_norm_match(title)
-                        for c in res:
-                            if c.get("title", "").lower() == rn.lower():
-                                picked = c; break
-                        if not picked and res:
-                            picked = res[0]
-                        if picked:
-                            await set_slug_map(title, picked["id"])
-                            slug = picked["id"]
-                except Exception:
-                    slug = None
+            titles.append(title)
+            media_by_title[title] = m
+        slug_pairs = await _match_slugs_batch(titles)
+        slug_by_title = {t: s for t, s in slug_pairs}
+
+        items_out = []
+        for title, m in media_by_title.items():
+            slug = slug_by_title.get(title)
+            if not slug:
+                continue
             cover = (m.get("coverImage") or {})
             items_out.append({
-                "id": slug or "",
+                "id": slug,
                 "title": title,
                 "poster": cover.get("large") or cover.get("medium") or "",
                 "type": _format_to_type(m.get("format")),
@@ -161,7 +157,7 @@ async def seasonal(which: str = Query("", pattern="^(now|prev)$|^$"),
                 "score": (m.get("averageScore") or 0) / 10.0 if m.get("averageScore") else 0,
                 "anilist_id": m.get("id"),
                 "site": m.get("siteUrl") or "",
-                "matched": bool(slug),
+                "matched": True,
             })
 
         page_info = page_data.get("pageInfo") or {}
@@ -194,6 +190,49 @@ def _slug_norm_match(title):
     return _slug_norm(title)
 
 
+async def _match_slug_one(loop, title):
+    """Resolve 1 judul -> slug hianime via cache get/set. Return None jika gagal."""
+    slug = await get_slug_map(title)
+    if slug:
+        return slug
+    try:
+        res = await loop.run_in_executor(None, lambda t=title: hi.hianime_search(t, 5))
+        if res:
+            rn = _slug_norm_match(title)
+            picked = None
+            for c in res:
+                if c.get("title", "").lower() == rn.lower():
+                    picked = c
+                    break
+            if not picked:
+                picked = res[0]
+            if picked:
+                await set_slug_map(title, picked["id"])
+                return picked["id"]
+    except Exception:
+        pass
+    return None
+
+
+# Batas request paralel ke hianime per scrape (mencegah rate-limit).
+_SLUG_MATCH_CONCURRENCY = 8
+
+
+async def _match_slugs_batch(titles):
+    """Match banyak judul ke slug hianime secara paralel.
+    Output: list of (title, slug_or_None) dengan urutan input dipertahankan."""
+    titles = list(titles)
+    if not titles:
+        return []
+    loop = asyncio.get_running_loop()
+    sem = asyncio.Semaphore(_SLUG_MATCH_CONCURRENCY)
+    async def one(t):
+        async with sem:
+            return t, await _match_slug_one(loop, t)
+    pairs = await asyncio.gather(*(one(t) for t in titles))
+    return pairs
+
+
 @app.get("/api/upcoming-episodes")
 async def upcoming_episodes(days: int = Query(7, ge=1, le=30)):
     """Episode yang rilis dalam N hari ke depan (default 7), dari Page.airingSchedules.
@@ -220,10 +259,11 @@ async def upcoming_episodes(days: int = Query(7, ge=1, le=30)):
         # dari cache 1 jam, ~16 episode/matched). Filter musim di Python.
         schedules = await loop.run_in_executor(None, lambda: al.anilist_schedules(now, end, 100))
 
-        items_out = []
-        seen = set()
+        # Filter musim & kumpulkan judul yang lolos untuk match slug paralel.
         cur_season_up = cur_season.upper()
         prev_season_up = prev_season.upper()
+        pending = []
+        seen = set()
         for s in schedules:
             m = s.get("media") or {}
             sy = m.get("seasonYear")
@@ -240,31 +280,23 @@ async def upcoming_episodes(days: int = Query(7, ge=1, le=30)):
             title = (m.get("title") or {}).get("english") or (m.get("title") or {}).get("romaji") or ""
             if not title:
                 continue
-            slug = await get_slug_map(title)
-            if not slug:
-                try:
-                    res = await loop.run_in_executor(None, lambda t=title: hi.hianime_search(t, 5))
-                    if res:
-                        rn = _slug_norm_match(title)
-                        picked = None
-                        for c in res:
-                            if c.get("title", "").lower() == rn.lower():
-                                picked = c; break
-                        if not picked:
-                            picked = res[0]
-                        await set_slug_map(title, picked["id"])
-                        slug = picked["id"]
-                except Exception:
-                    slug = None
+            pending.append((s, title))
+        # Match paralel (lihat timeline & urutan paralel di _match_slugs_batch).
+        slug_pairs = await _match_slugs_batch([t for _, t in pending])
+        slug_by_title = {t: s for t, s in slug_pairs}
+
+        items_out = []
+        for s, title in pending:
+            slug = slug_by_title.get(title)
             if not slug:
                 continue
 
             airing_dt = _dt.datetime.fromtimestamp(s["airingAt"])
-            cover = (m.get("coverImage") or {})
+            cover = (s.get("media") or {}).get("coverImage", {})
             items_out.append({
                 "id": slug,
                 "title": title,
-                "anilist_id": m.get("id"),
+                "anilist_id": s.get("media", {}).get("id"),
                 "poster": cover.get("large") or cover.get("medium") or "",
                 "episode": s.get("episode"),
                 "airing_at": int(s["airingAt"]),
