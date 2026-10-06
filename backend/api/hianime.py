@@ -112,6 +112,22 @@ FILTERS = {
 }
 
 
+def scrape_genres():
+    """Ambil list genre dari sidebar widget hianime /browse. Return [{slug,title}]."""
+    html = _fetch(BROWSE_API)
+    out, seen = [], set()
+    for m in re.finditer(
+        r'<a href="https?://hianime\.at/genres/([a-z0-9-]+)"\s+title="([^"]+)"',
+        html):
+        slug = m.group(1)
+        title = htmlmod.unescape(m.group(2)).strip()
+        if slug in seen or not slug or not title:
+            continue
+        seen.add(slug)
+        out.append({"slug": slug, "title": title})
+    return out
+
+
 def browse(params: dict = None, page: int = 1):
     """GET /browse?{filter} — kartu + total halaman. Maksimal sesuai form filter."""
     from urllib.parse import urlencode

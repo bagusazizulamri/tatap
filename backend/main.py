@@ -77,6 +77,21 @@ async def catalog(page: int = Query(1, ge=1, le=100)):
     except Exception as e:
         return fail(str(e))
 
+@app.get("/api/genres")
+async def genres():
+    """Daftar genre dari hianime /browse sidebar. Cache 24 jam."""
+    try:
+        key = "genres|list"
+        hit = await get_browse_cache(key, ttl=24*3600)
+        if hit:
+            return ok({"list": hit["list"], "cached": True})
+        loop = asyncio.get_running_loop()
+        out = await loop.run_in_executor(None, hi.scrape_genres)
+        await set_browse_cache(key, {"list": out})
+        return ok({"list": out, "cached": False})
+    except Exception as e:
+        return fail(str(e))
+
 @app.get("/api/seasonal")
 async def seasonal(which: str = Query("now", pattern="^(now|prev)$"),
                    page: int = Query(1, ge=1, le=1)):
