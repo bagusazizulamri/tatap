@@ -20,7 +20,7 @@ var Tui = (function () {
   function saveCmdHist(h){try{localStorage.setItem("tatap_hist",JSON.stringify(h.slice(0,50)));}catch(e){}}
 
   function cmdUsage(){
-    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :terbaru | :season <winter|spring|summer|fall> <tahun>\n  :filter [key=val...] | :filter reset\n  :genre <slug|title> | :genre | :genre --list | :genre reset\n  :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
+    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :terbaru | :season <winter|spring|summer|fall> <tahun>\n  :filter [key=val...] | :filter reset\n  :genre <slug|title> | :genre | :genre --list | :genre reset\n  :apikey [gsk_...|sk-...|clear] | :model <nama> | :apiurl <url>\n  :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
   }
 
   function applyFilter(){
@@ -338,6 +338,62 @@ var Tui = (function () {
     applySeasonFilter(name, year);
   }
 
+  // ==== :apikey / :model / :apiurl ====
+  var TRANSLATE_KEYS = {
+    apikey: {field:"translate_apikey", label:"apikey"},
+    model:  {field:"translate_model",  label:"model"},
+    apiurl: {field:"translate_apiurl", label:"apiurl"}
+  };
+  function maskKey(v){
+    if(!v) return "(kosong)";
+    if(v.length <= 10) return "****";
+    return v.slice(0,8) + "..." + v.slice(-4);
+  }
+  async function cmdTranslateSetting(cmd, rawArgs){
+    var info = TRANSLATE_KEYS[cmd];
+    if(!info) return;
+    var args = (rawArgs||"").trim();
+    if(!args){
+      // Status: tampilkan ketiga nilai translate (mask apikey).
+      var r = await window.Tatap.getSettings();
+      var d = (r && r.success && r.data) || {};
+      log("apikey : "+maskKey(d.translate_apikey||""),"ok");
+      log("model  : "+(d.translate_model||"(default)"),"ok");
+      log("apiurl : "+(d.translate_apiurl||"(default)"),"ok");
+      if(!d.translate_apikey){
+        log("Belum ada API key. Daftar gratis di console.groq.com (Groq),","err");
+        log("lalu: :apikey gsk_...  (auto-set apiurl Groq)","err");
+      }
+      return;
+    }
+    if(args === "clear" || args === "reset"){
+      var p1 = {}; p1[info.field] = "";
+      try{ await window.Tatap.setSetting(p1); }catch(e){}
+      log(info.label+" dihapus","ok");
+      return;
+    }
+    // Set value.
+    var payload = {};
+    payload[info.field] = args;
+    var extra = "";
+    if(cmd === "apikey"){
+      if(args.indexOf("gsk_") === 0){
+        // Groq key -> auto-set apiurl + model Groq-compatible.
+        payload.translate_apiurl = "https://api.groq.com/openai/v1";
+        payload.translate_model = "openai/gpt-oss-20b";
+        extra = " (auto: apiurl=Groq, model=openai/gpt-oss-20b)";
+      }else if(args.indexOf("sk-") === 0 || args.indexOf("sk_") === 0){
+        payload.translate_apiurl = "https://api.openai.com/v1";
+        payload.translate_model = "gpt-4o-mini";
+        extra = " (auto: apiurl=OpenAI, model=gpt-4o-mini)";
+      }else{
+        extra = " (provider lain: cek :apikey untuk status, atur :apiurl/:model bila perlu)";
+      }
+    }
+    try{ await window.Tatap.setSetting(payload); }catch(e){}
+    log(info.label+" disimpan"+extra,"ok");
+  }
+
   async function handleCommand(raw){
     var s=raw.trim();if(!s)return;
     var parts=s.split(/\s+/);
@@ -381,6 +437,8 @@ var Tui = (function () {
         log("ambient "+(nxt2==="on"?"ON":"OFF"),"ok");break;
       case "riwayat":
         try{await fetch("/api/history",{method:"DELETE"});log("riwayat dihapus","ok");}catch(e){log("err: "+e.message,"err");}break;
+      case "apikey":case "model":case "apiurl":
+        await cmdTranslateSetting(cmd,args);break;
       case "status":
         var extra="";
         if(S.filter&&Object.keys(S.filter).length) extra+=" filter="+JSON.stringify(S.filter);

@@ -24,5 +24,15 @@ PEMUTAR EKSTERNAL MPV (OPSIONAL):
 
 TROUBLESHOOTING:
 - Jika ingin melihat log server atau jika Tatap.exe tidak merespons, jalankan "run-console.bat".
-- Data riwayat tontonan dan bookmark tersimpan di "backend\anime.db".
 - Seluruh aplikasi ini 100% portable: Anda dapat memindahkan folder ini ke flashdisk/drive lain tanpa perlu install ulang.
+
+SUBTITLE INDONESIA (AI TRANSLATE):
+- Subtitle Indonesia tersedia via translate AI otomatis dari track English.
+- Aktifkan toggle 🌐 ID di player foot bar (sebelah tombol ukuran S/M/L).
+- Pilih "Indonesian (AI)" di dropdown subtitle → backend translate otomatis.
+- API key gratis diperlukan untuk terjemahan berkualitas tinggi:
+  - Daftar gratis di console.groq.com (Groq) atau platform.openai.com.
+  - Di terminal Tatap (ketik judul), masukkan: :apikey gsk_... (Groq) atau :apikey sk-... (OpenAI).
+  - Apikey otomatis terdeteksi: Groq → apiurl & model otomatis, OpenAI → auto-set juga.
+  - Lihat status: :apikey | Hapus: :apikey clear | Ganti model: :model llama-3.3-70b-versatile
+  - Fallback gratis: MyMemory (5000 char/hari per IP) jika belum set API key.
