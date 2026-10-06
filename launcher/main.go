@@ -19,6 +19,8 @@ import (
 var (
 	user32          = syscall.NewLazyDLL("user32.dll")
 	procMessageBoxW = user32.NewProc("MessageBoxW")
+	dwmapi          = syscall.NewLazyDLL("dwmapi.dll")
+	procDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
 )
 
 const (
@@ -26,6 +28,10 @@ const (
 	MB_ICONERROR     = 0x00000010
 	MB_ICONWARNING   = 0x00000030
 	CREATE_NO_WINDOW = 0x08000000
+	// DWMWA_USE_IMMERSIVE_DARK_MODE: 20 untuk Win10 1903+,
+	// 19 untuk build lama. Border/titlebar ikut tema sistem.
+	DWMWA_USE_IMMERSIVE_DARK_MODE_NEW = 20
+	DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19
 )
 
 func showMessage(title, text string, flags uint) {
@@ -88,6 +94,37 @@ func acquireSingleInstance() (release func(), ok bool) {
 	return func() { windows.CloseHandle(h) }, true
 }
 
+func isSystemDarkMode() bool {
+	// HKCU\...\Themes\Personalize\AppsUseLightTheme: 0 = dark, 1 = light.
+	sub, _ := windows.UTF16PtrFromString(`Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`)
+	name, _ := windows.UTF16PtrFromString(`AppsUseLightTheme`)
+	var k windows.Handle
+	if err := windows.RegOpenKeyEx(windows.HKEY_CURRENT_USER, sub, 0, windows.KEY_READ, &k); err != nil {
+		return true
+	}
+	defer windows.RegCloseKey(k)
+	var typ, val uint32
+	var n uint32 = 4
+	if err := windows.RegQueryValueEx(k, name, nil, &typ, (*byte)(unsafe.Pointer(&val)), &n); err != nil {
+		return true
+	}
+	return val == 0
+}
+
+func setDarkMode(hwnd uintptr, dark bool) {
+	var v int32
+	if dark {
+		v = 1
+	}
+	pv := uintptr(unsafe.Pointer(&v))
+	for _, attr := range []uintptr{DWMWA_USE_IMMERSIVE_DARK_MODE_NEW, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD} {
+		r, _, _ := procDwmSetWindowAttribute.Call(hwnd, attr, pv, 4)
+		if r == 0 {
+			return
+		}
+	}
+}
+
 func runWebView(appURL, dataPath string) {
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		Debug:     false,
@@ -107,6 +144,7 @@ func runWebView(appURL, dataPath string) {
 		return
 	}
 	defer w.Destroy()
+	setDarkMode(uintptr(w.Window()), isSystemDarkMode())
 	w.Navigate(appURL)
 	w.Run()
 }
