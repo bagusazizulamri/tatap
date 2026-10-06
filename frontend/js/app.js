@@ -1,6 +1,8 @@
 var cur = {slug:"", title:"", ep:1, mode:"sub", quality:"best", res:null, eps:[], watched:{},
             subLang:"English",    // preferensi bahasa user dari /api/settings
-            activeSub:null        // URL track subtitle yang sedang aktif (live switch)
+            activeSub:null,       // URL track subtitle yang sedang aktif (live switch)
+            cues:[],              // cue subtitle hasil parse VTT (render overlay milik app)
+            subSize:"m"           // ukuran subtitle overlay: s|m|l
            };
 function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
@@ -199,26 +201,84 @@ function renderSubtitles(subtitles, activeUrl){
   };
 }
 
+function vttTime(s){
+  var m=/^(?:(\d+):)?([0-5]?\d):([0-5]\d)(?:[.,](\d{1,3}))?$/.exec((s||"").trim());
+  if(!m)return -1;
+  var ms=m[4]?parseInt((m[4]+"000").slice(0,3),10):0;
+  return (m[1]?parseInt(m[1],10)*3600:0)+parseInt(m[2],10)*60+parseInt(m[3],10)+ms/1000;
+}
+function parseVtt(text){
+  var out=[];
+  var lines=String(text||"").replace(/\r\n?/g,"\n").split("\n");
+  var i=0;
+  if(lines[0]&&lines[0].indexOf("WEBVTT")===0)i=1;
+  var start=-1,end=-1,buf=[];
+  var flush=function(){
+    if(start>=0&&end>start&&buf.length){
+      var html=buf.map(function(x){return esc(x);}).join("<br>");
+      html=html.replace(/&lt;[^&]*?&gt;/g,"");
+      out.push({start:start,end:end,html:html});
+    }
+    start=-1;end=-1;buf=[];
+  };
+  for(;i<lines.length;i++){
+    var ln=lines[i].trim();
+    if(!ln){flush();continue;}
+    if(ln.indexOf("-->")>=0){
+      flush();
+      var p=ln.split("-->");
+      start=vttTime(p[0]);end=vttTime((p[1]||"").trim().split(" ")[0]);
+      continue;
+    }
+    if(/^(NOTE|STYLE|REGION)/.test(ln))continue;
+    if(start>=0)buf.push(ln);
+  }
+  flush();
+  return out;
+}
+function clearOverlay(){
+  var box=$("pm-subs-overlay");
+  if(!box)return;
+  var s=box.querySelector("span");
+  if(s)s.innerHTML="";
+}
+function paintCue(){
+  var box=$("pm-subs-overlay");
+  var v=$("vid");
+  if(!box||!v)return;
+  var s=box.querySelector("span");
+  if(!s)return;
+  if($("player-modal").classList.contains("hidden")){s.innerHTML="";return;}
+  var t=v.currentTime||0;
+  var html="";
+  for(var i=0;i<cur.cues.length;i++){
+    if(t>=cur.cues[i].start&&t<=cur.cues[i].end){html=cur.cues[i].html;break;}
+  }
+  if(s._last!==html){s.innerHTML=html;s._last=html;}
+}
 function switchSubtitleTrack(url){
-  // Ganti <track> pada <video> secara live. URL kosong = Off (hapus semua track).
+  // Render subtitle milik app (overlay div), bukan <track> native.
+  // Style tidak lagi mengikuti setting caption Windows.
   var v=$("vid");
   if(!v)return;
+  // Bersihkan <track> lama kalau ada (legacy), lalu kosongkan overlay.
   var oldTracks=v.querySelectorAll("track");
   for(var i=0;i<oldTracks.length;i++)oldTracks[i].parentNode.removeChild(oldTracks[i]);
+  cur.cues=[];
+  clearOverlay();
   if(!url)return;
-  var t=document.createElement("track");
-  t.kind="subtitles";
-  // Pakai label bahasa aktif untuk label track, fallback ke "Subtitle".
-  t.label=cur.subLang||"Subtitle";
-  t.srclang=cur.subLang==="English"?"en":(cur.subLang==="Indonesian"?"id":"");
-  try{t["default"]=true;}catch(e){t.setAttribute("default","");}
-  // Proxy subtitle lewat backend agar Referer otomatis di-inject.
   var ref=cur.res&&cur.res.referer||"";
-  t.src="/api/player/sub?url="+encodeURIComponent(url)+"&referer="+encodeURIComponent(ref);
-  v.appendChild(t);
-  // Force refresh mode (HTML5 video butuh trigger mode change agar track baru aktif).
-  var mode=v.textTracks&&v.textTracks.length?v.textTracks[0].mode:null;
-  if(mode){v.textTracks[0].mode="hidden";v.textTracks[0].mode="showing";}
+  var prox="/api/player/sub?url="+encodeURIComponent(url)+"&referer="+encodeURIComponent(ref);
+  fetch(prox).then(function(r){
+    if(!r.ok)throw new Error("sub "+r.status);
+    return r.text();
+  }).then(function(t){
+    cur.cues=parseVtt(t);
+    paintCue();
+  }).catch(function(){
+    cur.cues=[];
+    clearOverlay();
+  });
 }
 function armAutohide(){
   var stage=document.querySelector(".ambient-stage");
@@ -338,6 +398,8 @@ function closePlayer(){
   var v=$("vid");
   try{v.pause();}catch(e){}
   if(window._hls){try{window._hls.destroy();window._hls=null;}catch(e){}}
+  cur.cues=[];
+  clearOverlay();
   v.removeAttribute("src");
   try{v.load();}catch(e){}
   $("player-modal").classList.add("hidden");
@@ -429,6 +491,23 @@ function onKeyPlayer(e){
   else if(e.key==="ArrowLeft"){e.preventDefault();v.currentTime-=5;}
 }
 
+function syncSubSize(){
+  var box=$("pm-subs-overlay");
+  if(box){
+    box.classList.remove("sz-s","sz-m","sz-l");
+    box.classList.add("sz-"+(cur.subSize||"m"));
+  }
+  document.querySelectorAll(".sub-size button").forEach(function(b){
+    b.classList.toggle("active",b.getAttribute("data-subsize")===(cur.subSize||"m"));
+  });
+}
+function setSubSize(sz){
+  if(sz!=="s"&&sz!=="m"&&sz!=="l")return;
+  cur.subSize=sz;
+  try{localStorage.setItem("tatap_subsize",sz);}catch(e){}
+  syncSubSize();
+}
+
 App = {
   openTitle:openTitle, openPlayer:openPlayer, playMPV:playMPV,
   renderContinue:renderContinue, onKeyPlayer:onKeyPlayer
@@ -436,6 +515,16 @@ App = {
 
 function init(){
   loadPrefs();
+  try{
+    var sz=localStorage.getItem("tatap_subsize");
+    if(sz==="s"||sz==="m"||sz==="l")cur.subSize=sz;
+  }catch(e){}
+  syncSubSize();
+  document.querySelectorAll(".sub-size button").forEach(function(b){
+    b.addEventListener("click",function(){setSubSize(b.getAttribute("data-subsize"));});
+  });
+  $("vid").addEventListener("timeupdate",paintCue);
+  $("vid").addEventListener("seeked",paintCue);
   // Muat preferensi subtitle dari server (sub_lang). Kalau server gagal,
   // fallback ke default 'English' yang sudah di-set di var cur.
   if(window.Tatap&&window.Tatap.getSettings){

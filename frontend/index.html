@@ -113,6 +113,7 @@
       <div id="ambient-fallback" aria-hidden="true"></div>
       <canvas id="ambient" width="96" height="54" aria-hidden="true"></canvas>
       <video id="vid" controls playsinline preload="auto"></video>
+      <div id="pm-subs-overlay" class="subs-overlay sz-m" aria-hidden="true"><span></span></div>
       <div id="pm-spinner" class="spinner hidden"><div class="ring"></div><p id="pm-status">resolving…</p></div>
     </div>
     <div class="player-foot">
@@ -121,6 +122,9 @@
       <div id="pm-subs-wrap" class="sub-picker hidden" title="Pilih Subtitle">
         <span class="sub-icon" aria-hidden="true">💬</span>
         <select id="pm-subs" aria-label="Subtitle"></select>
+        <div class="sub-size" role="group" aria-label="Ukuran subtitle">
+          <button data-subsize="s" title="Subtitle kecil">S</button><button data-subsize="m" title="Subtitle sedang">M</button><button data-subsize="l" title="Subtitle besar">L</button>
+        </div>
       </div>
       <button id="pm-next" title="Episode berikutnya (n)">NEXT ⏭</button>
     </div>

@@ -174,6 +174,19 @@ body.no-ambient #ambient,body.no-ambient #ambient-fallback{display:none}
 .sub-picker select{background:transparent;border:0;color:var(--txt);font:inherit;font-size:11px;cursor:pointer;padding:3px 4px;outline:none;min-width:96px;max-width:160px}
 .sub-picker select:focus{outline:1px solid var(--acc);outline-offset:-1px;border-radius:var(--r)}
 .sub-picker select option{background:var(--panel);color:var(--txt);font-family:inherit}
+.sub-size{display:flex;gap:4px}
+.sub-size button{background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:var(--r);padding:2px 7px;cursor:pointer;font:inherit;font-size:10px}
+.sub-size button.active{background:var(--acc);color:#04121f;border-color:var(--acc)}
+/* Overlay subtitle milik app: posisi di atas video, pointer tembus.
+   Style tetap milik Tatap, tidak mengikuti setting caption Windows. */
+.subs-overlay{position:absolute;left:0;right:0;bottom:6%;z-index:4;display:flex;justify-content:center;pointer-events:none;padding:0 8%}
+.subs-overlay span{display:inline-block;max-width:100%;text-align:center;color:#fff;background:rgba(0,0,0,.7);
+  padding:.15em .5em;border-radius:3px;line-height:1.45;font-weight:600;
+  text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000;font-family:inherit}
+video::cue{color:#fff;background:rgba(0,0,0,.7);font-family:inherit}
+.subs-overlay.sz-s span{font-size:clamp(12px,.6vw + .55rem,14px)}
+.subs-overlay.sz-m span{font-size:clamp(15px,.9vw + .7rem,20px)}
+.subs-overlay.sz-l span{font-size:clamp(18px,1.3vw + .9rem,26px)}
 .player-foot{padding:8px 4px}
 .player-foot>.variants{flex:0 1 auto;max-width:55%}
 .player-foot>.sub-picker{flex:0 0 auto}
@@ -215,6 +228,8 @@ body.no-ambient #ambient,body.no-ambient #ambient-fallback{display:none}
   .sub-picker{padding:3px 6px}
   .sub-picker .sub-icon{font-size:12px}
   .sub-picker select{min-width:80px;font-size:10px;padding:2px 2px}
+  .sub-size button{padding:2px 6px;font-size:9px}
+  .subs-overlay{bottom:9%;padding:0 4%}
   .player-hint{font-size:10px}
   #ambient,#ambient-fallback{left:-20px;right:-20px;top:-20px;bottom:-20px;width:calc(100% + 40px);height:calc(100% + 40px);filter:blur(40px)}
   .toast{bottom:calc(var(--status-h) + 56px)}
