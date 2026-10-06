@@ -1,5 +1,5 @@
 var Tui = (function () {
-  var S = {view:"cari",items:[],sel:-1,page:1,total:1,filter:{},promptFoc:false};
+  var S = {view:"cari",items:[],sel:-1,page:1,total:1,filter:{},promptFoc:false,seasonFilter:null};
   var MAXLOG = 200;
 
   function $(id){return document.getElementById(id);}
@@ -20,7 +20,7 @@ var Tui = (function () {
   function saveCmdHist(h){try{localStorage.setItem("tatap_hist",JSON.stringify(h.slice(0,50)));}catch(e){}}
 
   function cmdUsage(){
-    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :terbaru | :filter [key=val...] | :filter reset\n  :genre <slug|title> | :genre | :genre --list | :genre reset\n  :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
+    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :terbaru | :season <winter|spring|summer|fall> <tahun>\n  :filter [key=val...] | :filter reset\n  :genre <slug|title> | :genre | :genre --list | :genre reset\n  :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
   }
 
   function applyFilter(){
@@ -42,6 +42,11 @@ var Tui = (function () {
       case "lanjutan":$("results-title").textContent="Masih tayang (lanjut)";break;
       case "katalog":$("results-title").textContent="Katalog";break;
       case "terbaru":$("results-title").textContent="Sedang rilis · episode terbaru";break;
+      case "season-custom":{
+        var sf=S.seasonFilter||{season:"",year:""};
+        $("results-title").textContent="Season: "+(sf.season||"?")+" "+sf.year;
+        break;
+      }
     }
     $("sb-view").textContent="view: "+v;
     loadView();
@@ -53,6 +58,10 @@ var Tui = (function () {
       case "lanjutan":return window.Tatap.stillAiring(S.page);
       case "katalog":return window.Tatap.browse(S.filter,S.page);
       case "terbaru":return window.Tatap.upcoming(7);
+      case "season-custom":{
+        if(!S.seasonFilter)return null;
+        return window.Tatap.seasonBy(S.seasonFilter.season, S.seasonFilter.year);
+      }
       case "cari":return null;
     }
     return null;
@@ -284,6 +293,40 @@ var Tui = (function () {
     applyGenreFilter(slug);
   }
 
+  // ==== :season ====
+  var SEASONS = ["winter","spring","summer","fall"];
+  function applySeasonFilter(name, year){
+    S.seasonFilter = {season: name, year: year};
+    S.page = 1;
+    log("season: "+name+" "+year, "ok");
+    setViewSilent("season-custom");
+    $("results-title").textContent = "Season: "+name[0].toUpperCase()+name.slice(1)+" "+year;
+    $("empty-state").style.display = "none";
+    $("pager").classList.remove("hidden");
+    loadView();
+  }
+  function cmdSeason(rawArgs){
+    var t = (rawArgs||"").trim();
+    if(!t){
+      log("usage: season <winter|spring|summer|fall> <tahun>","err");
+      log("contoh: :season fall 2024","err");return;
+    }
+    var parts = t.split(/\s+/);
+    if(parts.length < 2){
+      log("usage: season <winter|spring|summer|fall> <tahun>","err");
+      log("contoh: :season fall 2024","err");return;
+    }
+    var name = parts[0].toLowerCase();
+    var year = parseInt(parts[1], 10);
+    if(SEASONS.indexOf(name) < 0){
+      log("season tak dikenal: "+name+" (winter/spring/summer/fall)","err");return;
+    }
+    if(!year || year < 1900 || year > 2100){
+      log("tahun tak valid: "+parts[1],"err");return;
+    }
+    applySeasonFilter(name, year);
+  }
+
   async function handleCommand(raw){
     var s=raw.trim();if(!s)return;
     var parts=s.split(/\s+/);
@@ -294,6 +337,7 @@ var Tui = (function () {
       case "musim":setView("musim");break;
       case "lanjutan":setView("lanjutan");break;
       case "katalog":setView("katalog");break;
+      case "season":cmdSeason(args);break;
       case "terbaru":case "airing":setView("terbaru");break;
       case "genre":cmdGenre(parts);break;
       case "filter":
@@ -327,7 +371,10 @@ var Tui = (function () {
       case "riwayat":
         try{await fetch("/api/history",{method:"DELETE"});log("riwayat dihapus","ok");}catch(e){log("err: "+e.message,"err");}break;
       case "status":
-        log("view="+S.view+" page="+S.page+"/"+S.total+" items="+S.items.length+(S.sel>=0?" sel="+S.sel:""),"ok");break;
+        var extra="";
+        if(S.filter&&Object.keys(S.filter).length) extra+=" filter="+JSON.stringify(S.filter);
+        if(S.seasonFilter) extra+=" season="+S.seasonFilter.season+" "+S.seasonFilter.year;
+        log("view="+S.view+" page="+S.page+"/"+S.total+" items="+S.items.length+(S.sel>=0?" sel="+S.sel:"")+extra,"ok");break;
       case "bantuan":case "help":case "?":
         $("help-overlay").classList.remove("hidden");
         $("help-body").textContent=cmdUsage();
