@@ -510,7 +510,12 @@ function setSubSize(sz){
 
 App = {
   openTitle:openTitle, openPlayer:openPlayer, playMPV:playMPV,
-  renderContinue:renderContinue, onKeyPlayer:onKeyPlayer
+  renderContinue:renderContinue, onKeyPlayer:onKeyPlayer,
+  openGenreModal:function(){
+    if(typeof window.Tui!=="undefined"&&window.Tui.openGenreModal){
+      window.Tui.openGenreModal();
+    }
+  }
 };
 
 function init(){

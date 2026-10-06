@@ -20,7 +20,7 @@ var Tui = (function () {
   function saveCmdHist(h){try{localStorage.setItem("tatap_hist",JSON.stringify(h.slice(0,50)));}catch(e){}}
 
   function cmdUsage(){
-    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :terbaru | :filter [key=val...] | :filter reset\n  :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
+    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :terbaru | :filter [key=val...] | :filter reset\n  :genre <slug|title> | :genre | :genre --list | :genre reset\n  :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
   }
 
   function applyFilter(){
@@ -210,6 +210,80 @@ var Tui = (function () {
     $("lane-still-sec").classList.add("hidden");
   }
 
+  // ==== :genre ====
+  var _genreList=null;
+  function slugifyGenre(s){
+    return String(s||"").trim().toLowerCase()
+      .replace(/&/g,"and").replace(/[^a-z0-9]+/g,"-")
+      .replace(/^-+|-+$/g,"");
+  }
+  async function loadGenres(){
+    if(_genreList)return _genreList;
+    var r=await window.Tatap.genres();
+    _genreList=(r&&r.success&&r.data&&r.data.list)||[];
+    return _genreList;
+  }
+  async function openGenreModal(){
+    $("genre-modal").classList.remove("hidden");
+    $("genre-search").value="";
+    var list=await loadGenres();
+    renderGenreList(list);
+    setTimeout(function(){$("genre-search").focus();},30);
+  }
+  function closeGenreModal(){$("genre-modal").classList.add("hidden");}
+  function renderGenreList(list){
+    var box=$("genre-list");box.innerHTML="";
+    if(!list.length){
+      var e=document.createElement("div");e.className="empty";e.textContent="(tidak ada hasil)";box.appendChild(e);return;
+    }
+    for(var i=0;i<list.length;i++){
+      (function(g){
+        var b=document.createElement("button");
+        b.innerHTML='<span class="g-slug">'+esc(g.slug)+'</span><span class="g-title">'+esc(g.title)+'</span>';
+        b.addEventListener("click",function(){
+          applyGenreFilter(g.slug);closeGenreModal();
+        });
+        box.appendChild(b);
+      })(list[i]);
+    }
+  }
+  function applyGenreFilter(slug){
+    S.filter={genre:slug};S.page=1;
+    log("genre: "+slug,"ok");
+    setViewSilent("katalog");
+    $("results-title").textContent="Genre: "+slug;
+    $("empty-state").style.display="none";
+    $("pager").classList.remove("hidden");
+    loadView();
+  }
+  async function cmdGenre(parts){
+    if(parts.length<=1){openGenreModal();return;}
+    var a=parts.slice(1);
+    if(a[0]==="reset"){
+      if(S.filter&&S.filter.genre){delete S.filter.genre;S.page=1;
+        log("genre filter dihapus","ok");applyFilter();}
+      else log("tidak ada genre filter aktif","err");return;
+    }
+    if(a[0]==="--list"||a[0]==="list"){
+      var kw=a[1]&&a[1]!=="--search"?a[1]:(a[2]||"");
+      var list=await loadGenres();
+      if(!list.length){log("gagal load genre (lihat ?bak offline).","err");return;}
+      var shown=0;
+      for(var i=0;i<list.length;i++){
+        var g=list[i];
+        if(kw&&(g.title+" "+g.slug).toLowerCase().indexOf(kw.toLowerCase())<0)continue;
+        log((""+g.slug).padEnd(28)+"  "+g.title);
+        shown++;
+      }
+      if(!shown)log("tidak ada genre cocok '"+kw+"'","err");
+      else log("total: "+shown+" genre","ok");
+      return;
+    }
+    var slug=slugifyGenre(a.join(" "));
+    if(!slug){log("usage: genre <slug|title> | genre | genre --list | genre reset","err");return;}
+    applyGenreFilter(slug);
+  }
+
   async function handleCommand(raw){
     var s=raw.trim();if(!s)return;
     var parts=s.split(/\s+/);
@@ -221,6 +295,7 @@ var Tui = (function () {
       case "lanjutan":setView("lanjutan");break;
       case "katalog":setView("katalog");break;
       case "terbaru":case "airing":setView("terbaru");break;
+      case "genre":cmdGenre(parts);break;
       case "filter":
         if(!args||args==="reset"){
           S.filter={};S.page=1;log("filter direset","ok");applyFilter();break;
@@ -345,6 +420,18 @@ var Tui = (function () {
     document.addEventListener("keydown",onKey);
     $("help-close").addEventListener("click",function(){$("help-overlay").classList.add("hidden");});
     $("help-overlay").addEventListener("click",function(e){if(e.target===$("help-overlay"))$("help-overlay").classList.add("hidden");});
+    // Genre modal listeners
+    $("genre-close").addEventListener("click",closeGenreModal);
+    $("genre-modal").addEventListener("click",function(e){if(e.target===$("genre-modal"))closeGenreModal();});
+    $("genre-search").addEventListener("input",function(){
+      var kw=this.value.trim().toLowerCase();
+        loadGenres().then(function(list){
+          var filtered=kw?list.filter(function(g){
+            return (g.title+" "+g.slug).toLowerCase().indexOf(kw)>=0;
+          }):list;
+          renderGenreList(filtered);
+        });
+      });
     $("clear-hist").addEventListener("click",async function(){
       try{await fetch("/api/history",{method:"DELETE"});}catch(e){}
       App.renderContinue();log("riwayat dihapus","ok");
@@ -353,5 +440,5 @@ var Tui = (function () {
     renderRecents();
   }
 
-  return {boot:boot,log:log,clearLog:clearLog,setView:setView,loadView:loadView,moveSel:moveSel,renderSel:renderSel,openSelected:openSelected,startSearch:startSearch,doSearch:doSearch,renderResults:renderResults,renderPager:renderPager,renderRecents:renderRecents,cmdUsage:cmdUsage,view:function(){return S.view;},state:function(){return S;}};
+  return {boot:boot,log:log,clearLog:clearLog,setView:setView,loadView:loadView,moveSel:moveSel,renderSel:renderSel,openSelected:openSelected,startSearch:startSearch,doSearch:doSearch,renderResults:renderResults,renderPager:renderPager,renderRecents:renderRecents,cmdUsage:cmdUsage,openGenreModal:openGenreModal,view:function(){return S.view;},state:function(){return S;}};
 })();

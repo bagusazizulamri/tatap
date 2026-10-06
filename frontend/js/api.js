@@ -14,6 +14,7 @@ browse:function(params,page){
 },
 episodes:function(slug){return jget("/api/anime/"+encodeURIComponent(slug)+"/episodes");},
 resolve:function(slug,ep,mode,q){return jget("/api/stream/resolve?slug="+encodeURIComponent(slug)+"&ep="+ep+"&mode="+(mode||"sub")+"&q="+(q||"best"));},
+genres:function(){return jget("/api/genres");},
 health:function(){return jget("/api/health");},
 history:function(){return jget("/api/history");},
 saveHist:function(b){return jpost("/api/history",b);},
