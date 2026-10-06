@@ -95,14 +95,14 @@ async def genres():
 @app.get("/api/seasonal")
 async def seasonal(which: str = Query("", pattern="^(now|prev)$|^$"),
                    season: str = Query("", pattern="^(winter|spring|summer|fall)$|^$"),
-                   year: int = Query(0, ge=1900, le=2100),
+                   year: int = Query(0, ge=0, le=2100),
                    page: int = Query(1, ge=1, le=1)):
     """Daftar anime per musim (AniList).
     which=now|prev = musim saat ini / sebelumnya.
     season+year = musim spesifik (contoh: season=fall year=2024).
     AniList pagination over-reports setelah page 1, jadi endpoint dikunci 1 halaman."""
     try:
-        if season and year:
+        if season and year >= 1900:
             season_name = season
             season_year = year
             cache_id = f"{season}_{year}"

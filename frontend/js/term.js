@@ -71,7 +71,18 @@ var Tui = (function () {
     if(S.view==="cari"){renderRecents();return;}
     try{
       var r=await apiCall(S.view);
-      if(!r||!r.success){log("gagal load: "+(r&&r.error||"??"),"err");return;}
+      if(!r){log("gagal load: response kosong","err");return;}
+      if(!r.success){
+        // FastAPI 422 unpacked — tampilkan detail pertama agar user tahu alasannya.
+        var msg=r.error;
+        if(Array.isArray(r.detail)&&r.detail[0]&&r.detail[0].msg){
+          msg=r.detail[0].msg;
+        }else if(r.detail&&r.detail.msg){
+          msg=r.detail.msg;
+        }
+        log("gagal load: "+(msg||"??"),"err");
+        return;
+      }
       var d=r.data||{};
       S.items=d.items||[];S.page=d.page||1;S.total=d.total_pages||1;S.sel=-1;
       var label=$("results-title").textContent;
