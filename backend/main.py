@@ -93,20 +93,30 @@ async def genres():
         return fail(str(e))
 
 @app.get("/api/seasonal")
-async def seasonal(which: str = Query("now", pattern="^(now|prev)$"),
+async def seasonal(which: str = Query("", pattern="^(now|prev)$|^$"),
+                   season: str = Query("", pattern="^(winter|spring|summer|fall)$|^$"),
+                   year: int = Query(0, ge=1900, le=2100),
                    page: int = Query(1, ge=1, le=1)):
-    """Daftar anime musim saat ini (now) atau satu musim sebelumnya (prev),
-    diambil dari AniList. Judul dicocokkan ke slug hianime via search.
+    """Daftar anime per musim (AniList).
+    which=now|prev = musim saat ini / sebelumnya.
+    season+year = musim spesifik (contoh: season=fall year=2024).
     AniList pagination over-reports setelah page 1, jadi endpoint dikunci 1 halaman."""
     try:
-        import datetime as _dt
-        year_cur, name_cur = al.current_season()
-        if which == "now":
-            season_name, season_year = name_cur, year_cur
+        if season and year:
+            season_name = season
+            season_year = year
+            cache_id = f"{season}_{year}"
         else:
-            season_year, season_name = al.prev_season(name_cur, year_cur)
+            year_cur, name_cur = al.current_season()
+            if which == "now":
+                season_name, season_year = name_cur, year_cur
+            elif which == "prev":
+                season_year, season_name = al.prev_season(name_cur, year_cur)
+            else:
+                return fail("butuh which=now|prev atau season=<nama>&year=<tahun>")
+            cache_id = which
 
-        key = f"seasonal|{which}|page={page}"
+        key = f"seasonal|{cache_id}|page={page}"
         hit = await get_browse_cache(key)
         if hit:
             hit["cached"] = True
