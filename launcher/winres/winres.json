@@ -13,18 +13,18 @@
     "#1": {
       "0000": {
         "fixed": {
-          "file_version": "2.0.0.0",
-          "product_version": "2.0.0.0"
+          "file_version": "2.2.0.0",
+          "product_version": "2.2.0.0"
         },
         "info": {
           "0409": {
             "CompanyName": "Tatap",
             "FileDescription": "Tatap - Nonton Santai di Lokal",
-            "FileVersion": "2.0.0.0",
+            "FileVersion": "2.2.0.0",
             "InternalName": "Tatap.exe",
             "OriginalFilename": "Tatap.exe",
             "ProductName": "Tatap",
-            "ProductVersion": "2.0.0.0"
+            "ProductVersion": "2.2.0.0"
           }
         }
       }

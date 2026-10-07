@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
 
-app = FastAPI(title="Tatap", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Tatap", version="2.2.0", lifespan=lifespan)
 
 def ok(data):
     return {"success": True, "data": data}

@@ -21,20 +21,26 @@ Tatap menyediakan fitur auto-translate subtitle dari track English ke Bahasa Ind
 > **BYOK (Bring Your Own Key)**: Tatap tidak menyediakan server LLM terpusat. Untuk mendapatkan terjemahan episode penuh secara cepat dan tanpa batas kuota harian, **kamu membawa API Key kamu sendiri** (gratis via Groq atau OpenAI).
 
 ### Tier Penerjemahan:
-1. **Tier 1 (Utama & Direkomendasikan): LLM API (BYOK)**
-   - Mendukung **Groq** (sangat cepat & gratis) atau **OpenAI**-compatible endpoint.
+1. **Tier 1 (Utama & Kualitas Fansub Terbaik): AI LLM API (BYOK)**
+   - Mendukung **Ollama Cloud** (`gpt-oss:20b-cloud`), **Groq** (`llama-3.3-70b-versatile`), **Google AI Studio** (`gemini-3.1-flash-lite`), dan **OpenAI** (`gpt-4o-mini`).
+   - Bahasa luwes, santai (aku/kamu ala fansub), istilah gamer/anime tetap terjaga.
    - Cara pakai di web app / TUI:
      - Masukkan API key langsung di command bar / terminal Tatap:
-       - `:apikey gsk_...` → otomatis mendeteksi Groq (apiurl & model terset otomatis).
-       - `:apikey sk-...` → otomatis mendeteksi OpenAI (`gpt-4o-mini`).
+       - `:apikey ollama_...` → otomatis preset Ollama Cloud (`gpt-oss:20b-cloud`).
+       - `:apikey gsk_...` → otomatis preset Groq (`llama-3.3-70b-versatile`).
+       - `:apikey AQ...` → otomatis preset Google AI Studio (`gemini-3.1-flash-lite`).
+       - `:apikey sk-...` → otomatis preset OpenAI (`gpt-4o-mini`).
      - Periksa status: `:apikey`
      - Ubah model/endpoint custom: `:model <nama_model>` atau `:apiurl <url>`
      - Hapus API key: `:apikey clear`
    - *Keamanan*: Kunci API disimpan 100% lokal di database SQLite komputermu (`anime.db`) dan hanya dikirim langsung ke provider API pilihanmu.
-2. **Tier 2 (Fallback Publik): MyMemory Translation**
-   - Aktif otomatis jika API key belum disetel. Kuota publik gratis ~5.000 karakter per hari per IP.
-3. **Tier 3 (Fallback Sumber): English Original**
-   - Jika kuota publik habis atau terjadi kegagalan jaringan, subtitle tetap menampilkan teks asli bahasa Inggris tanpa terputus.
+2. **Tier 2 (Default / Fallback AI): Google GTX Web RPC**
+   - Tanpa API Key (Zero-Key), tanpa batas kuota (unmetered), super cepat (~1-2 detik per episode).
+   - Menggunakan preservasi tag HTML (`<p id="i">`) agar urutan kalimat stabil 100% dan bebas dari *sentence drift*.
+3. **Tier 3 (Cadangan Cloud): MyMemory Translation**
+   - Kuota gratis harian ~5.000 karakter per IP.
+4. **Tier 4 (Safety Net): English Original**
+   - Jika semua engine gagal, pemutar tetap menampilkan subtitle asli bahasa Inggris tanpa crash.
 
 ### Cara Mengaktifkan di Player:
 - Klik tombol **🌐 ID** di player control bar, atau
