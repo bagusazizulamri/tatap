@@ -158,6 +158,51 @@ def _extract_err(resp):
     return raw_msg
 
 
+def _parse_llm_response(content: str, is_google: bool = False):
+    """Robust parser untuk respons LLM berupa JSON array atau multi-line strings."""
+    if not content:
+        return []
+    text = content.strip()
+    if text.startswith("```"):
+        text = _re.sub(r"^```[a-zA-Z]*\n?", "", text)
+        text = _re.sub(r"\n?```$", "", text).strip()
+
+    if is_google or text.startswith("["):
+        # 1. Coba standard json.loads
+        try:
+            val = _json.loads(text)
+            if isinstance(val, list):
+                return [str(x).strip() for x in val]
+        except Exception:
+            pass
+
+        # 2. Ekstrak blok JSON array [ ... ] dengan regex jika ada quote bermasalah
+        m = _re.search(r"\[\s*(.*)\s*\]", text, _re.DOTALL)
+        if m:
+            inner = m.group(1)
+            items = _re.findall(r"\"((?:[^\"\\]|\\.)*)\"", inner)
+            if items:
+                out = []
+                for x in items:
+                    try:
+                        out.append(x.encode("utf-8").decode("unicode_escape").strip())
+                    except Exception:
+                        out.append(x.strip())
+                return out
+
+    # 3. Fallback: line-by-line parsing (OpenAI format atau numbering)
+    lines = []
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        # Bersihkan leading bullet / numbering seperti "1. Halo" atau "1) Halo"
+        cleaned = _re.sub(r"^\d+[\.\)]\s*", "", line).strip()
+        if cleaned:
+            lines.append(cleaned)
+    return lines
+
+
 async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=60.0):
     """Translate via OpenAI-compatible /chat/completions with chunked batches.
     cues: list[{start,end,text}]. Returns translated cues (text replaced, timing preserved)."""
@@ -198,9 +243,17 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
                 await _asyncio.sleep(0.5)  # Jeda aman per batch
             lines = [cue["text"].replace("\n", " ").strip() for cue in batch]
             
+            system_prompt = (
+                f"You are a professional anime fansub translator. Translate dialogue into natural, colloquial, spoken {tgt_name} (santai, luwes, tidak kaku, gunakan 'aku/kamu').\n"
+                f"Rules:\n"
+                f"1. Keep gamer/anime terms as is (e.g. NPC, quest, level, raid, guild, party, skill, boss, inventory).\n"
+                f"2. Do not translate anime titles (e.g. 'Overgeared' must remain 'Overgeared').\n"
+                f"3. Maintain original tone, emotion, and punctuation."
+            )
+            
             if is_google:
                 prompt = (
-                    f"Translate the following JSON array of subtitle dialogue strings from {src_name} to natural {tgt_name}.\n"
+                    f"Translate the following JSON array of anime dialogue strings into natural, colloquial {tgt_name}.\n"
                     f"Return ONLY a valid JSON array of strings with the exact same length ({len(lines)} items) in the exact same order.\n"
                     f"Output raw JSON without markdown formatting or code blocks."
                 )
@@ -209,7 +262,7 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
             else:
                 body_text = "\n".join(lines)
                 prompt = (
-                    f"Translate each subtitle line below from {src_name} to {tgt_name}.\n"
+                    f"Translate each anime dialogue line below into natural, spoken {tgt_name}.\n"
                     f"Return exactly one translated line per input line, in the same order.\n"
                     f"Output only the translations in {tgt_name}, no numbering, explanations, or commentary."
                 )
@@ -219,7 +272,7 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
             payload = {
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": f"You are a professional subtitle translator translating into natural, fluent {tgt_name}."},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": body_content},
                 ],
                 "temperature": 0.2 if is_google else 0.3,
@@ -260,23 +313,7 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
                         d = r.json()
                         msg = (d.get("choices") or [{}])[0].get("message", {})
                         content = msg.get("content", "").strip()
-                        
-                        if is_google:
-                            raw = content
-                            if raw.startswith("```"):
-                                raw = _re.sub(r"^```[a-zA-Z]*\n?", "", raw)
-                                raw = _re.sub(r"\n?```$", "", raw).strip()
-                            try:
-                                parsed = _json.loads(raw)
-                                if isinstance(parsed, list):
-                                    translated = [str(x).strip() for x in parsed]
-                            except Exception:
-                                translated = []
-                        if not translated:
-                            if content.startswith("```"):
-                                content = _re.sub(r"^```[a-zA-Z]*\n?", "", content)
-                                content = _re.sub(r"\n?```$", "", content)
-                            translated = [x.strip() for x in content.split("\n") if x.strip() != ""]
+                        translated = _parse_llm_response(content, is_google=is_google)
                         
                         if translated:
                             break
@@ -317,6 +354,9 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
     for i, c in enumerate(cues):
         tr_text = all_translated[i] if i < len(all_translated) else c["text"]
         out.append({"start": c["start"], "end": c["end"], "text": tr_text})
+    return out
+
+
 async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0):
     """Translate via Google GTX Web RPC (Unmetered, Zero-Key, Super Cepat).
     Menggunakan HTML preservation (<p id="i">...</p>) per batch (40 cues/batch).

@@ -677,9 +677,9 @@ async def proxy_sub(url: str = Query(""),
     except Exception as e:
         new_text = text
         tier = {"cues": None, "level": "source", "error": str(e)}
-    # Cache hasil hanya jika berhasil diterjemahkan (tier1 / tier2).
+    # Cache hasil jika berhasil diterjemahkan (tier1, tier2, tier3).
     # Jangan cache jika jatuh ke source fallback agar user bisa retry saat set apikey.
-    if tier.get("level") in ("tier1", "tier2"):
+    if tier.get("level") in ("tier1", "tier2", "tier3"):
         await set_subtitle_cache(cache_key, new_text)
     resp = Response(content=new_text, media_type="text/vtt")
     resp.headers["X-Translate-Tier"] = tier.get("level", "source")
@@ -692,23 +692,37 @@ async def proxy_sub(url: str = Query(""),
 
 async def _translate_with_fallback(cues, src, tgt):
     """Multi-tier translate:
-    Tier 1: Google GTX Web RPC (Unmetered, Zero-Key, Super Cepat ~1-2s)
-    Tier 2: MyMemory Public REST (Fallback cloud gratis)
-    Tier 3: Source original fallback (Safety net, tanpa crash)
-    Return {"cues": [...], "level": "tier1|tier2|source", "error": "..."}."""
-    from api.translate import call_gtx_translate, call_mymemory_translate, estimate_chars
+    Tier 1 (Jika API Key disetel): AI LLM (Groq / Ollama Cloud / Gemini / OpenAI)
+    Tier 2 (Default / Fallback): Google GTX Web RPC (HTML-Preserved, Unmetered, Zero-Key)
+    Tier 3: MyMemory Public REST (Cadangan cloud gratis)
+    Tier 4: Source original fallback (Safety net, tanpa crash)
+    Return {"cues": [...], "level": "tier1|tier2|tier3|source", "error": "..."}."""
+    from api.translate import call_openai_translate, call_gtx_translate, call_mymemory_translate, estimate_chars
     import datetime as _dt
     last_err = ""
 
-    # Tier 1: Google GTX Web RPC (Unmetered, Zero-Key)
+    # Tier 1: AI LLM (OpenAI / Groq / Ollama Cloud / Gemini) jika API key disetel
+    apikey = await get_setting("translate_apikey", "")
+    if apikey:
+        model = await get_setting("translate_model", "gpt-oss-20b")
+        apiurl = await get_setting("translate_apiurl", "https://api.groq.com/openai/v1")
+        try:
+            translated = await call_openai_translate(cues, src, tgt, apikey, model, apiurl)
+            return {"cues": translated, "level": "tier1", "error": ""}
+        except Exception as e:
+            last_err = f"Tier 1 (AI LLM) error: {e}"
+            print(f"[TRANSLATE TIER 1 ERROR] {e}")
+
+    # Tier 2: Google GTX Web RPC (HTML-Preserved, Zero-Key, Unmetered)
     try:
         translated = await call_gtx_translate(cues, src, tgt)
-        return {"cues": translated, "level": "tier1", "error": ""}
+        return {"cues": translated, "level": "tier2", "error": ""}
     except Exception as e:
-        last_err = f"Tier 1 (Google GTX) error: {e}"
-        print(f"[TRANSLATE TIER 1 ERROR] {e}")
+        if not last_err:
+            last_err = f"Tier 2 (Google GTX) error: {e}"
+        print(f"[TRANSLATE TIER 2 ERROR] {e}")
 
-    # Tier 2: MyMemory dengan soft-limit per-IP per-day.
+    # Tier 3: MyMemory dengan soft-limit per-IP per-day.
     day = _dt.datetime.utcnow().strftime("%Y-%m-%d")
     used = await get_today_char_count(day)
     needed = estimate_chars(cues)
@@ -717,7 +731,7 @@ async def _translate_with_fallback(cues, src, tgt):
         try:
             translated = await call_mymemory_translate(cues, src, tgt)
             await add_today_char_count(day, needed)
-            return {"cues": translated, "level": "tier2", "error": ""}
+            return {"cues": translated, "level": "tier3", "error": ""}
         except Exception as e:
             if not last_err:
                 last_err = f"MyMemory error: {e}"
@@ -725,7 +739,7 @@ async def _translate_with_fallback(cues, src, tgt):
         if not last_err:
             last_err = f"Kuota gratis MyMemory harian habis ({used}/{SOFT_LIMIT} char)"
 
-    # Tier 3: source fallback (return cues asli dengan label source).
+    # Tier 4: source fallback (return cues asli dengan label source).
     return {"cues": cues, "level": "source", "error": last_err}
 
 def find_mpv_binary():
