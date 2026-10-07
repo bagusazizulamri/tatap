@@ -319,22 +319,29 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
         out.append({"start": c["start"], "end": c["end"], "text": tr_text})
 async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0):
     """Translate via Google GTX Web RPC (Unmetered, Zero-Key, Super Cepat).
-    Menggabungkan teks dengan separator ' ||| ' per batch (50 cues/batch).
-    Menggunakan urllib.request bawaan Python yang tidak terkena header fingerprint 429."""
+    Menggunakan HTML preservation (<p id="i">...</p>) per batch (40 cues/batch).
+    Google Translate menjaga 100% struktur tag HTML dan atribut id sehingga urutan dialog
+    dijamin presisi dan tidak pernah bergeser atau buyar ke bahasa Inggris."""
     if not cues:
         return cues
     import urllib.request as _ur
     import urllib.parse as _up
+    import re as _re
+    import html as _html
     
-    BATCH_SIZE = 50
+    BATCH_SIZE = 40
     batches = [cues[i:i + BATCH_SIZE] for i in range(0, len(cues), BATCH_SIZE)]
     all_translated = []
     t_start = _time.time()
-    log_translate(f"Mulai translate Tier 1 (Google GTX RPC): {len(cues)} cues | {len(batches)} batches")
+    log_translate(f"Mulai translate Tier 1 (Google GTX HTML-Preserved): {len(cues)} cues | {len(batches)} batches")
     
     def _fetch_batch_sync(batch_lines):
-        sep = " ||| "
-        joined = sep.join(batch_lines)
+        html_chunks = []
+        for i, line in enumerate(batch_lines):
+            # Escape XML/HTML entities
+            safe_text = _html.escape(line) if line else ""
+            html_chunks.append(f'<p id="{i}">{safe_text}</p>')
+        joined = "".join(html_chunks)
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={src}&tl={tgt}&dt=t&q={_up.quote(joined)}"
         req = _ur.Request(url, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -343,8 +350,17 @@ async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0):
         with _ur.urlopen(req, timeout=timeout) as resp:
             data = _json.loads(resp.read().decode("utf-8"))
             raw_out = "".join([item[0] for item in data[0] if item and item[0]])
-            parts = [p.strip() for p in raw_out.split("|||")]
-            return parts
+            # Ekstrak konten per ID secara deterministik
+            matches = dict(_re.findall(r'<p\s+id=[\"\']?(\d+)[\"\']?>(.*?)</p>', raw_out, _re.DOTALL))
+            res = []
+            for i in range(len(batch_lines)):
+                if str(i) in matches:
+                    unescaped = _html.unescape(matches[str(i)]).strip()
+                    res.append(unescaped)
+                else:
+                    # Fallback ke teks awal jika ID hilang
+                    res.append(batch_lines[i])
+            return res
 
     loop = _asyncio.get_running_loop()
     for idx, batch in enumerate(batches):
@@ -353,18 +369,13 @@ async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0):
         lines = [cue["text"].replace("\n", " ").strip() for cue in batch]
         try:
             parts = await loop.run_in_executor(None, lambda l=lines: _fetch_batch_sync(l))
-            # Samakan jumlah hasil dengan jumlah baris input
-            if len(parts) < len(lines):
-                parts = parts + lines[len(parts):]
-            elif len(parts) > len(lines):
-                parts = parts[:len(lines)]
             all_translated.extend(parts)
         except Exception as e:
             log_translate(f"GTX Batch {idx+1}/{len(batches)} error: {e}")
             raise e
 
     dur = _time.time() - t_start
-    log_translate(f"Sukses translate Tier 1 (Google GTX): {len(cues)} cues dalam {dur:.2f}s")
+    log_translate(f"Sukses translate Tier 1 (Google GTX HTML): {len(cues)} cues dalam {dur:.2f}s")
     out = []
     for i, c in enumerate(cues):
         tr_text = all_translated[i] if i < len(all_translated) else c["text"]
