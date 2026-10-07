@@ -368,7 +368,10 @@ function switchSubtitleTrack(url, langCode){
         else msg+=" (menampilkan subtitle asli)";
         toast(msg, 6000);
       }else{
-        var tierLabel = res.tier === "tier2" ? "MyMemory" : "AI";
+        var tierLabel = "AI Fansub";
+        if(res.tier === "tier2") tierLabel = "Google GTX";
+        else if(res.tier === "tier3") tierLabel = "MyMemory";
+        else if(res.tier === "cached") tierLabel = "Tersimpan";
         toast("Subtitle Indonesia siap ("+tierLabel+")! ("+cur.cues.length+" baris)");
       }
     }

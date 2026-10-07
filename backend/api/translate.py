@@ -210,6 +210,7 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
         return cues
     apikey = (apikey or "").strip().strip("\"'").strip()
     apiurl = (apiurl or "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/")
+    is_google = "googleapis.com" in apiurl
     use_json_mode = is_google or "ollama.com" in apiurl or "groq.com" in apiurl or "openai.com" in apiurl
 
     if is_google:
