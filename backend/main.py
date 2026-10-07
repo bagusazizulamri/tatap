@@ -459,11 +459,15 @@ async def proxy_video(url: str = Query(""), referer: str = Query("")):
     # Probe status cepat sebelum StreamingResponse — kalau 4xx/5xx, return
     # langsung 502 agar HLS.js deteksi fragLoadError. (StreamingResponse swallows
     # HTTPException dari dalam generator, jadi probe wajib sebelum spawn _SR.)
+    # Deteksi MIME type yang sesuai agar Hls.js menginisialisasi audio decoder
+    is_m3u8 = ".m3u8" in url
+    media_type = "application/vnd.apple.mpegurl" if is_m3u8 else "video/mp2t"
+
     # Jika host terdeteksi diblokir DPI ISP, gunakan TLS desync murni (aman dari Sangfor)
     from api.hianime import _host_from, _BLOCKED_DPI_HOSTS
     host = _host_from(url)
     if host in _BLOCKED_DPI_HOSTS:
-        return _SR(_pipe_desync_video(url, referer), media_type="application/octet-stream",
+        return _SR(_pipe_desync_video(url, referer), media_type=media_type,
                    headers={"Access-Control-Allow-Origin": "*"})
 
     try:
@@ -482,18 +486,41 @@ async def proxy_video(url: str = Query(""), referer: str = Query("")):
         err_str = str(e).lower()
         if "reset" in err_str or "ssl" in err_str or "recv failure" in err_str:
             _BLOCKED_DPI_HOSTS.add(host)
-            return _SR(_pipe_desync_video(url, referer), media_type="application/octet-stream",
+            return _SR(_pipe_desync_video(url, referer), media_type=media_type,
                        headers={"Access-Control-Allow-Origin": "*"})
         return Response(status_code=502,
                         content=f"upstream error: {type(e).__name__}".encode(),
                         media_type="text/plain")
-    return _SR(_pipe_video(url, referer), media_type="application/octet-stream",
+    return _SR(_pipe_video(url, referer), media_type=media_type,
                headers={"Access-Control-Allow-Origin": "*"})
+
+
+def _rewrite_m3u8_content(txt: str, base_url: str, referer: str) -> str:
+    """Tulis ulang m3u8 dan pastikan audio codec terdaftar di manifest."""
+    import urllib.parse as _up
+    base = base_url.rsplit("/", 1)[0] + "/"
+    out = []
+    for ln in txt.splitlines():
+        s = ln.strip()
+        if not s:
+            out.append(ln)
+            continue
+        # Jika master playlist menyertakan STREAM-INF tanpa CODECS, injeksikan CODECS
+        # agar browser/Hls.js tahu ada stream audio AAC dan menyiapkan audio SourceBuffer
+        if s.startswith("#EXT-X-STREAM-INF:") and "CODECS=" not in s:
+            s += ',CODECS="avc1.64001f,mp4a.40.2"'
+            out.append(s)
+            continue
+        if s.startswith("#"):
+            out.append(ln)
+            continue
+        absu = s if s.startswith("http") else _up.urljoin(base, s)
+        out.append(f"/api/player/video?url={_up.quote(absu, safe='')}&referer={_up.quote(referer or '', safe='')}")
+    return "\n".join(out)
 
 
 async def _pipe_desync_video(url: str, referer: str):
     """Streaming video via TLS Client Hello Desynchronization (Direct TCP 443 tanpa VPN)."""
-    import urllib.parse as _up
     from api.desync import tls_desync_request, tls_desync_stream
     import asyncio
     
@@ -511,16 +538,7 @@ async def _pipe_desync_video(url: str, referer: str):
         if "#EXTM3U" not in txt:
             yield body
             return
-        base = url.rsplit("/", 1)[0] + "/"
-        out = []
-        for ln in txt.splitlines():
-            s = ln.strip()
-            if not s or s.startswith("#"):
-                out.append(ln)
-                continue
-            absu = s if s.startswith("http") else _up.urljoin(base, s)
-            out.append(f"/api/player/video?url={_up.quote(absu, safe='')}&referer={_up.quote(referer or '', safe='')}")
-        yield "\n".join(out).encode()
+        yield _rewrite_m3u8_content(txt, url, referer).encode("utf-8")
         return
 
     # Segmen TS: stream per bongkah via desync TLS generator
@@ -569,16 +587,7 @@ async def _pipe_video(url: str, referer: str):
                 if "#EXTM3U" not in txt:
                     yield body
                     return
-                base = url.rsplit("/", 1)[0] + "/"
-                out = []
-                for ln in txt.splitlines():
-                    s = ln.strip()
-                    if not s or s.startswith("#"):
-                        out.append(ln)
-                        continue
-                    absu = s if s.startswith("http") else _up.urljoin(base, s)
-                    out.append(f"/api/player/video?url={_up.quote(absu, safe='')}&referer={_up.quote(referer or '', safe='')}")
-                yield "\n".join(out).encode()
+                yield _rewrite_m3u8_content(txt, url, referer).encode("utf-8")
                 return
             # segmen: teruskan per bongkah, buang prefix bila perlu
             skipped = 0

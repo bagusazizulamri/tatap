@@ -410,6 +410,10 @@ function armAutohide(){
 }
 function playUrl(url,referrer,sub,subRef,resumeTime){
   var v=$("vid");
+  if(v){
+    v.muted=false;
+    if(v.volume===0) v.volume=1.0;
+  }
   var prox="/api/player/video?url="+encodeURIComponent(url)+"&referer="+encodeURIComponent(referrer||"");
   try{
     var m=/^(.*\/)index-(f\d+-v\d+-a\d+)\.m3u8/.exec(url);
@@ -437,8 +441,33 @@ function playUrl(url,referrer,sub,subRef,resumeTime){
   setTimeout(function(){$("pm-spinner").classList.add("hidden");},15000);
   if(window.Hls&&window.Hls.isSupported()&&url.indexOf(".m3u8")>=0){
     if(window._hls){try{window._hls.destroy();}catch(e){}}
-    var h=new Hls({maxBufferLength:30,maxMaxBufferLength:60,maxBufferSize:40*1000*1000,startLevel:-1,capLevelToPlayerSize:true,fragLoadingMaxRetry:6,manifestLoadingMaxRetry:4,levelLoadingMaxRetry:4,fragLoadingMaxRetryTimeout:12000,backBufferLength:30,liveSyncDurationCount:2,maxFragLookUpTolerance:0.5,testBandwidth:false,progressive:true,lowLatencyMode:false});
+    var h=new Hls({
+      maxBufferLength:30,
+      maxMaxBufferLength:60,
+      maxBufferSize:40*1000*1000,
+      startLevel:-1,
+      capLevelToPlayerSize:true,
+      fragLoadingMaxRetry:6,
+      manifestLoadingMaxRetry:4,
+      levelLoadingMaxRetry:4,
+      fragLoadingMaxRetryTimeout:12000,
+      backBufferLength:30,
+      liveSyncDurationCount:2,
+      maxFragLookUpTolerance:0.5,
+      testBandwidth:false,
+      progressive:true,
+      lowLatencyMode:false,
+      defaultAudioCodec:"mp4a.40.2",
+      enableWorker:true
+    });
     window._hls=h;
+    h.on(Hls.Events.AUDIO_TRACKS_UPDATED,function(ev,data){
+      if(data&&data.audioTracks&&data.audioTracks.length){
+        if(h.audioTrack===-1||h.audioTrack===undefined){
+          h.audioTrack=0;
+        }
+      }
+    });
     h.on(Hls.Events.FRAG_BUFFERED,function(){
       try{
         var nxt=null;
