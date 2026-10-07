@@ -20,7 +20,7 @@ var Tui = (function () {
   function saveCmdHist(h){try{localStorage.setItem("tatap_hist",JSON.stringify(h.slice(0,50)));}catch(e){}}
 
   function cmdUsage(){
-    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :terbaru | :season <winter|spring|summer|fall> <tahun>\n  :switch [hianime|otaku] (ganti sumber video HiAnime / Otakudesu)\n  :filter [key=val...] | :filter reset\n  :genre <slug|title> | :genre | :genre --list | :genre reset\n  :apikey [AQ...|gsk_...|ollama_...|sk-...|clear] | :model <nama> | :apiurl <url>\n  :logs | :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
+    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :terbaru | :season <winter|spring|summer|fall> <tahun>\n  :switch [hianime|otaku] (ganti sumber video HiAnime / Otakudesu)\n  :filter [key=val...] | :filter reset\n  :genre <slug|title> | :genre | :genre --list | :genre reset\n  :apikey <key> | :ollama <key> | :groq <key> | :gemini <key> | :model <nama> | :apiurl <url>\n  :logs | :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
   }
 
   function applyFilter(){
@@ -338,9 +338,13 @@ var Tui = (function () {
     applySeasonFilter(name, year);
   }
 
-  // ==== :apikey / :model / :apiurl ====
+  // ==== :apikey / :model / :apiurl / :ollama / :groq / :gemini ====
   var TRANSLATE_KEYS = {
     apikey: {field:"translate_apikey", label:"apikey"},
+    ollama: {field:"translate_apikey", label:"apikey (Ollama Cloud)"},
+    groq:   {field:"translate_apikey", label:"apikey (Groq)"},
+    gemini: {field:"translate_apikey", label:"apikey (Google AI Studio)"},
+    openai: {field:"translate_apikey", label:"apikey (OpenAI)"},
     model:  {field:"translate_model",  label:"model"},
     apiurl: {field:"translate_apiurl", label:"apiurl"}
   };
@@ -354,7 +358,7 @@ var Tui = (function () {
     var info = TRANSLATE_KEYS[cmd];
     if(!info) return;
     var args = (rawArgs||"").trim();
-    if(cmd === "apikey"){
+    if(cmd === "apikey" || cmd === "ollama" || cmd === "groq" || cmd === "gemini" || cmd === "openai"){
       args = args.replace(/^["']|["']$/g, "").trim();
     }
     if(!args){
@@ -383,32 +387,31 @@ var Tui = (function () {
     var payload = {};
     payload[info.field] = args;
     var extra = "";
-    if(cmd === "apikey"){
-      if(args.indexOf("AQ.") === 0 || args.indexOf("AIza") === 0 || args.indexOf("AQ") === 0){
-        // Google Gemini key (Google AI Studio: AQ. baru / AIza legacy) -> auto-set apiurl + model Gemini Flash Lite.
-        payload.translate_apiurl = "https://generativelanguage.googleapis.com/v1beta/openai";
-        payload.translate_model = "gemini-3.1-flash-lite";
-        extra = " (auto: apiurl=Google AI Studio, model=gemini-3.1-flash-lite)";
-      }else if(args.indexOf("gsk_") === 0){
-        // Groq key -> auto-set apiurl + model Llama-3.3-70B / gpt-oss-20b
-        payload.translate_apiurl = "https://api.groq.com/openai/v1";
-        payload.translate_model = "llama-3.3-70b-versatile";
-        extra = " (auto: apiurl=Groq, model=llama-3.3-70b-versatile)";
-      }else if(args.indexOf("ollama_") === 0 || args.indexOf("ol_") === 0){
+      if(cmd === "ollama" || args.indexOf("ollama_") === 0 || args.indexOf("ol_") === 0){
         // Ollama Cloud key -> auto-set apiurl + model gpt-oss:20b-cloud
         payload.translate_apiurl = "https://ollama.com/v1";
         payload.translate_model = "gpt-oss:20b-cloud";
         extra = " (auto: apiurl=Ollama Cloud, model=gpt-oss:20b-cloud)";
+      }else if(cmd === "gemini" || args.indexOf("AQ.") === 0 || args.indexOf("AIza") === 0 || args.indexOf("AQ") === 0){
+        // Google Gemini key (Google AI Studio: AQ. baru / AIza legacy) -> auto-set apiurl + model Gemini Flash Lite.
+        payload.translate_apiurl = "https://generativelanguage.googleapis.com/v1beta/openai";
+        payload.translate_model = "gemini-3.1-flash-lite";
+        extra = " (auto: apiurl=Google AI Studio, model=gemini-3.1-flash-lite)";
+      }else if(cmd === "groq" || args.indexOf("gsk_") === 0){
+        // Groq key -> auto-set apiurl + model Llama-3.3-70B / gpt-oss-20b
+        payload.translate_apiurl = "https://api.groq.com/openai/v1";
+        payload.translate_model = "llama-3.3-70b-versatile";
+        extra = " (auto: apiurl=Groq, model=llama-3.3-70b-versatile)";
       }else if(args.indexOf("sk-or-") === 0){
         payload.translate_apiurl = "https://openrouter.ai/api/v1";
         payload.translate_model = "google/gemini-2.0-flash-exp:free";
         extra = " (auto: apiurl=OpenRouter, model=gemini-2.0-flash-exp:free)";
-      }else if(args.indexOf("sk-") === 0 || args.indexOf("sk_") === 0){
+      }else if(cmd === "openai" || args.indexOf("sk-") === 0 || args.indexOf("sk_") === 0){
         payload.translate_apiurl = "https://api.openai.com/v1";
         payload.translate_model = "gpt-4o-mini";
         extra = " (auto: apiurl=OpenAI, model=gpt-4o-mini)";
       }else{
-        extra = " (provider kustom: gunakan juga :apiurl <url> dan :model <nama> bila perlu)";
+        extra = " (provider kustom: gunakan juga :apiurl <url> dan :model <nama> bila perlu, atau ketik :ollama <key>)";
       }
     }
     try{
@@ -518,6 +521,7 @@ var Tui = (function () {
       case "logs":case "translog":
         await cmdLogs();break;
       case "apikey":case "model":case "apiurl":
+      case "ollama":case "groq":case "gemini":case "openai":
         await cmdTranslateSetting(cmd,args);break;
       case "status":
         var extra="";
