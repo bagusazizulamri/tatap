@@ -211,14 +211,16 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
     apikey = (apikey or "").strip().strip("\"'").strip()
     apiurl = (apiurl or "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/")
     is_google = "googleapis.com" in apiurl
-    use_json_mode = is_google or "ollama.com" in apiurl or "groq.com" in apiurl or "openai.com" in apiurl
+    is_ollama = "ollama.com" in apiurl
+    # Model reasoning seperti gpt-oss di Ollama Cloud jauh lebih cepat & stabil dengan line-by-line text
+    use_json_mode = is_google or (not is_ollama and ("groq.com" in apiurl or "openai.com" in apiurl))
 
     if is_google:
         if not model or model in ("gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-3.8-flash"):
             model = "gemini-3.1-flash-lite"
         BATCH_SIZE = 200
-    elif "ollama.com" in apiurl:
-        BATCH_SIZE = 70
+    elif is_ollama:
+        BATCH_SIZE = 25
     else:
         BATCH_SIZE = 60
 
@@ -234,7 +236,7 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
     batches = [cues[i:i + BATCH_SIZE] for i in range(0, len(cues), BATCH_SIZE)]
     all_translated = []
     t_start = _time.time()
-    prov_name = "Google AI Studio" if is_google else ("Ollama Cloud" if "ollama.com" in apiurl else ("Groq" if "groq.com" in apiurl else "OpenAI-compatible"))
+    prov_name = "Google AI Studio" if is_google else ("Ollama Cloud" if is_ollama else ("Groq" if "groq.com" in apiurl else "OpenAI-compatible"))
     log_translate(
         f"Mulai translate {len(cues)} cues ({src_name} -> {tgt_name}) | Provider: {prov_name} | Model: {model} | Batches: {len(batches)}"
     )
@@ -244,7 +246,7 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
         for idx, batch in enumerate(batches):
             t_batch = _time.time()
             if idx > 0:
-                await _asyncio.sleep(0.5)  # Jeda aman per batch
+                await _asyncio.sleep(0.3)  # Jeda aman per batch
             lines = [cue["text"].replace("\n", " ").strip() for cue in batch]
             
             system_prompt = (
@@ -254,6 +256,8 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
                 f"2. Do not translate anime titles (e.g. 'Overgeared' must remain 'Overgeared').\n"
                 f"3. Maintain original tone, emotion, and punctuation."
             )
+            if is_ollama:
+                system_prompt += "\nDo NOT explain or output reasoning thoughts. Output direct translations immediately, exactly one line per line."
             
             if use_json_mode:
                 prompt = (
@@ -266,12 +270,12 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
             else:
                 body_text = "\n".join(lines)
                 prompt = (
-                    f"Translate each anime dialogue line below into natural, spoken {tgt_name}.\n"
-                    f"Return exactly one translated line per input line, in the same order.\n"
+                    f"Translate each anime dialogue line below into natural, spoken {tgt_name} fansub.\n"
+                    f"Return exactly one translated line per input line ({len(lines)} lines total), in the same order.\n"
                     f"Output only the translations in {tgt_name}, no numbering, explanations, or commentary."
                 )
                 body_content = prompt + "\n\n" + body_text
-                calc_tokens = max(512, min(2048, len(lines) * 35))
+                calc_tokens = max(1024, min(4096, len(lines) * 60))
 
             payload = {
                 "model": model,
@@ -303,8 +307,10 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
                             r = await c.post(apiurl + "/chat/completions", json=payload, headers=headers)
                         if r.status_code == 429:
                             last_batch_err = f"Rate limit (429): {_extract_err(r)}"
-                            # Coba model alternatif bila tersedia
-                            break
+                            await _asyncio.sleep(2.0)
+                            if is_google:
+                                break
+                            continue
                         if r.status_code >= 400:
                             msg = _extract_err(r)
                             last_batch_err = f"HTTP {r.status_code}: {msg}"
@@ -321,6 +327,8 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
                         
                         if translated:
                             break
+                        else:
+                            last_batch_err = "Respon model kosong atau tidak menghasilkan translasi"
                     except RuntimeError:
                         raise
                     except Exception as ex:
