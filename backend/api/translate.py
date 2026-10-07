@@ -210,13 +210,16 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
         return cues
     apikey = (apikey or "").strip().strip("\"'").strip()
     apiurl = (apiurl or "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/")
-    is_google = "googleapis.com" in apiurl
+    use_json_mode = is_google or "ollama.com" in apiurl or "groq.com" in apiurl or "openai.com" in apiurl
+
     if is_google:
         if not model or model in ("gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-3.8-flash"):
             model = "gemini-3.1-flash-lite"
         BATCH_SIZE = 200
+    elif "ollama.com" in apiurl:
+        BATCH_SIZE = 70
     else:
-        BATCH_SIZE = 50
+        BATCH_SIZE = 60
 
     src_name = LANG_NAMES.get((src or "").lower(), src or "English")
     tgt_name = LANG_NAMES.get((tgt or "").lower(), tgt or "Indonesian")
@@ -251,14 +254,14 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
                 f"3. Maintain original tone, emotion, and punctuation."
             )
             
-            if is_google:
+            if use_json_mode:
                 prompt = (
                     f"Translate the following JSON array of anime dialogue strings into natural, colloquial {tgt_name}.\n"
                     f"Return ONLY a valid JSON array of strings with the exact same length ({len(lines)} items) in the exact same order.\n"
                     f"Output raw JSON without markdown formatting or code blocks."
                 )
                 body_content = prompt + "\n\n" + _json.dumps(lines, ensure_ascii=False)
-                calc_tokens = min(8192, max(2048, len(lines) * 40))
+                calc_tokens = min(8192, max(2048, len(lines) * 45))
             else:
                 body_text = "\n".join(lines)
                 prompt = (
@@ -275,7 +278,7 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": body_content},
                 ],
-                "temperature": 0.2 if is_google else 0.3,
+                "temperature": 0.2 if use_json_mode else 0.3,
                 "max_tokens": calc_tokens,
             }
             if "groq.com" in apiurl and "gpt-oss" in model:
@@ -313,7 +316,7 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
                         d = r.json()
                         msg = (d.get("choices") or [{}])[0].get("message", {})
                         content = msg.get("content", "").strip()
-                        translated = _parse_llm_response(content, is_google=is_google)
+                        translated = _parse_llm_response(content, is_google=use_json_mode)
                         
                         if translated:
                             break
