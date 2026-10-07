@@ -387,18 +387,27 @@ var Tui = (function () {
     var payload = {};
     payload[info.field] = args;
     var extra = "";
-      if(cmd === "ollama" || args.indexOf("ollama_") === 0 || args.indexOf("ol_") === 0){
-        // Ollama Cloud key -> auto-set apiurl + model gpt-oss:20b-cloud
+    if(cmd === "apikey" || cmd === "ollama" || cmd === "groq" || cmd === "gemini" || cmd === "openai"){
+      // Deteksi Ollama Cloud:
+      // 1) Command eksplisit :ollama
+      // 2) Prefix: ollama_... atau ol_...
+      // 3) Format API key resmi Ollama Cloud: 32 karakter hex + titik + alphanumeric secret token (misal: afd1045d...TYA04...)
+      var isOllamaKey = cmd === "ollama" ||
+                        args.indexOf("ollama_") === 0 ||
+                        args.indexOf("ol_") === 0 ||
+                        /^[a-f0-9]{32}\.[A-Za-z0-9_-]+$/.test(args);
+
+      if(isOllamaKey){
         payload.translate_apiurl = "https://ollama.com/v1";
-        payload.translate_model = "gpt-oss:20b-cloud";
-        extra = " (auto: apiurl=Ollama Cloud, model=gpt-oss:20b-cloud)";
+        payload.translate_model = "gpt-oss:20b";
+        extra = " (auto: apiurl=Ollama Cloud, model=gpt-oss:20b)";
       }else if(cmd === "gemini" || args.indexOf("AQ.") === 0 || args.indexOf("AIza") === 0 || args.indexOf("AQ") === 0){
         // Google Gemini key (Google AI Studio: AQ. baru / AIza legacy) -> auto-set apiurl + model Gemini Flash Lite.
         payload.translate_apiurl = "https://generativelanguage.googleapis.com/v1beta/openai";
         payload.translate_model = "gemini-3.1-flash-lite";
         extra = " (auto: apiurl=Google AI Studio, model=gemini-3.1-flash-lite)";
       }else if(cmd === "groq" || args.indexOf("gsk_") === 0){
-        // Groq key -> auto-set apiurl + model Llama-3.3-70B / gpt-oss-20b
+        // Groq key -> auto-set apiurl + model Llama-3.3-70B
         payload.translate_apiurl = "https://api.groq.com/openai/v1";
         payload.translate_model = "llama-3.3-70b-versatile";
         extra = " (auto: apiurl=Groq, model=llama-3.3-70b-versatile)";

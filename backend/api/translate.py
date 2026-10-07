@@ -230,7 +230,7 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
     batches = [cues[i:i + BATCH_SIZE] for i in range(0, len(cues), BATCH_SIZE)]
     all_translated = []
     t_start = _time.time()
-    prov_name = "Google AI Studio" if is_google else "OpenAI-compatible"
+    prov_name = "Google AI Studio" if is_google else ("Ollama Cloud" if "ollama.com" in apiurl else ("Groq" if "groq.com" in apiurl else "OpenAI-compatible"))
     log_translate(
         f"Mulai translate {len(cues)} cues ({src_name} -> {tgt_name}) | Provider: {prov_name} | Model: {model} | Batches: {len(batches)}"
     )
