@@ -11,7 +11,26 @@ Backend pakai layer ini dengan signature:
 import re as _re
 import json as _json
 import time as _time
+import asyncio as _asyncio
+import collections as _collections
+import datetime as _dt
 import httpx as _httpx
+
+TRANSLATE_LOGS = _collections.deque(maxlen=100)
+
+
+def log_translate(msg: str):
+    """Catat pesan log translasi ke ring-buffer in-memory dan stdout (flush)."""
+    ts = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    entry = f"[{ts}] {msg}"
+    TRANSLATE_LOGS.append(entry)
+    print(f"[TRANSLATE] {entry}", flush=True)
+
+
+def get_translate_logs():
+    """Ambil list log translasi terbaru."""
+    return list(TRANSLATE_LOGS)
+
 
 
 def parse_vtt(text):
@@ -111,63 +130,171 @@ LANG_NAMES = {
 }
 
 
+def _extract_err(resp):
+    """Ekstrak pesan error dari response HTTP OpenAI/Gemini/Groq."""
+    raw_msg = ""
+    try:
+        j = resp.json()
+        if isinstance(j, list) and len(j) > 0:
+            j = j[0]
+        if isinstance(j, dict):
+            err = j.get("error")
+            if isinstance(err, dict):
+                raw_msg = err.get("message") or err.get("code") or str(err)
+            elif err:
+                raw_msg = str(err)
+            elif "message" in j:
+                raw_msg = str(j["message"])
+    except Exception:
+        pass
+    if not raw_msg:
+        txt = (resp.text or "").strip()
+        raw_msg = txt[:120] if txt else f"HTTP {resp.status_code}"
+
+    # Deteksi pesan error spesifik Google AI Studio key
+    low = raw_msg.lower()
+    if "api key not valid" in low or "pass a valid api key" in low or "api_key_invalid" in low or "invalid auth key" in low:
+        return "API Key Google tidak valid. Dapatkan kunci terbaru (awalan AQ...) di aistudio.google.com"
+    return raw_msg
+
+
 async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=60.0):
     """Translate via OpenAI-compatible /chat/completions with chunked batches.
     cues: list[{start,end,text}]. Returns translated cues (text replaced, timing preserved)."""
     if not cues:
         return cues
-    apiurl = (apiurl or "https://api.openai.com/v1").rstrip("/")
-    model = model or "openai/gpt-oss-20b"
+    apikey = (apikey or "").strip().strip("\"'").strip()
+    apiurl = (apiurl or "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/")
+    is_google = "googleapis.com" in apiurl
+    if is_google:
+        if not model or model in ("gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-3.8-flash"):
+            model = "gemini-3.1-flash-lite"
+        BATCH_SIZE = 200
+    else:
+        BATCH_SIZE = 50
+
     src_name = LANG_NAMES.get((src or "").lower(), src or "English")
     tgt_name = LANG_NAMES.get((tgt or "").lower(), tgt or "Indonesian")
     
     headers = {
         "Authorization": "Bearer " + apikey,
+        "x-goog-api-key": apikey,
         "Content-Type": "application/json",
     }
     
-    BATCH_SIZE = 40
     batches = [cues[i:i + BATCH_SIZE] for i in range(0, len(cues), BATCH_SIZE)]
     all_translated = []
+    t_start = _time.time()
+    prov_name = "Google AI Studio" if is_google else "OpenAI-compatible"
+    log_translate(
+        f"Mulai translate {len(cues)} cues ({src_name} -> {tgt_name}) | Provider: {prov_name} | Model: {model} | Batches: {len(batches)}"
+    )
     
-    timeout_cfg = _httpx.Timeout(timeout, connect=15.0)
+    timeout_cfg = _httpx.Timeout(timeout, connect=20.0)
     async with _httpx.AsyncClient(timeout=timeout_cfg, trust_env=True) as c:
-        for batch in batches:
+        for idx, batch in enumerate(batches):
+            t_batch = _time.time()
+            if idx > 0:
+                await _asyncio.sleep(0.5)  # Jeda aman per batch
             lines = [cue["text"].replace("\n", " ").strip() for cue in batch]
-            body_text = "\n".join(lines)
-            prompt = (
-                f"Translate each subtitle line below from {src_name} to {tgt_name}.\n"
-                f"Return exactly one translated line per input line, in the same order.\n"
-                f"Output only the translations in {tgt_name}, no numbering, explanations, or commentary."
-            )
+            
+            if is_google:
+                prompt = (
+                    f"Translate the following JSON array of subtitle dialogue strings from {src_name} to natural {tgt_name}.\n"
+                    f"Return ONLY a valid JSON array of strings with the exact same length ({len(lines)} items) in the exact same order.\n"
+                    f"Output raw JSON without markdown formatting or code blocks."
+                )
+                body_content = prompt + "\n\n" + _json.dumps(lines, ensure_ascii=False)
+                calc_tokens = min(8192, max(2048, len(lines) * 40))
+            else:
+                body_text = "\n".join(lines)
+                prompt = (
+                    f"Translate each subtitle line below from {src_name} to {tgt_name}.\n"
+                    f"Return exactly one translated line per input line, in the same order.\n"
+                    f"Output only the translations in {tgt_name}, no numbering, explanations, or commentary."
+                )
+                body_content = prompt + "\n\n" + body_text
+                calc_tokens = max(512, min(2048, len(lines) * 35))
+
             payload = {
                 "model": model,
                 "messages": [
                     {"role": "system", "content": f"You are a professional subtitle translator translating into natural, fluent {tgt_name}."},
-                    {"role": "user", "content": prompt + "\n\n" + body_text},
+                    {"role": "user", "content": body_content},
                 ],
-                "temperature": 0.3,
-                "max_tokens": 4096,
+                "temperature": 0.2 if is_google else 0.3,
+                "max_tokens": calc_tokens,
             }
-            if "groq.com" in apiurl:
+            if "groq.com" in apiurl and "gpt-oss" in model:
                 payload["reasoning_format"] = "hidden"
             
             translated = []
-            for attempt in range(2):
-                try:
-                    r = await c.post(apiurl + "/chat/completions", json=payload, headers=headers)
-                    if r.status_code == 400 and "reasoning_format" in payload:
-                        payload.pop("reasoning_format", None)
+            last_batch_err = None
+            models_to_try = [model]
+            if is_google:
+                # Siapkan fallback otomatis jika model utama terkena rate limit (429)
+                alt = "gemini-3.8-flash" if "flash-lite" in model else "gemini-3.1-flash-lite"
+                models_to_try.append(alt)
+
+            for cur_model in models_to_try:
+                payload["model"] = cur_model
+                for attempt in range(2):
+                    try:
                         r = await c.post(apiurl + "/chat/completions", json=payload, headers=headers)
-                    r.raise_for_status()
-                    d = r.json()
-                    msg = (d.get("choices") or [{}])[0].get("message", {})
-                    content = msg.get("content", "").strip()
-                    translated = [x.strip() for x in content.split("\n") if x.strip() != ""]
-                    if translated:
-                        break
-                except Exception:
-                    translated = []
+                        if r.status_code == 400 and "reasoning_format" in payload:
+                            payload.pop("reasoning_format", None)
+                            r = await c.post(apiurl + "/chat/completions", json=payload, headers=headers)
+                        if r.status_code == 429:
+                            last_batch_err = f"Rate limit (429): {_extract_err(r)}"
+                            # Coba model alternatif bila tersedia
+                            break
+                        if r.status_code >= 400:
+                            msg = _extract_err(r)
+                            last_batch_err = f"HTTP {r.status_code}: {msg}"
+                            if r.status_code in (400, 401, 403):
+                                raise RuntimeError(last_batch_err)
+                            await _asyncio.sleep(1.0)
+                            continue
+                        
+                        r.raise_for_status()
+                        d = r.json()
+                        msg = (d.get("choices") or [{}])[0].get("message", {})
+                        content = msg.get("content", "").strip()
+                        
+                        if is_google:
+                            raw = content
+                            if raw.startswith("```"):
+                                raw = _re.sub(r"^```[a-zA-Z]*\n?", "", raw)
+                                raw = _re.sub(r"\n?```$", "", raw).strip()
+                            try:
+                                parsed = _json.loads(raw)
+                                if isinstance(parsed, list):
+                                    translated = [str(x).strip() for x in parsed]
+                            except Exception:
+                                translated = []
+                        if not translated:
+                            if content.startswith("```"):
+                                content = _re.sub(r"^```[a-zA-Z]*\n?", "", content)
+                                content = _re.sub(r"\n?```$", "", content)
+                            translated = [x.strip() for x in content.split("\n") if x.strip() != ""]
+                        
+                        if translated:
+                            break
+                    except RuntimeError:
+                        raise
+                    except Exception as ex:
+                        last_batch_err = str(ex)
+                        translated = []
+
+                if translated:
+                    break
+
+            if not translated and last_batch_err:
+                log_translate(f"Batch {idx+1}/{len(batches)} GAGAL: {last_batch_err}")
+                raise RuntimeError(last_batch_err)
+            
+            dur_batch = _time.time() - t_batch
+            log_translate(f"Batch {idx+1}/{len(batches)} selesai ({len(translated)} cues) dalam {dur_batch:.2f}s via {payload.get('model', model)}")
             
             # Pad / truncate to match batch cue count
             if len(translated) < len(lines):
@@ -180,8 +307,64 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=6
     # Validasi: pastikan ada baris yang berhasil diterjemahkan
     changed_count = sum(1 for i, c in enumerate(cues) if i < len(all_translated) and all_translated[i] != c["text"])
     if changed_count == 0:
+        log_translate("Translasi gagal: tidak ada baris yang berubah.")
         raise RuntimeError("Translation returned no translated lines")
     
+    total_dur = _time.time() - t_start
+    log_translate(f"Translasi AI sukses {len(cues)} cues dalam {total_dur:.2f}s ({changed_count} baris diterjemahkan)")
+    
+    out = []
+    for i, c in enumerate(cues):
+        tr_text = all_translated[i] if i < len(all_translated) else c["text"]
+        out.append({"start": c["start"], "end": c["end"], "text": tr_text})
+async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0):
+    """Translate via Google GTX Web RPC (Unmetered, Zero-Key, Super Cepat).
+    Menggabungkan teks dengan separator ' ||| ' per batch (50 cues/batch).
+    Menggunakan urllib.request bawaan Python yang tidak terkena header fingerprint 429."""
+    if not cues:
+        return cues
+    import urllib.request as _ur
+    import urllib.parse as _up
+    
+    BATCH_SIZE = 50
+    batches = [cues[i:i + BATCH_SIZE] for i in range(0, len(cues), BATCH_SIZE)]
+    all_translated = []
+    t_start = _time.time()
+    log_translate(f"Mulai translate Tier 1 (Google GTX RPC): {len(cues)} cues | {len(batches)} batches")
+    
+    def _fetch_batch_sync(batch_lines):
+        sep = " ||| "
+        joined = sep.join(batch_lines)
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={src}&tl={tgt}&dt=t&q={_up.quote(joined)}"
+        req = _ur.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Accept": "*/*"
+        })
+        with _ur.urlopen(req, timeout=timeout) as resp:
+            data = _json.loads(resp.read().decode("utf-8"))
+            raw_out = "".join([item[0] for item in data[0] if item and item[0]])
+            parts = [p.strip() for p in raw_out.split("|||")]
+            return parts
+
+    loop = _asyncio.get_running_loop()
+    for idx, batch in enumerate(batches):
+        if idx > 0:
+            await _asyncio.sleep(0.3)
+        lines = [cue["text"].replace("\n", " ").strip() for cue in batch]
+        try:
+            parts = await loop.run_in_executor(None, lambda l=lines: _fetch_batch_sync(l))
+            # Samakan jumlah hasil dengan jumlah baris input
+            if len(parts) < len(lines):
+                parts = parts + lines[len(parts):]
+            elif len(parts) > len(lines):
+                parts = parts[:len(lines)]
+            all_translated.extend(parts)
+        except Exception as e:
+            log_translate(f"GTX Batch {idx+1}/{len(batches)} error: {e}")
+            raise e
+
+    dur = _time.time() - t_start
+    log_translate(f"Sukses translate Tier 1 (Google GTX): {len(cues)} cues dalam {dur:.2f}s")
     out = []
     for i, c in enumerate(cues):
         tr_text = all_translated[i] if i < len(all_translated) else c["text"]

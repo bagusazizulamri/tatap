@@ -46,14 +46,14 @@ def _is_dead_pair(host, slug, ep):
         return bool(exp and exp > _time.time())
 
 
-def _mark_dead(host, ttl=3600):
+def _mark_dead(host, ttl=300):
     base = (host or "").lower()
     with _neg_lock:
         _neg_cache[base] = int(_time.time()) + ttl
 
 
-def _mark_dead_pair(host, slug, ep, ttl=3600):
-    """Tandai (host, slug, ep) gagal. Request berikut skip tanpa probe."""
+def _mark_dead_pair(host, slug, ep, ttl=600):
+    """Tandai (host, slug, ep) gagal. Request berikut skip tanpa probe (TTL 10 menit agar pulih jika CDN update)."""
     base = (host or "").lower()
     key = f"{base}|{slug or ''}|{ep}"
     with _neg_lock:
@@ -65,9 +65,13 @@ def _host_from(url):
     return m.group(1).lower() if m else ""
 
 
+_BLOCKED_DPI_HOSTS = {"hls.dramahot.top"}
+
+
 def _probe_master(master_url, referer):
-    """Probe cepat master.m3u8: TLS-RST / 4xx / 5xx raise. Sukses = dapat 1+ byte.
-    Pakai curl_cffi kalau tersedia, fallback ke httpx."""
+    """Probe cepat master.m3u8:
+    100% Direct TCP port 443 tanpa VPN.
+    Bypass DPI ISP menggunakan TLS Client-Hello record fragmentation (desync)."""
     if not master_url or not master_url.startswith("http"):
         raise RuntimeError("invalid master url")
     host = _host_from(master_url)
@@ -75,31 +79,39 @@ def _probe_master(master_url, referer):
         raise RuntimeError(f"host dead: {host}")
     headers = {"User-Agent": HI_UA,
                **({"Referer": referer} if referer else {})}
-    status, body = None, None
+    
+    # Jika host terdeteksi diblokir DPI ISP, gunakan TLS desync langsung
+    if host in _BLOCKED_DPI_HOSTS:
+        try:
+            from api.desync import tls_desync_request
+            content = tls_desync_request(master_url, headers=headers, timeout=8.0)
+            if content and b"#EXTM3U" in content:
+                return content
+        except Exception:
+            pass
+
+    # Direct connection biasa untuk semua host normal
     try:
         from curl_cffi import requests as creq
         kw = dict(headers=headers, impersonate="chrome124", timeout=10)
         r = creq.get(master_url, **kw)
-        status, body = r.status_code, r.content
-    except ImportError:
-        # Fallback ke _fetch() yang sudah handle httpx fallback.
-        try:
-            text = _fetch(master_url, referer=referer, timeout=10)
-            status, body = 200, text.encode() if isinstance(text, str) else text
-        except Exception as e:
-            _mark_dead(host)
-            raise RuntimeError(f"probe fail {host}: {type(e).__name__}")
+        if r.status_code == 200 and r.content:
+            return r.content
+        if r.status_code >= 400:
+            raise RuntimeError(f"upstream {r.status_code} for {host}")
     except Exception as e:
+        err_str = str(e).lower()
+        if "reset" in err_str or "ssl" in err_str or "recv failure" in err_str:
+            _BLOCKED_DPI_HOSTS.add(host)
+            try:
+                from api.desync import tls_desync_request
+                content = tls_desync_request(master_url, headers=headers, timeout=8.0)
+                if content and b"#EXTM3U" in content:
+                    return content
+            except Exception:
+                pass
         _mark_dead(host)
         raise RuntimeError(f"probe fail {host}: {type(e).__name__}")
-    if status is None or status >= 400:
-        if status and status >= 500:
-            _mark_dead(host)
-        raise RuntimeError(f"upstream {status} for {host}")
-    if not body:
-        _mark_dead(host)
-        raise RuntimeError(f"empty response for {host}")
-    return body
 
 FILTERS = {
     "type": ["tv", "movie", "ova", "ona", "special", "music"],
@@ -528,6 +540,31 @@ def _order_servers(servers):
     return sorted(servers, key=score)
 
 
+def _fetch_media(url: str, referer: str = None, timeout: int = 10) -> str:
+    """Fetch teks/playlist/sub:
+    - Host biasa: 100% direct.
+    - Host terblokir ISP: bypass via TLS desync tanpa VPN."""
+    host = _host_from(url)
+    headers = {"User-Agent": HI_UA, **({"Referer": referer} if referer else {})}
+    if host in _BLOCKED_DPI_HOSTS:
+        try:
+            from api.desync import tls_desync_request
+            b = tls_desync_request(url, headers=headers, timeout=timeout)
+            if b:
+                return b.decode("utf-8", errors="ignore")
+        except Exception:
+            pass
+    try:
+        from curl_cffi import requests as creq
+        kw = dict(headers=headers, impersonate="chrome124", timeout=timeout)
+        r = creq.get(url, **kw)
+        if r.status_code == 200:
+            return r.text
+    except Exception:
+        pass
+    return _fetch(url, referer=referer, timeout=timeout)
+
+
 def _validate_master_playlist(master_url: str, referer: str, variants: list):
     """Validasi master playlist: harus (a) mulainya #EXTM3U, (b) minimal ada 1
     URL segment/variant pada body. Return list variants yang sudah tervalidasi:
@@ -536,7 +573,7 @@ def _validate_master_playlist(master_url: str, referer: str, variants: list):
     Raise RuntimeError kalau playlist tidak punya konten yang bisa diputar."""
     if not master_url or not master_url.startswith("http"):
         raise RuntimeError("invalid master url")
-    body = _fetch(master_url, referer=referer, timeout=10)
+    body = _fetch_media(master_url, referer=referer, timeout=10)
     txt = body if isinstance(body, str) else body.decode("utf-8", errors="ignore")
     if "#EXTM3U" not in txt:
         raise RuntimeError("master playlist: not m3u8")
@@ -569,17 +606,20 @@ def _validate_sub_url(sub_url: str, referer: str):
     if not sub_url or not sub_url.startswith("http"):
         return None
     try:
+        host = _host_from(sub_url)
+        headers = {"User-Agent": HI_UA, **({"Referer": referer} if referer else {})}
+        if host in _BLOCKED_DPI_HOSTS:
+            from api.desync import tls_desync_request
+            b = tls_desync_request(sub_url, headers=headers, timeout=6.0)
+            if b and len(b) >= 10:
+                return sub_url
+            return None
         from curl_cffi import requests as creq
-        kw = dict(headers={"User-Agent": HI_UA,
-                           **({"Referer": referer} if referer else {})},
-                  impersonate="chrome124", timeout=8)
+        kw = dict(headers=headers, impersonate="chrome124", timeout=8)
         r = creq.get(sub_url, **kw)
-        if r.status_code != 200:
-            return None
-        # Pastikan body minimal 10 byte (signature VTT minimal: "WEBVTT\n").
-        if not r.content or len(r.content) < 10:
-            return None
-        return sub_url
+        if r.status_code == 200 and r.content and len(r.content) >= 10:
+            return sub_url
+        return None
     except Exception:
         return None
 
@@ -692,13 +732,19 @@ def hianime_m3u8(episode_maps, ep_no: int, mode: str = "sub", slug: str = ""):
             last_err = f"{srv['name']}: {err_msg}"
             msg = err_msg.lower()
             # Tandai host mati kalau error-nya network (RST, ConnectError, probe fail).
-            if any(t in msg for t in ("rst", "reset", "connect", "timeout", "dead", "upstream", "probe fail")):
+            if any(t in msg for t in ("rst", "reset", "connect", "timeout", "dead", "upstream", "probe fail", "sslerror")):
                 _mark_dead(host)
             # Tandai per-(host, slug, ep) kalau anime tidak ada di server ini.
             if any(t in msg for t in ("404 page", "not on server", "window.__p not found", "data-id not found")):
                 if slug:
                     _mark_dead_pair(host, slug, ep_no)
             continue
+    if "dramahot.top" in last_err.lower() or "zokoanime" in last_err.lower():
+        raise RuntimeError(
+            "Server video anime baru ini (ZokoAnime) diblokir DPI/ISP (hls.dramahot.top). "
+            "Server utama (Megaplay) belum diunggah oleh penyedia. "
+            "Aktifkan Cloudflare WARP (1.1.1.1) / VPN untuk memutar judul ini."
+        )
     raise RuntimeError(last_err or "m3u8 not found")
 
 def select_quality(variants, quality: str = "best"):

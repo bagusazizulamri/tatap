@@ -22,6 +22,7 @@ function loadPrefs(){
 
 function openTitle(slug,title){
   cur.slug=slug;cur.title=title;cur.eps=[];
+  renderSourceUI();
   $("tm-title").textContent=title;
   $("tm-sub").textContent=slug;
   $("tm-eyebrow").textContent="DETAIL ANIME";
@@ -66,7 +67,7 @@ function syncSeg(){
   document.querySelectorAll("#mode-seg button").forEach(function(x){x.classList.toggle("active",x.getAttribute("data-mode")===cur.mode);});
 }
 
-function openPlayer(ep){
+function openPlayer(ep, resumeTime){
   cur.ep=ep;
   closeTitle();
   $("player-modal").classList.remove("hidden");
@@ -76,17 +77,27 @@ function openPlayer(ep){
   $("pm-status").textContent="resolving ep "+ep+"...";
   updatePrevNext();
   var t0=Date.now();
-  window.Tatap.resolve(cur.slug,ep,cur.mode,cur.quality).then(function(r){
+  var src=cur.source||"";
+  window.Tatap.resolve(cur.slug,ep,cur.mode,cur.quality,src).then(function(r){
     if(!r.success){$("pm-status").textContent="ERROR: "+r.error;return;}
     cur.res=r.data;
+    cur.source=r.data.source||"hianime";
     var picked=r.data.picked||r.data.variants[0];
-    $("pm-meta").textContent="ep "+ep+" · "+cur.mode.toUpperCase()+" · "+picked.q+" · "+(r.data.server||"")+(r.data.cached?" · cached":" · "+(Date.now()-t0)+"ms");
+    var srvText=r.data.server||"";
+    $("pm-meta").innerHTML="ep "+ep+" · "+cur.mode.toUpperCase()+" · "+picked.q+" · <button id='pm-source-btn' class='server-badge' title='Klik untuk switch sumber' style='background:none;border:1px solid rgba(255,255,255,0.25);color:var(--cyan,#00dbeb);cursor:pointer;border-radius:4px;padding:1px 6px;font:inherit;'>"+esc(srvText)+" ⇄</button>"+(r.data.cached?" · cached":" · "+(Date.now()-t0)+"ms");
+    var srvBtn=$("pm-source-btn");
+    if(srvBtn){
+      srvBtn.onclick=function(){
+        if(window.Tui&&window.Tui.switchSource){window.Tui.switchSource();}
+        else{App.switchSource();}
+      };
+    }
     renderVariants();
     // Render dropdown subtitle: pilih track yang cocok dengan preferensi user
     // (cur.subLang) atau default: true. Simpan URL track yang aktif.
     cur.activeSub = pickSubtitleUrl(r.data.subtitles || [], cur.subLang);
     renderSubtitles(r.data.subtitles || [], cur.activeSub);
-    playUrl(picked.url,r.data.referer,cur.activeSub,r.data.referer);
+    playUrl(picked.url,r.data.referer,cur.activeSub,r.data.referer,resumeTime);
     window.Tatap.saveHist({slug:cur.slug,title:cur.title,episode:ep,mode:cur.mode}).then(function(){renderContinue();});
   });
 }
@@ -326,25 +337,46 @@ function switchSubtitleTrack(url, langCode){
   }
   if(langCode==="id"){
     toast("Menerjemahkan subtitle AI ke bahasa Indonesia...", 4000);
+    var obox=$("pm-subs-overlay");
+    if(obox){
+      var osp=obox.querySelector("span");
+      if(osp){
+        osp.textContent="[Menerjemahkan subtitle AI ke bahasa Indonesia...]";
+        osp._last=osp.textContent;
+      }
+    }
   }
   var ref=cur.res&&cur.res.referer||"";
   var qs="url="+encodeURIComponent(url)+"&referer="+encodeURIComponent(ref);
   if(langCode) qs+="&lang="+encodeURIComponent(langCode);
   var prox="/api/player/sub?"+qs;
   fetch(prox).then(function(r){
-    if(!r.ok)throw new Error("sub "+r.status);
-    return r.text();
-  }).then(function(t){
-    cur.cues=parseVtt(t);
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    var tier=r.headers.get("X-Translate-Tier")||"";
+    var trErr=r.headers.get("X-Translate-Error")||"";
+    return r.text().then(function(t){
+      return {text:t, tier:tier, error:trErr};
+    });
+  }).then(function(res){
+    clearOverlay();
+    cur.cues=parseVtt(res.text);
     paintCue();
     if(langCode==="id"){
-      toast("Subtitle Indonesia siap! ("+cur.cues.length+" baris)");
+      if(res.tier==="source"){
+        var msg="Gagal translate AI";
+        if(res.error) msg+=": "+res.error;
+        else msg+=" (menampilkan subtitle asli)";
+        toast(msg, 6000);
+      }else{
+        var tierLabel = res.tier === "tier2" ? "MyMemory" : "AI";
+        toast("Subtitle Indonesia siap ("+tierLabel+")! ("+cur.cues.length+" baris)");
+      }
     }
-  }).catch(function(){
+  }).catch(function(err){
     cur.cues=[];
     clearOverlay();
     if(langCode==="id"){
-      toast("Gagal menerjemahkan subtitle");
+      toast("Gagal menerjemahkan subtitle: "+(err&&err.message||err));
     }
   });
 }
@@ -376,7 +408,7 @@ function armAutohide(){
   v.addEventListener("seeking",show);
   show();
 }
-function playUrl(url,referrer,sub,subRef){
+function playUrl(url,referrer,sub,subRef,resumeTime){
   var v=$("vid");
   var prox="/api/player/video?url="+encodeURIComponent(url)+"&referer="+encodeURIComponent(referrer||"");
   try{
@@ -395,7 +427,12 @@ function playUrl(url,referrer,sub,subRef){
   switchSubtitleTrack(sub || null);
   $("pm-spinner").classList.remove("hidden");
   $("pm-status").textContent="buffering...";
-  var onCan=function(){$("pm-spinner").classList.add("hidden");};
+  var onCan=function(){
+    $("pm-spinner").classList.add("hidden");
+    if(resumeTime && resumeTime > 0){
+      try{v.currentTime = resumeTime;}catch(e){}
+    }
+  };
   v.addEventListener("canplay",onCan,{once:true});
   setTimeout(function(){$("pm-spinner").classList.add("hidden");},15000);
   if(window.Hls&&window.Hls.isSupported()&&url.indexOf(".m3u8")>=0){
@@ -419,6 +456,22 @@ function playUrl(url,referrer,sub,subRef){
     h.on(Hls.Events.ERROR,function(ev,d){
       if(!d)return;
       if(d.fatal){
+        if(d.type===Hls.ErrorTypes.NETWORK_ERROR){
+          // Coba pulihkan koneksi network sekali sebelum menyerah
+          if(!h._networkRetried){
+            h._networkRetried=true;
+            $("pm-status").textContent="mencoba memulihkan koneksi stream...";
+            h.startLoad();
+            return;
+          }
+        }else if(d.type===Hls.ErrorTypes.MEDIA_ERROR){
+          if(!h._mediaRetried){
+            h._mediaRetried=true;
+            $("pm-status").textContent="mencoba memulihkan codec media...";
+            h.recoverMediaError();
+            return;
+          }
+        }
         $("pm-status").textContent="player error: "+(d.type||"fatal")+" — "+(d.details||"");
         try{h.destroy();}catch(_){}
         return;
@@ -555,6 +608,7 @@ function onKeyPlayer(e){
   else if(e.key==="n")stepEp(1);
   else if(e.key==="p")stepEp(-1);
   else if(e.key==="m")v.muted=!v.muted;
+  else if(e.key==="s"||e.key==="S")switchSource();
   else if(e.key==="ArrowRight"){e.preventDefault();v.currentTime+=5;}
   else if(e.key==="ArrowLeft"){e.preventDefault();v.currentTime-=5;}
 }
@@ -599,9 +653,47 @@ function setTranslate(on){
   toast("Translate: "+(cur.translate?"ON":"OFF"));
 }
 
+function renderSourceUI(){
+  var s = cur.source || "hianime";
+  var isOtaku = (s === "otakudesu");
+  var txt = isOtaku ? "src: otakudesu (sub indo) ⇄" : "src: hianime ⇄";
+  var badgeTxt = isOtaku ? "OTAKUDESU (SUB INDO) ⇄" : "HIANIME ⇄";
+  var sb = $("sb-source");
+  if(sb){
+    sb.textContent = txt;
+    sb.classList.toggle("otaku", isOtaku);
+  }
+  var tm = $("tm-source-btn");
+  if(tm){
+    tm.textContent = "SRC: " + badgeTxt;
+    tm.classList.toggle("otaku", isOtaku);
+  }
+}
+
+function switchSource(targetSource){
+  var v=$("vid");
+  var curTime = (v && !isNaN(v.currentTime)) ? v.currentTime : 0;
+  var nextSource = targetSource;
+  if(!nextSource){
+    nextSource = (cur.source === "otakudesu") ? "hianime" : "otakudesu";
+  }
+  cur.source = nextSource;
+  renderSourceUI();
+  if(window.Tatap && window.Tatap.setSetting){
+    window.Tatap.setSetting({ preferred_source: nextSource }).catch(function(){});
+  }
+  var label = nextSource === "otakudesu" ? "Otakudesu (Sub Indo)" : "HiAnime";
+  toast("Sumber: " + label);
+  if(!$("player-modal").classList.contains("hidden") && cur.ep){
+    openPlayer(cur.ep, curTime);
+  }
+  return nextSource;
+}
+
 App = {
   openTitle:openTitle, openPlayer:openPlayer, playMPV:playMPV,
   renderContinue:renderContinue, onKeyPlayer:onKeyPlayer,
+  switchSource:switchSource,
   openGenreModal:function(){
     if(typeof window.Tui!=="undefined"&&window.Tui.openGenreModal){
       window.Tui.openGenreModal();
@@ -629,6 +721,11 @@ function init(){
   });
   $("vid").addEventListener("timeupdate",paintCue);
   $("vid").addEventListener("seeked",paintCue);
+  renderSourceUI();
+  var sbSrc=$("sb-source");
+  if(sbSrc) sbSrc.addEventListener("click",function(){switchSource();});
+  var tmSrc=$("tm-source-btn");
+  if(tmSrc) tmSrc.addEventListener("click",function(){switchSource();});
   // Muat preferensi subtitle dari server (sub_lang). Kalau server gagal,
   // fallback ke default 'English' yang sudah di-set di var cur.
   if(window.Tatap&&window.Tatap.getSettings){
@@ -637,6 +734,7 @@ function init(){
         if(r.data.sub_lang) cur.subLang=r.data.sub_lang;
         if(r.data.quality) cur.quality=r.data.quality;
         if(r.data.mode) {cur.mode=r.data.mode; syncSeg();}
+        if(r.data.preferred_source) {cur.source=r.data.preferred_source; renderSourceUI();}
       }
     }).catch(function(){});
   }

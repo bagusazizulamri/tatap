@@ -8,6 +8,7 @@ APP_HOST = os.getenv("APP_HOST", "127.0.0.1")
 
 # --- satu-satunya sumber katalog (single source) ---
 HI_BASE = os.getenv("HI_BASE", "https://hianime.at")
+OTAKU_BASE = os.getenv("OTAKU_BASE", "https://ww2.otakudesu.biz")
 HI_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 XOR_KEY = b"otaku-embed-v1"
 

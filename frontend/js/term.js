@@ -20,7 +20,7 @@ var Tui = (function () {
   function saveCmdHist(h){try{localStorage.setItem("tatap_hist",JSON.stringify(h.slice(0,50)));}catch(e){}}
 
   function cmdUsage(){
-    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :terbaru | :season <winter|spring|summer|fall> <tahun>\n  :filter [key=val...] | :filter reset\n  :genre <slug|title> | :genre | :genre --list | :genre reset\n  :apikey [gsk_...|sk-...|clear] | :model <nama> | :apiurl <url>\n  :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
+    return "perintah:\n  cari <judul> | :musim | :lanjutan | :katalog\n  :terbaru | :season <winter|spring|summer|fall> <tahun>\n  :switch [hianime|otaku] (ganti sumber video HiAnime / Otakudesu)\n  :filter [key=val...] | :filter reset\n  :genre <slug|title> | :genre | :genre --list | :genre reset\n  :apikey [AQ...|AIza...|gsk_...|sk-...|clear] | :model <nama> | :apiurl <url>\n  :logs | :crt on|off|toggle | :ambient on|off|toggle\n  :riwayat | :status | :bantuan | :q";
   }
 
   function applyFilter(){
@@ -347,12 +347,16 @@ var Tui = (function () {
   function maskKey(v){
     if(!v) return "(kosong)";
     if(v.length <= 10) return "****";
-    return v.slice(0,8) + "..." + v.slice(-4);
+    var prefixLen = (v.indexOf("AQ.") === 0) ? 6 : 8;
+    return v.slice(0, prefixLen) + "..." + v.slice(-4);
   }
   async function cmdTranslateSetting(cmd, rawArgs){
     var info = TRANSLATE_KEYS[cmd];
     if(!info) return;
     var args = (rawArgs||"").trim();
+    if(cmd === "apikey"){
+      args = args.replace(/^["']|["']$/g, "").trim();
+    }
     if(!args){
       // Status: tampilkan ketiga nilai translate (mask apikey).
       var r = await window.Tatap.getSettings();
@@ -361,8 +365,8 @@ var Tui = (function () {
       log("model  : "+(d.translate_model||"(default)"),"ok");
       log("apiurl : "+(d.translate_apiurl||"(default)"),"ok");
       if(!d.translate_apikey){
-        log("Belum ada API key. Daftar gratis di console.groq.com (Groq),","err");
-        log("lalu: :apikey gsk_...  (auto-set apiurl Groq)","err");
+        log("Belum ada API key. Ambil gratis di aistudio.google.com (format AQ...),","err");
+        log("lalu ketik: :apikey AQ...  (auto-set model & apiurl)","err");
       }
       return;
     }
@@ -377,11 +381,20 @@ var Tui = (function () {
     payload[info.field] = args;
     var extra = "";
     if(cmd === "apikey"){
-      if(args.indexOf("gsk_") === 0){
+      if(args.indexOf("AQ.") === 0 || args.indexOf("AIza") === 0 || args.indexOf("AQ") === 0){
+        // Google Gemini key (Google AI Studio: AQ. baru / AIza legacy) -> auto-set apiurl + model Gemini Flash Lite.
+        payload.translate_apiurl = "https://generativelanguage.googleapis.com/v1beta/openai";
+        payload.translate_model = "gemini-3.1-flash-lite";
+        extra = " (auto: apiurl=Google AI Studio, model=gemini-3.1-flash-lite)";
+      }else if(args.indexOf("gsk_") === 0){
         // Groq key -> auto-set apiurl + model Groq-compatible.
         payload.translate_apiurl = "https://api.groq.com/openai/v1";
-        payload.translate_model = "openai/gpt-oss-20b";
-        extra = " (auto: apiurl=Groq, model=openai/gpt-oss-20b)";
+        payload.translate_model = "qwen/qwen3.8-27b";
+        extra = " (auto: apiurl=Groq, model=qwen/qwen3.8-27b)";
+      }else if(args.indexOf("sk-or-") === 0){
+        payload.translate_apiurl = "https://openrouter.ai/api/v1";
+        payload.translate_model = "google/gemini-2.0-flash-exp:free";
+        extra = " (auto: apiurl=OpenRouter, model=gemini-2.0-flash-exp:free)";
       }else if(args.indexOf("sk-") === 0 || args.indexOf("sk_") === 0){
         payload.translate_apiurl = "https://api.openai.com/v1";
         payload.translate_model = "gpt-4o-mini";
@@ -390,8 +403,41 @@ var Tui = (function () {
         extra = " (provider lain: cek :apikey untuk status, atur :apiurl/:model bila perlu)";
       }
     }
-    try{ await window.Tatap.setSetting(payload); }catch(e){}
-    log(info.label+" disimpan"+extra,"ok");
+    try{
+      var res = await window.Tatap.setSetting(payload);
+      if(res && res.success){
+        var masked = (cmd === "apikey") ? (" (" + maskKey(args) + ")") : (" (" + args + ")");
+        log(info.label + " disimpan" + masked + extra, "ok");
+      }else{
+        log("gagal menyimpan " + info.label + ": " + ((res && res.error) || "unknown error"), "err");
+      }
+    }catch(e){
+      log("gagal menyimpan " + info.label + ": " + e.message, "err");
+    }
+  }
+
+  async function cmdLogs(){
+    try{
+      var r = await fetch("/api/translate/logs").then(function(res){return res.json();});
+      var logs = (r&&r.data&&r.data.logs)||[];
+      if(!logs.length){
+        log("Belum ada riwayat aktivitas translasi subtitle.", "dim");
+        return;
+      }
+      log("--- Riwayat Log Translasi Subtitle ---", "ok");
+      for(var i=0; i<logs.length; i++){
+        var line = logs[i];
+        var cls = "dim";
+        if(line.indexOf("sukses")>=0 || line.indexOf("selesai")>=0 || line.indexOf("Cache HIT")>=0){
+          cls = "ok";
+        }else if(line.indexOf("GAGAL")>=0 || line.indexOf("gagal")>=0 || line.indexOf("ERROR")>=0 || line.indexOf("Rate limit")>=0){
+          cls = "err";
+        }
+        log(line, cls);
+      }
+    }catch(e){
+      log("Gagal membaca log translasi: " + e.message, "err");
+    }
   }
 
   async function handleCommand(raw){
@@ -406,6 +452,30 @@ var Tui = (function () {
       case "katalog":setView("katalog");break;
       case "season":cmdSeason(args);break;
       case "terbaru":case "airing":setView("terbaru");break;
+      case "switch":
+        var target = (args || "").toLowerCase().trim();
+        var curSrc = (window.cur && window.cur.source) || "hianime";
+        var nxt = "";
+        if(target === "otaku" || target === "otakudesu"){
+          nxt = "otakudesu";
+        }else if(target === "hi" || target === "hianime"){
+          nxt = "hianime";
+        }else if(!target){
+          nxt = (curSrc === "otakudesu") ? "hianime" : "otakudesu";
+        }else{
+          log("usage: :switch [hianime|otaku]","err");
+          break;
+        }
+        if(window.App && window.App.switchSource){
+          var resSrc = window.App.switchSource(nxt);
+          log("sumber streaming beralih ke: " + (resSrc === "otakudesu" ? "Otakudesu (Sub Indo)" : "HiAnime"), "ok");
+        }else{
+          if(window.Tatap && window.Tatap.setSetting){
+            window.Tatap.setSetting({ preferred_source: nxt }).catch(function(){});
+          }
+          log("sumber streaming default: " + nxt, "ok");
+        }
+        break;
       case "genre":cmdGenre(parts);break;
       case "filter":
         if(!args||args==="reset"){
@@ -437,6 +507,8 @@ var Tui = (function () {
         log("ambient "+(nxt2==="on"?"ON":"OFF"),"ok");break;
       case "riwayat":
         try{await fetch("/api/history",{method:"DELETE"});log("riwayat dihapus","ok");}catch(e){log("err: "+e.message,"err");}break;
+      case "logs":case "translog":
+        await cmdLogs();break;
       case "apikey":case "model":case "apiurl":
         await cmdTranslateSetting(cmd,args);break;
       case "status":

@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, re
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import asyncio, subprocess, tempfile
 from fastapi import FastAPI, Query, HTTPException
@@ -9,6 +9,7 @@ from config import APP_PORT, APP_HOST, HI_BASE, HI_UA
 from database import init_db, get_search_cache, set_search_cache, get_episode_cache, set_episode_cache, add_history, get_history, clear_history, get_setting, set_setting, get_browse_cache, set_browse_cache, get_slug_map, set_slug_map, get_subtitle_cache, set_subtitle_cache, get_today_char_count, add_today_char_count
 from api import hianime as hi
 from api import anilist as al
+from api import otakudesu as otaku
 import httpx
 
 frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend")
@@ -359,29 +360,69 @@ async def episodes(slug: str):
         return fail(str(e))
 
 @app.get("/api/stream/resolve")
-async def resolve(slug: str = Query(""), ep: int = Query(1), mode: str = Query("sub"), q: str = Query("best")):
+async def resolve(slug: str = Query(""), ep: int = Query(1), mode: str = Query("sub"), q: str = Query("best"), source: str = Query("")):
     try:
         mode = "dub" if mode.lower() == "dub" else "sub"
-        hit = await get_episode_cache(slug, ep, mode)
+        pref_source = (await get_setting("preferred_source", "hianime")).lower()
+        active_source = (source or pref_source or "hianime").lower()
+
+        # Cache key mencakup source agar stream tidak tertukar
+        cache_slug = f"{active_source}:{slug}" if active_source != "hianime" else slug
+        hit = await get_episode_cache(cache_slug, ep, mode)
         if hit:
             picked = hi.select_quality(hit["variants"], q)
             hit["picked"] = picked
             hit["cached"] = True
-            # Pastikan 'subtitles' selalu list (bukan None) di response — UI
-            # bisa render dropdown tanpa null-check tambahan.
             hit["subtitles"] = hit.get("subtitles") or []
+            hit["source"] = active_source
             return ok(hit)
+
         loop = asyncio.get_running_loop()
-        maps = await loop.run_in_executor(None, lambda: hi.hianime_episodes(slug))
-        got = await loop.run_in_executor(None, lambda: hi.hianime_m3u8(maps, ep, mode))
-        # Simpan subtitle list (default []) ke cache agar subsequent request langsung baca.
-        await set_episode_cache(slug, ep, mode, got["master"], got["variants"],
-                                got.get("sub"), got.get("sub_lang"),
-                                got.get("referer"), got.get("server"),
-                                subtitles=got.get("subtitles") or [])
+        got = None
+        last_error = None
+
+        if active_source == "otakudesu":
+            try:
+                got = await loop.run_in_executor(None, lambda: otaku.resolve_stream(slug, ep))
+            except Exception as e:
+                last_error = e
+                # Fallback ke hianime kalau user pakai auto
+                if source == "auto" or not source:
+                    try:
+                        maps = await loop.run_in_executor(None, lambda: hi.hianime_episodes(slug))
+                        got = await loop.run_in_executor(None, lambda: hi.hianime_m3u8(maps, ep, mode, slug))
+                        active_source = "hianime"
+                        cache_slug = slug
+                    except Exception:
+                        pass
+        else:
+            try:
+                maps = await loop.run_in_executor(None, lambda: hi.hianime_episodes(slug))
+                got = await loop.run_in_executor(None, lambda: hi.hianime_m3u8(maps, ep, mode, slug))
+            except Exception as e:
+                last_error = e
+                # Fallback ke otakudesu jika hianime gagal
+                if source == "auto" or not source:
+                    try:
+                        got = await loop.run_in_executor(None, lambda: otaku.resolve_stream(slug, ep))
+                        active_source = "otakudesu"
+                        cache_slug = f"otakudesu:{slug}"
+                    except Exception:
+                        pass
+
+        if not got:
+            raise last_error or RuntimeError("Stream gagal di-resolve dari semua sumber")
+
+        got["source"] = active_source
         got["picked"] = hi.select_quality(got["variants"], q)
         got["cached"] = False
         got["subtitles"] = got.get("subtitles") or []
+
+        # Simpan cache episode
+        await set_episode_cache(cache_slug, ep, mode, got["master"], got["variants"],
+                                got.get("sub"), got.get("sub_lang"),
+                                got.get("referer"), got.get("server"),
+                                subtitles=got["subtitles"])
         return ok(got)
     except Exception as e:
         return fail(str(e))
@@ -418,16 +459,18 @@ async def proxy_video(url: str = Query(""), referer: str = Query("")):
     # Probe status cepat sebelum StreamingResponse — kalau 4xx/5xx, return
     # langsung 502 agar HLS.js deteksi fragLoadError. (StreamingResponse swallows
     # HTTPException dari dalam generator, jadi probe wajib sebelum spawn _SR.)
+    # Jika host terdeteksi diblokir DPI ISP, gunakan TLS desync murni (aman dari Sangfor)
+    from api.hianime import _host_from, _BLOCKED_DPI_HOSTS
+    host = _host_from(url)
+    if host in _BLOCKED_DPI_HOSTS:
+        return _SR(_pipe_desync_video(url, referer), media_type="application/octet-stream",
+                   headers={"Access-Control-Allow-Origin": "*"})
+
     try:
-        c = _client()
+        c = _get_video_client(url)
         async with c.stream("GET", url,
                             headers={"User-Agent": HI_UA, **({"Referer": referer} if referer else {})}) as r:
             if r.status_code >= 400:
-                # Drain sebelum close agar connection kembali ke pool.
-                try:
-                    await r.aread()
-                except Exception:
-                    pass
                 return Response(status_code=502,
                                 content=f"upstream {r.status_code}".encode(),
                                 media_type="text/plain")
@@ -435,6 +478,12 @@ async def proxy_video(url: str = Query(""), referer: str = Query("")):
         return Response(status_code=e.status_code, content=str(e.detail).encode(),
                         media_type="text/plain")
     except Exception as e:
+        # Jika direct gagal karena blokir DPI ISP, tandai host dan gunakan TLS desync
+        err_str = str(e).lower()
+        if "reset" in err_str or "ssl" in err_str or "recv failure" in err_str:
+            _BLOCKED_DPI_HOSTS.add(host)
+            return _SR(_pipe_desync_video(url, referer), media_type="application/octet-stream",
+                       headers={"Access-Control-Allow-Origin": "*"})
         return Response(status_code=502,
                         content=f"upstream error: {type(e).__name__}".encode(),
                         media_type="text/plain")
@@ -442,29 +491,65 @@ async def proxy_video(url: str = Query(""), referer: str = Query("")):
                headers={"Access-Control-Allow-Origin": "*"})
 
 
-_shared_client = None
+async def _pipe_desync_video(url: str, referer: str):
+    """Streaming video via TLS Client Hello Desynchronization (Direct TCP 443 tanpa VPN)."""
+    import urllib.parse as _up
+    from api.desync import tls_desync_request, tls_desync_stream
+    import asyncio
+    
+    headers = {"Referer": referer} if referer else {}
+    loop = asyncio.get_running_loop()
+    
+    # Playlist m3u8: baca penuh dan rewrite URL agar segmen tetap lewat proxy Tatap
+    if ".m3u8" in url:
+        body = await loop.run_in_executor(None, lambda: tls_desync_request(url, headers=headers))
+        try:
+            txt = body.decode("utf-8", errors="strict")
+        except Exception:
+            yield body
+            return
+        if "#EXTM3U" not in txt:
+            yield body
+            return
+        base = url.rsplit("/", 1)[0] + "/"
+        out = []
+        for ln in txt.splitlines():
+            s = ln.strip()
+            if not s or s.startswith("#"):
+                out.append(ln)
+                continue
+            absu = s if s.startswith("http") else _up.urljoin(base, s)
+            out.append(f"/api/player/video?url={_up.quote(absu, safe='')}&referer={_up.quote(referer or '', safe='')}")
+        yield "\n".join(out).encode()
+        return
 
-def _client():
-    global _shared_client
-    if _shared_client is None:
-        import httpx as _hx
+    # Segmen TS: stream per bongkah via desync TLS generator
+    async for chunk in tls_desync_stream(url, headers=headers):
+        if chunk:
+            yield chunk
+
+
+_direct_client = None
+
+def _get_video_client(url: str):
+    """Direct client murni untuk video normal (Megaplay, Otakudesu, dll.)."""
+    global _direct_client
+    import httpx as _hx
+    if _direct_client is None:
         limits = _hx.Limits(max_connections=40, max_keepalive_connections=20, keepalive_expiry=60.0)
-        # Direct utama (tanpa proxy) — warp full-tunnel mesin tetap membungkus bila aktif.
-        # Failover eksplisit per-request tidak didukung httpx shared; direct cukup
-        # karena warp-cli full-tunnel sudah jadi jaring pengaman di level OS.
-        _shared_client = _hx.AsyncClient(follow_redirects=True, timeout=_hx.Timeout(20.0, connect=8.0),
-                                         limits=limits, http2=False)
-    return _shared_client
+        _direct_client = _hx.AsyncClient(
+            follow_redirects=True,
+            timeout=_hx.Timeout(25.0, connect=8.0),
+            limits=limits,
+            http2=False
+        )
+    return _direct_client
 
 
 async def _pipe_video(url: str, referer: str):
     import urllib.parse as _up
     from api.hianime import STRIP_BYTES as _SB, STRIP_RE as _SR2
-    # Catatan: dramahot.top dulu diblokir karena TLS-RST dari region kita.
-    # Per Oct 2026 host sudah bisa dijangkau (TLS handshake sukses) sehingga
-    # blokir di-hapus; kalau mati lagi, _mark_dead() di hianime.py akan masukkan
-    # ke negative cache dan smart-fallback skip server ZokoAnime secara otomatis.
-    c = _client()
+    c = _get_video_client(url)
     upstream_status = None
     try:
         async with c.stream("GET", url,
@@ -527,12 +612,28 @@ async def proxy_sub(url: str = Query(""),
     multi-tier fallback translate (Tier 1 OpenAI API → Tier 2 MyMemory → Tier 3 source)."""
     if not url.startswith("http"):
         return Response(status_code=400)
+    # Helper fetcher yang mendukung desync bila host terblokir DPI
+    async def _fetch_sub_text(target_url, ref):
+        from api.hianime import _host_from, _BLOCKED_DPI_HOSTS
+        h = _host_from(target_url)
+        if h in _BLOCKED_DPI_HOSTS:
+            from api.desync import tls_desync_request
+            loop = asyncio.get_running_loop()
+            raw = await loop.run_in_executor(None, lambda: tls_desync_request(target_url, headers={"Referer": ref} if ref else {}))
+            return raw.decode("utf-8", errors="replace")
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as c:
+            r = await c.get(target_url, headers={"User-Agent": HI_UA,
+                                                 **({"Referer": ref} if ref else {})})
+            return r.text
+
     # Lang kosong → return source apa adanya.
     if not lang or lang == src:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as c:
-            r = await c.get(url, headers={"User-Agent": HI_UA,
-                                            **({"Referer": referer} if referer else {})})
-        return Response(content=r.text, media_type="text/vtt")
+        try:
+            content = await _fetch_sub_text(url, referer)
+            return Response(content=content, media_type="text/vtt")
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"gagal mengambil subtitle: {e}")
+
     # Cache key: hash dari URL+referer+lang (deterministic).
     import hashlib
     cache_key = "sub|" + hashlib.sha1(
@@ -540,47 +641,64 @@ async def proxy_sub(url: str = Query(""),
     ).hexdigest()
     hit = await get_subtitle_cache(cache_key)
     if hit is not None:
-        return Response(content=hit, media_type="text/vtt")
+        try:
+            from api.translate import log_translate
+            log_translate(f"Cache HIT subtitle [{lang}]: dimuat instan dari database lokal")
+        except Exception:
+            pass
+        resp = Response(content=hit, media_type="text/vtt")
+        resp.headers["X-Translate-Tier"] = "cached"
+        return resp
     # Fetch source subtitle.
-    async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as c:
-        r = await c.get(url, headers={"User-Agent": HI_UA,
-                                        **({"Referer": referer} if referer else {})})
-    text = r.text
+    try:
+        text = await _fetch_sub_text(url, referer)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"gagal mengambil subtitle: {e}")
     # Multi-tier translate.
     try:
         from api.translate import parse_vtt, build_vtt, call_openai_translate, call_mymemory_translate
         cues = parse_vtt(text)
         if not cues:
-            return Response(content=text, media_type="text/vtt")
+            resp = Response(content=text, media_type="text/vtt")
+            resp.headers["X-Translate-Tier"] = "source"
+            resp.headers["X-Translate-Error"] = "Subtitle kosong atau format tidak didukung"
+            return resp
         tier = await _translate_with_fallback(cues, src, lang)
         new_text = build_vtt(tier["cues"])
-    except Exception:
+    except Exception as e:
         new_text = text
-        tier = {"cues": None, "level": "source"}
+        tier = {"cues": None, "level": "source", "error": str(e)}
     # Cache hasil hanya jika berhasil diterjemahkan (tier1 / tier2).
     # Jangan cache jika jatuh ke source fallback agar user bisa retry saat set apikey.
     if tier.get("level") in ("tier1", "tier2"):
         await set_subtitle_cache(cache_key, new_text)
     resp = Response(content=new_text, media_type="text/vtt")
-    resp.headers["X-Translate-Tier"] = tier["level"]
+    resp.headers["X-Translate-Tier"] = tier.get("level", "source")
+    if tier.get("error"):
+        # Bersihkan newline dari header agar valid HTTP header
+        clean_err = re.sub(r"[\r\n]+", " ", str(tier["error"])).strip()
+        resp.headers["X-Translate-Error"] = clean_err[:200]
     return resp
 
 
 async def _translate_with_fallback(cues, src, tgt):
-    """Multi-tier translate: OpenAI API → MyMemory → source English fallback.
-    Return {"cues": [...], "level": "tier1|tier2|tier3|source"}."""
-    from api.translate import call_openai_translate, call_mymemory_translate, estimate_chars
+    """Multi-tier translate:
+    Tier 1: Google GTX Web RPC (Unmetered, Zero-Key, Super Cepat ~1-2s)
+    Tier 2: MyMemory Public REST (Fallback cloud gratis)
+    Tier 3: Source original fallback (Safety net, tanpa crash)
+    Return {"cues": [...], "level": "tier1|tier2|source", "error": "..."}."""
+    from api.translate import call_gtx_translate, call_mymemory_translate, estimate_chars
     import datetime as _dt
-    # Tier 1: OpenAI-compatible API (kalau user isi API key).
-    apikey = await get_setting("translate_apikey", "")
-    if apikey:
-        model = await get_setting("translate_model", "openai/gpt-oss-20b")
-        apiurl = await get_setting("translate_apiurl", "https://api.openai.com/v1")
-        try:
-            translated = await call_openai_translate(cues, src, tgt, apikey, model, apiurl)
-            return {"cues": translated, "level": "tier1"}
-        except Exception:
-            pass  # lanjut Tier 2
+    last_err = ""
+
+    # Tier 1: Google GTX Web RPC (Unmetered, Zero-Key)
+    try:
+        translated = await call_gtx_translate(cues, src, tgt)
+        return {"cues": translated, "level": "tier1", "error": ""}
+    except Exception as e:
+        last_err = f"Tier 1 (Google GTX) error: {e}"
+        print(f"[TRANSLATE TIER 1 ERROR] {e}")
+
     # Tier 2: MyMemory dengan soft-limit per-IP per-day.
     day = _dt.datetime.utcnow().strftime("%Y-%m-%d")
     used = await get_today_char_count(day)
@@ -590,11 +708,16 @@ async def _translate_with_fallback(cues, src, tgt):
         try:
             translated = await call_mymemory_translate(cues, src, tgt)
             await add_today_char_count(day, needed)
-            return {"cues": translated, "level": "tier2"}
-        except Exception:
-            pass
+            return {"cues": translated, "level": "tier2", "error": ""}
+        except Exception as e:
+            if not last_err:
+                last_err = f"MyMemory error: {e}"
+    else:
+        if not last_err:
+            last_err = f"Kuota gratis MyMemory harian habis ({used}/{SOFT_LIMIT} char)"
+
     # Tier 3: source fallback (return cues asli dengan label source).
-    return {"cues": cues, "level": "source"}
+    return {"cues": cues, "level": "source", "error": last_err}
 
 def find_mpv_binary():
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -660,15 +783,27 @@ async def play_mpv(body: dict = None):
         # Helper download async; return None kalau gagal (skip track).
         async def _download_sub(url):
             try:
-                async with httpx.AsyncClient(timeout=15) as c:
-                    sr = await c.get(url, headers={"User-Agent": HI_UA,
-                                                    "Referer": got.get("referer", "")})
-                    if sr.status_code != 200 or not sr.text:
-                        return None
-                    fp = os.path.join(tempfile.gettempdir(),
-                                      f"{slug}-ep{ep}-{abs(hash(url)) % 10**8}.vtt")
-                    open(fp, "w").write(sr.text)
-                    return fp
+                from api.hianime import _host_from, _BLOCKED_DPI_HOSTS
+                h = _host_from(url)
+                if h in _BLOCKED_DPI_HOSTS:
+                    from api.desync import tls_desync_request
+                    loop = asyncio.get_running_loop()
+                    raw = await loop.run_in_executor(None, lambda: tls_desync_request(url, headers={"Referer": got.get("referer", "")}))
+                    text = raw.decode("utf-8", errors="replace")
+                else:
+                    async with httpx.AsyncClient(timeout=15) as c:
+                        sr = await c.get(url, headers={"User-Agent": HI_UA,
+                                                        "Referer": got.get("referer", "")})
+                        if sr.status_code != 200 or not sr.text:
+                            return None
+                        text = sr.text
+
+                if not text:
+                    return None
+                fp = os.path.join(tempfile.gettempdir(),
+                                  f"{slug}-ep{ep}-{abs(hash(url)) % 10**8}.vtt")
+                open(fp, "w").write(text)
+                return fp
             except Exception:
                 return None
 
@@ -727,6 +862,7 @@ async def get_set():
         "quality": await get_setting("quality", "best"),
         "mode": await get_setting("mode", "sub"),
         "player": await get_setting("player", "browser"),
+        "preferred_source": await get_setting("preferred_source", "hianime"),
         # Preferensi bahasa subtitle user. Default "English" karena sebagian besar
         # sumber (Megaplay, ZokoAnime) punya English sebagai track default. Kalau
         # user pernah pilih bahasa lain, disimpan di sini dan dipakai frontend
@@ -735,18 +871,27 @@ async def get_set():
         # Translate API (opsional). User isi via settings panel. Fallback ke
         # MyMemory kalau kosong. translate_apikey tidak pernah di-log.
         "translate_apikey": await get_setting("translate_apikey", ""),
-        "translate_model": await get_setting("translate_model", "openai/gpt-oss-20b"),
-        "translate_apiurl": await get_setting("translate_apiurl", "https://api.openai.com/v1"),
+        "translate_model": await get_setting("translate_model", "gemini-3.1-flash-lite"),
+        "translate_apiurl": await get_setting("translate_apiurl", "https://generativelanguage.googleapis.com/v1beta/openai"),
     })
 
 @app.post("/api/settings")
 async def set_set(body: dict = None):
     body = body or {}
-    for k in ("quality", "mode", "player", "sub_lang",
+    for k in ("quality", "mode", "player", "sub_lang", "preferred_source",
               "translate_apikey", "translate_model", "translate_apiurl"):
         if k in body:
-            await set_setting(k, body[k])
+            val = body[k]
+            if k == "translate_apikey" and isinstance(val, str):
+                val = val.strip().strip("\"'").strip()
+            await set_setting(k, val)
     return await get_set()
+
+@app.get("/api/translate/logs")
+async def get_translate_logs_api():
+    """Mengambil riwayat log aktivitas translasi subtitle terbaru."""
+    from api.translate import get_translate_logs
+    return {"success": True, "data": {"logs": get_translate_logs()}}
 
 app.mount("/js", StaticFiles(directory=os.path.join(frontend_dir, "js")), name="js")
 app.mount("/css", StaticFiles(directory=os.path.join(frontend_dir, "css")), name="css")

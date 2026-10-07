@@ -277,7 +277,7 @@ func main() {
 		}
 	}
 
-	// 6. Window close -> kill backend yang kita spawn
+	// 6. Window close -> kill background processes yang kita spawn
 	if pyCmd != nil && pyCmd.Process != nil {
 		defer func() {
 			_ = pyCmd.Process.Kill()
