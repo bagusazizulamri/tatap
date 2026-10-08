@@ -156,6 +156,9 @@ def test_sanitize_fansub_id():
     raw22 = "Dia jadi domba korban bagi seluruh tubuh siswa karena para punks mengacaukan anthologi itu."
     assert T._sanitize_fansub_id(raw22) == "Dia jadi tumbal bagi seluruh siswa karena berandalan mengacaukan antologi itu."
 
+    raw23 = "Setelah semua, marah di jam periode kelima bikin capek. Mari kita nikmati bath open-air dan lihat bayangan di balik layar kertas itu."
+    assert T._sanitize_fansub_id(raw23) == "Lagipula, marah di jam kelima bikin capek. Mari kita nikmati pemandian terbuka dan lihat bayangan di balik pintu geser kertas itu."
+
     # 2. Formal / Kerajaan / Militer (Harus mempertahankan kata baku & sopan)
     raw_formal1 = "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
     assert T._sanitize_fansub_id(raw_formal1) == "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."

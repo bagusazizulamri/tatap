@@ -353,6 +353,12 @@ Kosakata Misteri Sekolah & Klub Sastra (School Mystery / Club Anime - e.g. Hyouk
 - "Sacrificial lamb" -> "Tumbal / kambing hitam" (JANGAN: "domba korban").
 - "Punks" (in school/delinquent context) -> "Berandalan / preman" (JANGAN biarkan "para punks").
 - "Took the blame alone" -> "Menanggung semua kesalahan sendirian / memikul kesalahan sendirian"
+- "After all" -> "Lagipula / Bagaimanapun juga" (JANGAN: "Setelah semua").
+- "[N]th period / fifth period" (jadwal pelajaran sekolah) -> "Jam pelajaran ke-[N] / jam ke-[N]" (JANGAN: "periode ke-[N]").
+- "Open-air bath / rotenburo" -> "Pemandian terbuka / pemandian luar ruangan" (JANGAN: "bath open-air").
+- "Gave me chills / chills" -> "Bikin merinding / membuatku merinding" (JANGAN acak seperti "bikin kudetas").
+- "Paper screen / shoji" -> "Pintu geser kertas / sekat kertas / shoji" (JANGAN: "layar kertas").
+- "Transom / wooden transom" -> "Ventilasi kayu / kisi-kisi kayu"
 - Karakter perempuan anggun/sopan (seperti Chitanda): Wajib bertutur kata sopan ("aku/kamu", santun), JANGAN gunakan "gue/lo".
 
 Kosakata Anime Olahraga (Sports Anime):
@@ -632,6 +638,17 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bpara punks\b", "berandalan"),
     (r"\banthologi\b", "antologi"),
     (r"\bAnthologi\b", "Antologi"),
+    (r"\bsetelah semua, marah\b", "lagipula, marah"),
+    (r"\bsetelah semua\b", "lagipula"),
+    (r"\bSetelah semua\b", "Lagipula"),
+    (r"\bjam periode kelima\b", "jam kelima"),
+    (r"\bperiode kelima\b", "jam kelima"),
+    (r"\bbath open-air-nya\b", "pemandian terbukanya"),
+    (r"\bbath open-air\b", "pemandian terbuka"),
+    (r"\blayarnya kertas\b", "pintu geser kertas"),
+    (r"\blayar kertas\b", "pintu geser kertas"),
+    (r"\bbikin kudetas\b", "bikin merinding"),
+    (r"\btransom kayu\b", "ventilasi kayu"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
