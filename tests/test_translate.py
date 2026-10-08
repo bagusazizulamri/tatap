@@ -117,6 +117,9 @@ def test_sanitize_fansub_id():
     raw9 = "Kita bertembung kepala, dasar anjing campuran! Pergi dan berputus di neraka!"
     assert T._sanitize_fansub_id(raw9) == "Kita berselisih, dasar anjing buduk! Pergi dan mampus di neraka!"
 
+    raw10 = "Musuh sedang dalam kemarahan kerajaan. Jangan ngelakuin luka pada warga, atau aku akan menghapus kamu!"
+    assert T._sanitize_fansub_id(raw10) == "Musuh sedang dalam mengamuk hebat. Jangan melukai pada warga, atau aku akan menghabisi kamu!"
+
     # 2. Formal / Kerajaan / Militer (Harus mempertahankan kata baku & sopan)
     raw_formal1 = "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
     assert T._sanitize_fansub_id(raw_formal1) == "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."

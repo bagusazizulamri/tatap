@@ -329,6 +329,11 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "How long was I out?" / "pass out / knock out" -> "Berapa lama aku pingsan / tak sadarkan diri?" (JANGAN: "Berapa lama aku keluar").
 - "Make a fortune" -> "Kaya mendadak / untung besar / dapet banyak uang" (JANGAN: "Ngasih duit jahat").
 - "At this rate" -> "Kalau begini terus / kalau kayak gini terus" (JANGAN: "Dengan kecepatan kayak gini").
+- "On a royal tear / on a tear / on a rampage" -> "Mengamuk hebat / bikin onar tak terkendali" (JANGAN: "Kemarahan kerajaan").
+- "Harm [someone] / do harm" -> "Melukai / menyakiti [seseorang]" (JANGAN: "Ngelakuin luka").
+- "Eliminate [an opponent in battle]" -> "Menghabisi / melenyapkan" (JANGAN: "Menghapus Anda").
+- "Profane [God]" -> "Menodai / menistakan" (JANGAN: "Memfitnah Tuhan").
+- "Brother" (in anime sibling context) -> "Kakak / Kak / Abang" (JANGAN: "Bro").
 - "Face aside / [X] aside" -> "Terlepas dari wajahnya / kesampingkan soal wajahnya" (JANGAN: "Tinggalkan wajah").
 - "Sustain heavy damage / heavy casualties" -> "Mengalami kerugian/kerusakan besar" (JANGAN: "Menanggung kerusakan").
 - "Solo player" -> "Pemain solo" (JANGAN: "Saya sendiri").
@@ -457,6 +462,10 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bbertembung\b", "bentrok"),
     (r"\bberputus di neraka\b", "mampus di neraka"),
     (r"\banjing campuran\b", "anjing buduk"),
+    (r"\bkemarahan kerajaan\b", "mengamuk hebat"),
+    (r"\bngelakuin luka\b", "melukai"),
+    (r"\bmenghapus anda\b", "menghabisi Anda"),
+    (r"\bmenghapus kamu\b", "menghabisi kamu"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
