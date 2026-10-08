@@ -304,7 +304,17 @@ Kosakata Game, Isekai & Job System:
   * "Alchemist" -> "Alkemis"
   * "Hero" -> "Pahlawan"
   * "Demon Lord" -> "Raja Iblis"
+  * "Demon Lord" -> "Raja Iblis"
   * "Novice" -> "Pemula" / "Novice"
+
+Kosakata Anime Olahraga (Sports Anime):
+- "Match" -> "Pertandingan" (JANGAN biarkan "match" jika mengacu ke permainan).
+- "View" -> "Pemandangan" (JANGAN biarkan "view").
+- "Looms in front of me" -> "Menjulang di depanku" (JANGAN: "Ngeliat di depan aku").
+- "Coach" -> "Pelatih" (JANGAN biarkan "coach").
+- "Off course" (in ball set/pass) -> "Melenceng / meleset" (JANGAN: "Off course").
+- "Blow past [blockers]" -> "Menembus / menerobos [pemblokir]" (JANGAN: "Ngelupas blok").
+- Istilah teknis voli/olahraga (Toss, Spike, Serve, Libero, Setter, Block, Match point, Time out) boleh tetap digunakan sesuai tradisi fansub olahraga.
 
 Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "Aiming high" -> "Incaranmu tinggi juga" / "Seleramu tinggi juga" / "Pasang target tinggi" (JANGAN: "Banjir tinggi").
@@ -510,6 +520,9 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\blantai bawah dua\b", "lantai bawah tanah kedua"),
     (r"\bmorgue\b", "kamar jenazah"),
     (r"\bjangan bilang itu di luar\b", "jangan katakan itu keras-keras"),
+    (r"\bngelupas blok\b", "menerobos blok"),
+    (r"\bngeliat di depan aku\b", "menjulang di depanku"),
+    (r"\bngeliat di depanku\b", "menjulang di depanku"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
