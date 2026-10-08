@@ -361,6 +361,27 @@ Kosakata Misteri Sekolah & Klub Sastra (School Mystery / Club Anime - e.g. Hyouk
 - "Transom / wooden transom" -> "Ventilasi kayu / kisi-kisi kayu"
 - Karakter perempuan anggun/sopan (seperti Chitanda): Wajib bertutur kata sopan ("aku/kamu", santun), JANGAN gunakan "gue/lo".
 
+Kosakata Kuliner & Duel Memasak (Cooking Battle / Gourmet - e.g. Shokugeki no Souma):
+- "Order up! / Order's up!" -> "Pesanan siap! / Silakan dinikmati!" (JANGAN biarkan "Order up!").
+- "It wasn't much! / Glad you liked it! (Osomatsusama)" -> "Bukan apa-apa kok! / Selamat menikmati hidanganku!" (JANGAN kaku harfiah: "Gak banyak juga").
+- "Satisfy your palate" -> "Memanjakan lidahmu / memuaskan seleramu".
+
+Kosakata Historis, Peperangan Viking & Ksatria (Historical / Viking - e.g. Vinland Saga):
+- "Plunder / pillage" -> "Menjarah / merampas" (JANGAN: "mencuri / pencurilah").
+- "Longship" -> "Kapal perang Viking / kapal panjang".
+- "True warrior" -> "Prajurit sejati / kesatria sejati".
+
+Kosakata Cyberpunk & Kepolisian Futuristik (Cyberpunk - e.g. Psycho-Pass):
+- "Latent criminal" -> "Kriminal laten / penjahat laten".
+- "Crime Coefficient" -> "Koefisien Kejahatan / Koefisien Kriminal".
+- "Enforcement mode" -> "Mode penindakan / mode penegakan hukum".
+
+Kosakata Romansa Elit & Perang Pikiran OSIS (Psychological Rom-Com - e.g. Kaguya-sama):
+- "How cute... (O-kawaii koto)" -> "Manis sekali... / Betapa menggemaskannya..." (JANGAN diterjemahkan "Keren banget").
+- "Got on his/her knees" -> "Berlutut / bersujud" (JANGAN: "ngelamun").
+- "Confess / confession of love" -> "Menyatakan cinta / nembak" (JANGAN: "mengaku").
+- "Student Council" -> "OSIS / Dewan Siswa".
+
 Kosakata Anime Olahraga (Sports Anime):
 - "Match" -> "Pertandingan" (JANGAN biarkan "match" jika mengacu ke permainan).
 - "View" -> "Pemandangan" (JANGAN biarkan "view").
@@ -649,6 +670,14 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\blayar kertas\b", "pintu geser kertas"),
     (r"\bbikin kudetas\b", "bikin merinding"),
     (r"\btransom kayu\b", "ventilasi kayu"),
+    (r"\border up\b", "pesanan siap"),
+    (r"\bOrder up\b", "Pesanan siap"),
+    (r"\bgak banyak juga\b", "bukan apa-apa kok"),
+    (r"\bpencurilah kapal\b", "jarahlah kapal"),
+    (r"\bpencuri kapal\b", "penjarah kapal"),
+    (r"\bngelamun dan memohon\b", "berlutut dan memohon"),
+    (r"\bKeren banget\.\.\. Itu yang bakal dikatakan Shinomiya\b", "Manis sekali... Itu yang bakal dikatakan Shinomiya"),
+    (r"\bkeren banget\.\.\. itu yang bakal dikatakan\b", "manis sekali... itu yang bakal dikatakan"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).

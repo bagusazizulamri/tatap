@@ -159,6 +159,9 @@ def test_sanitize_fansub_id():
     raw23 = "Setelah semua, marah di jam periode kelima bikin capek. Mari kita nikmati bath open-air dan lihat bayangan di balik layar kertas itu."
     assert T._sanitize_fansub_id(raw23) == "Lagipula, marah di jam kelima bikin capek. Mari kita nikmati pemandian terbuka dan lihat bayangan di balik pintu geser kertas itu."
 
+    raw24 = "Order up! Senang kamu suka, gak banyak juga! Pencurilah kapal musuh itu kalau dia ngelamun dan memohon."
+    assert T._sanitize_fansub_id(raw24) == "Pesanan siap! Senang kamu suka, bukan apa-apa kok! Jarahlah kapal musuh itu kalau dia berlutut dan memohon."
+
     # 2. Formal / Kerajaan / Militer (Harus mempertahankan kata baku & sopan)
     raw_formal1 = "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
     assert T._sanitize_fansub_id(raw_formal1) == "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
