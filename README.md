@@ -8,37 +8,35 @@
 
 - **Katalog & Streaming Cepat**: Pencarian judul, riwayat tontonan, rekomendasi seasonal, dan pemutaran episode multi-server.
 - **Player Fleksibel**: Rasio 16:9, ambient glow, mode CRT/layar tabung, selector resolusi, dan kontrol keyboard lengkap.
-- **Auto-Translate Subtitle Indonesia (AI Fansub)**: Menerjemahkan subtitle English ke Bahasa Indonesia dengan gaya percakapan fansub santai (*aku/kamu*, *nggak*, *udah*, *aja*) secara instan.
+- **Auto-Translate Subtitle Indonesia (AI Fansub)**: Menerjemahkan subtitle English ke Bahasa Indonesia dengan nada percakapan fansub adaptif sesuai adegan dan genre (sekolah, misteri, mecha, olahraga, pertarungan, kuliner), bebas dari idiom kaku mesin.
 - **100% Penyimpanan Lokal**: Riwayat, bookmark, dan pengaturan tersimpan di SQLite lokal (`anime.db`).
 - **Pilihan Player**: Web player HTML5 bawaan atau pemutar eksternal MPV.
+- **Portabel & Multi-Platform**: Tersedia executable portabel untuk Windows (WebView2) dan Linux AppImage mandiri.
 
 ---
 
-## Petunjuk Subtitle AI (BYOK — Ollama)
+## Petunjuk Subtitle AI (BYOK)
 
-Tatap menggunakan konsep **BYOK (Bring Your Own Key)** agar kamu bisa menikmati terjemahan AI berkualitas fansub secara gratis dan tanpa batasan.
+Tatap menggunakan konsep **BYOK (Bring Your Own Key)** agar kamu bisa menikmati terjemahan AI berkualitas fansub secara fleksibel dan gratis.
 
-### Cara Memasang API Key Ollama:
+### Perintah Pemasangan Cepat di Terminal Tatap:
 
-1. Dapatkan API key gratis dari [Ollama Cloud](https://ollama.com).
-2. Buka aplikasi Tatap di browser ([http://127.0.0.1:8767](http://127.0.0.1:8767)).
-3. Ketik perintah berikut langsung di kotak pencarian / terminal Tatap:
-   ```text
-   :ollama <api_key_kamu>
-   ```
-   *(Contoh: `:ollama afd1045d...`)*
+Ketik salah satu perintah berikut langsung di kotak pencarian / terminal Tatap:
 
-Tatap akan otomatis mengatur:
-- **Provider**: Ollama Cloud (`https://ollama.com/v1`)
-- **Model**: `gpt-oss:20b` *(dengan cadangan otomatis `gpt-oss:120b` jika antrean penuh)*
+| Perintah | Provider | Model Utama |
+| :--- | :--- | :--- |
+| `:ollama <api_key>` | [Ollama Cloud](https://ollama.com) | `gpt-oss:20b` *(cadangan otomatis: `gpt-oss:120b`)* |
+| `:groq <api_key>` | [Groq](https://groq.com) | `llama-3.3-70b-versatile` |
+| `:gemini <api_key>` | [Google AI Studio](https://aistudio.google.com) | `gemini-3.1-flash-lite` |
+| `:openai <api_key>` | [OpenAI](https://platform.openai.com) | `gpt-4o-mini` |
 
-### Perintah Bantuan Terminal:
+### Perintah Bantuan:
 - Cek status konfigurasi: `:apikey`
 - Hapus API key: `:apikey clear`
-- Ganti model manual: `:model gpt-oss:20b`
+- Ganti model manual: `:model <nama_model>`
 
 > [!TIP]
-> **Tanpa API Key?** Jika belum memasukkan API key, Tatap tetap menyediakan fallback otomatis menggunakan **Google GTX (Zero-Key)** sehingga subtitle Indonesia tetap langsung muncul tanpa error.
+> **Tanpa API Key?** Jika belum memasukkan API key, Tatap otomatis memakai fallback **Google GTX (Zero-Key)** sehingga subtitle Indonesia tetap langsung muncul tanpa konfigurasi awal.
 
 ---
 
@@ -46,23 +44,25 @@ Tatap akan otomatis mengatur:
 
 ### Linux
 
+**Opsi 1 — AppImage (Portabel):**
 ```bash
-# Instalasi awal (sekali saja)
-./install.sh
+chmod +x Tatap-x86_64.AppImage
+./Tatap-x86_64.AppImage
+```
 
-# Menjalankan aplikasi
+**Opsi 2 — Dari Source Repository:**
+```bash
+./install.sh          # Instalasi awal (sekali saja)
 ./manage.sh start     # Berjalan di background (buka http://127.0.0.1:8767)
 ./manage.sh status    # Cek status server
 ./manage.sh stop      # Matikan server
 ```
 
-*(Atau jalankan langsung di foreground dengan `./run.sh`)*
-
 ### Windows (Portable)
 
-1. Unduh dan ekstrak `tatap-windows-x64-portable.zip`.
-2. Klik ganda **`Tatap.exe`** (memerlukan Microsoft Edge WebView2 — bawaan Windows 10/11).
-3. Backend dan aplikasi akan berjalan otomatis dalam jendela native.
+1. Unduh dan ekstrak **`tatap-windows-x64-portable.zip`**.
+2. Klik ganda **`Tatap.exe`** (memerlukan Microsoft Edge WebView2 bawaan Windows 10/11).
+3. Backend dan pemutar akan berjalan otomatis dalam jendela native tanpa perlu instalasi Python.
 
 ---
 
