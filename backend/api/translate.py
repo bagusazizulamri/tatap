@@ -313,6 +313,17 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "It goes without saying" -> "Nggak usah ditanya lagi" / "Sudah jelas" (JANGAN: "Gak usah dikira").
 - "High school debut" -> "Awal baru di SMA" / "Mulai masa SMA" (JANGAN: "Debut SMA saya").
 - "Plug the hole / plug" -> "Menutup lubang / menyumbat" (JANGAN: "Ngeplug").
+- "How dare you [do X]!" -> "Beraninya kamu [lakukan X]!" / "Kurang ajar!" (JANGAN: "Gimana sih kamu boleh [X]").
+- "How dare [an amateur]..." -> "Berani-beraninya [seorang amatir]..." (JANGAN: "Gimana sih amatir bisa...").
+- "Middle of nowhere" -> "Pelosok / tempat terpencil / antah-berantah" (JANGAN: "Di tengah-tengah hutan").
+- "Throw a tantrum / throw tantrums" -> "Tanteum / merajuk / ngambek" (JANGAN: "Lagi marah" tanpa emosi).
+- "Big baby" -> "Kayak anak kecil / cengeng banget" (JANGAN: "Anak kecil banget").
+- "See? Told ya!" -> "Tuh, kan! Apa kubilang!" (JANGAN: "Lihat? Katanya!").
+- "Cool your head / cool off" -> "Menenangkan pikiran / mendinginkan kepala" (JANGAN: "Dinginkan kepala di pulau").
+- "Talk back to [elders]" -> "Membantah / melawan [orang tua]" (JANGAN: "Ngomong balas").
+- "Secret base" -> "Markas rahasia" (JANGAN: "Basis rahasia").
+- "Cicadas" -> "Tonggeret / garengpung" (JANGAN: "Katak katak").
+- "Bug" (in nature context) -> "Serangga / kumbang" (JANGAN biarkan "bug" atau "kutu komputer").
 - "How suspicious is that?" / "How suspicious!" -> "Mencurigakan banget, kan?" / "Mencurigakan sekali" (JANGAN: "Berapa curiga itu").
 - "How [adjective] / How [suspicious/cute/etc.]" -> "Betapa / Begitu / Banget / Sekali" (JANGAN diterjemahkan "Berapa [kata sifat]").
 - "How long was I out?" / "pass out / knock out" -> "Berapa lama aku pingsan / tak sadarkan diri?" (JANGAN: "Berapa lama aku keluar").
@@ -433,6 +444,10 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\buang jahat\b", "untung besar"),
     (r"\bdengan kecepatan kayak gini\b", "kalau begini terus"),
     (r"\btinggalkan wajah\b", "terlepas dari wajah"),
+    (r"\bbasis rahasia\b", "markas rahasia"),
+    (r"\blihat\? katanya\b", "tuh, kan! Apa kubilang"),
+    (r"\bkatanya\! kamu harus santai\b", "apa kubilang! Kamu harus santai"),
+    (r"\bngomong balas\b", "membantah"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
