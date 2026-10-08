@@ -346,6 +346,9 @@ Kosakata Misteri Sekolah & Klub Sastra (School Mystery / Club Anime - e.g. Hyouk
 - "A database cannot draw conclusions" -> "Database tidak bisa menarik kesimpulan"
 - "Peeping Tom" -> "Tukang intip / pengintip"
 - "After-school rendezvous" -> "Pertemuan sepulang sekolah / kencan sepulang sekolah"
+- "Checkout period" (in library) -> "Masa peminjaman / batas pinjam buku" (JANGAN: "waktu cekout").
+- "Sharp tongue" -> "Bicaranya pedas / mulutnya cukup pedas" (JANGAN: "punya lidah tajam").
+- "Declare legally dead / legally dead" -> "Dinyatakan telah meninggal secara hukum / dinyatakan meninggal" (JANGAN kaku: "resmi mati").
 - Karakter perempuan anggun/sopan (seperti Chitanda): Wajib bertutur kata sopan ("aku/kamu", santun), JANGAN gunakan "gue/lo".
 
 Kosakata Anime Olahraga (Sports Anime):
@@ -612,6 +615,13 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bdatang buat ngelamun\b", "datang untuk memberi salam"),
     (r"\bpeeping tom\b", "tukang intip"),
     (r"\bPeeping Tom\b", "tukang intip"),
+    (r"\bwaktu cekout di perpustakaan\b", "masa peminjaman di perpustakaan"),
+    (r"\bwaktu cekout\b", "masa peminjaman"),
+    (r"\bpunya lidah tajam\b", "mulutnya cukup pedas"),
+    (r"\blidah yang tajam\b", "mulut yang pedas"),
+    (r"\blidah tajam\b", "mulut pedas"),
+    (r"\bresmi mati\b", "dinyatakan meninggal"),
+    (r"\bfavor pribadi\b", "permintaan pribadi"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
