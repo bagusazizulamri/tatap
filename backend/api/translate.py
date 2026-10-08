@@ -307,6 +307,19 @@ Kosakata Game, Isekai & Job System:
   * "Demon Lord" -> "Raja Iblis"
   * "Novice" -> "Pemula" / "Novice"
 
+Kosakata Supranatural & Cerita Hantu Sekolah (Supernatural / School Ghost Stories):
+- "Old school building / old schoolhouse" -> "Gedung sekolah lama / gedung sekolah tua"
+- "Ghost journal / spiritual diary" -> "Buku harian hantu / jurnal hantu / buku catatan hantu" (JANGAN: "Buku spiritual").
+- "Put [evil spirits / ghosts] to sleep / put to rest" -> "Menidurkan / menenangkan [roh / arwah / hantu]" (JANGAN: "Ngendang roh supaya tidur").
+- "Seal [a ghost / spirit / demon]" -> "Menyegel [hantu / roh / siluman]" (JANGAN: "Tutup hantu / tutup nasib").
+- "Spiritual seal / talisman" -> "Segel spiritual / jimat pengusir arwah / jimat" (JANGAN biarkan "talisman" kaku).
+- "Possess / possessed" -> "Merasuki / kerasukan / merasuk ke dalam" (JANGAN: "Memikat").
+- "Demon / fiend / youkai" -> "Siluman / iblis / monster / youkai" (JANGAN acak jadi "naga").
+- "Camphor tree" -> "Pohon kamper / pohon kapur barus" (JANGAN: "Pohon kapur tulis").
+- "Scaredy-cat" -> "Penakut / pengecut" (JANGAN: "Kucing takut").
+- "Pull yourself together!" -> "Kuatkan dirimu! / Tenangkan dirimu! / Sadarlah!" (JANGAN: "Kumpulin diri!").
+- "Echoing" (in empty hallway) -> "Bergema" (JANGAN: "Yang gema").
+
 Kosakata Anime Olahraga (Sports Anime):
 - "Match" -> "Pertandingan" (JANGAN biarkan "match" jika mengacu ke permainan).
 - "View" -> "Pemandangan" (JANGAN biarkan "view").
@@ -534,6 +547,18 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bdi kolam darah\b", "bersimbah darah"),
     (r"\bterbaring di kolam darah\b", "terbaring bersimbah darah"),
     (r"\bdisayat sampai mati\b", "ditusuk sampai mati"),
+    (r"\bmenegaskan nasib kita\b", "menentukan nasib kita"),
+    (r"\bmenegaskan nasib\b", "menentukan nasib"),
+    (r"\btutup nasib kita\b", "menentukan nasib kita"),
+    (r"\btutup nasib\b", "menentukan nasib"),
+    (r"\bmenegaskan begitu banyak hantu\b", "menyegel begitu banyak hantu"),
+    (r"\bmenegaskan banyak hantu\b", "menyegel banyak hantu"),
+    (r"\btutup banyak hantu\b", "menyegel banyak hantu"),
+    (r"\bngendang roh jahat supaya tidur\b", "menenangkan roh jahat"),
+    (r"\bngendang roh\b", "menenangkan roh"),
+    (r"\bkucing takut\b", "penakut"),
+    (r"\bkumpulin diri\b", "kuatkan dirimu"),
+    (r"\byang gema di lorong\b", "yang bergema di lorong"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
