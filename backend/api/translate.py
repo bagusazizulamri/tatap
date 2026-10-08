@@ -349,6 +349,10 @@ Kosakata Misteri Sekolah & Klub Sastra (School Mystery / Club Anime - e.g. Hyouk
 - "Checkout period" (in library) -> "Masa peminjaman / batas pinjam buku" (JANGAN: "waktu cekout").
 - "Sharp tongue" -> "Bicaranya pedas / mulutnya cukup pedas" (JANGAN: "punya lidah tajam").
 - "Declare legally dead / legally dead" -> "Dinyatakan telah meninggal secara hukum / dinyatakan meninggal" (JANGAN kaku: "resmi mati").
+- "Student body" -> "Seluruh murid / seluruh siswa" (JANGAN diterjemahkan harfiah: "tubuh siswa").
+- "Sacrificial lamb" -> "Tumbal / kambing hitam" (JANGAN: "domba korban").
+- "Punks" (in school/delinquent context) -> "Berandalan / preman" (JANGAN biarkan "para punks").
+- "Took the blame alone" -> "Menanggung semua kesalahan sendirian / memikul kesalahan sendirian"
 - Karakter perempuan anggun/sopan (seperti Chitanda): Wajib bertutur kata sopan ("aku/kamu", santun), JANGAN gunakan "gue/lo".
 
 Kosakata Anime Olahraga (Sports Anime):
@@ -622,6 +626,12 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\blidah tajam\b", "mulut pedas"),
     (r"\bresmi mati\b", "dinyatakan meninggal"),
     (r"\bfavor pribadi\b", "permintaan pribadi"),
+    (r"\bseluruh tubuh siswa\b", "seluruh siswa"),
+    (r"\btubuh siswa\b", "para siswa"),
+    (r"\bdomba korban\b", "tumbal"),
+    (r"\bpara punks\b", "berandalan"),
+    (r"\banthologi\b", "antologi"),
+    (r"\bAnthologi\b", "Antologi"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).

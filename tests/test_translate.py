@@ -150,6 +150,12 @@ def test_sanitize_fansub_id():
     raw20 = "Aku gabung ke Klub Classic Lit, jadi datang buat ngelamun. Jangan jadi peeping tom di sini!"
     assert T._sanitize_fansub_id(raw20) == "Aku gabung ke Klub Sastra Klasik, jadi datang untuk memberi salam. Jangan jadi tukang intip di sini!"
 
+    raw21 = "Waktu cekout di perpustakaan dua minggu. Dia punya lidah tajam, dan pamannya resmi mati."
+    assert T._sanitize_fansub_id(raw21) == "Masa peminjaman di perpustakaan dua minggu. Dia mulutnya cukup pedas, dan pamannya dinyatakan meninggal."
+
+    raw22 = "Dia jadi domba korban bagi seluruh tubuh siswa karena para punks mengacaukan anthologi itu."
+    assert T._sanitize_fansub_id(raw22) == "Dia jadi tumbal bagi seluruh siswa karena berandalan mengacaukan antologi itu."
+
     # 2. Formal / Kerajaan / Militer (Harus mempertahankan kata baku & sopan)
     raw_formal1 = "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
     assert T._sanitize_fansub_id(raw_formal1) == "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
