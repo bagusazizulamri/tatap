@@ -341,7 +341,12 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "Paint the coordinates" -> "Tandai / kunci koordinatnya" (JANGAN: "Cat koordinat").
 - "Wipe [them] off the map" -> "Ratakan [mereka] dengan tanah / lenyapkan mereka" (JANGAN: "Hapus mereka dari peta").
 - "Corporal" -> "Kopral" (JANGAN: "Korpul").
-- "Pillbox" (military bunker) -> "Bunker / pos perlindungan" (JANGAN: "Kotak obat").
+- "Sick prank" -> "Lelucon keterlaluan / lelucon menjijikkan" (JANGAN: "Lelucon aneh").
+- "Childish murderer" -> "Pembunuh kekanak-kanakan" (JANGAN: "Pembunuh anak kecil").
+- "The only bad guy left" -> "Satu-satunya penjahat yang tersisa" (JANGAN: "Satu-satunya jahat").
+- "I will see you executed" -> "Aku akan memastikanmu dieksekusi" (JANGAN: "Aku akan melihatmu dieksekusi").
+- "Righteous people" -> "Orang-orang saleh / orang-orang jujur" (JANGAN: "Orang-orang yang benar").
+- "Heart failure / heart attack" -> "Serangan jantung" (JANGAN: "Gagal jantung" jika konteks death note serangan mendadak).
 - "On a royal tear / on a tear / on a rampage" -> "Mengamuk hebat / bikin onar tak terkendali" (JANGAN: "Kemarahan kerajaan").
 - "Harm [someone] / do harm" -> "Melukai / menyakiti [seseorang]" (JANGAN: "Ngelakuin luka").
 - "Eliminate [an opponent in battle]" -> "Menghabisi / melenyapkan" (JANGAN: "Menghapus Anda").
@@ -492,6 +497,10 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bkau pervert\b", "dasar mesum"),
     (r"\bkamu pervert\b", "dasar mesum"),
     (r"\bpervert\b", "mesum"),
+    (r"\bpembunuh anak kecil\b", "pembunuh kekanak-kanakan"),
+    (r"\bsatu-satunya jahat yang tersisa\b", "satu-satunya penjahat yang tersisa"),
+    (r"\bsatu-satunya jahat\b", "satu-satunya penjahat"),
+    (r"\bmelihatmu dieksekusi\b", "memastikanmu dieksekusi"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
