@@ -1,14 +1,18 @@
 """Subtitle translation module.
 
-Multi-tier fallback translate subtitle cues:
-  Tier 1: OpenAI-compatible API (Groq / OpenAI / OpenRouter, default: gpt-oss-20b via Groq)
-  Tier 2: MyMemory REST API publik (gratis, 5000 char/day per IP, soft limit 4500)
-  Tier 3: source English original (no translation)
+Multi-tier fallback translate subtitle cues (orkestrasi di main._translate_with_fallback):
+  Tier 1: AI Fansub LLM (OpenAI-compatible: Ollama Cloud free / Gemini / Groq / OpenRouter /
+          Ollama lokal). Format ber-ID `N|teks`, batch paralel, rotasi model saat limit,
+          baris yang gagal diisi Google GTX (hybrid) — tidak lagi all-or-nothing.
+  Tier 2: Google GTX Web RPC (zero-key, terjemahan literal/kaku)
+  Tier 3: MyMemory REST API publik (gratis, 5000 char/day per IP, soft limit 4500)
+  Tier 4: source English original (no translation)
 
-Backend pakai layer ini dengan signature:
-    translated_cues, tier = translate_cues_with_fallback(cues, src, tgt, apikey, model, apiurl)
+Signature utama:
+    translated_cues, stats = await call_openai_translate(cues, src, tgt, apikey, model, apiurl)
 """
 import re as _re
+import html as _html
 import json as _json
 import time as _time
 import asyncio as _asyncio
@@ -49,11 +53,12 @@ def parse_vtt(text):
     def _flush():
         nonlocal start, end, buf, out
         if start >= 0 and end > start and buf:
-            text_lines = []
-            for ln in buf:
-                text_lines.append(ln.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
-            text_lines = [_re.sub(r"&lt;[^&]*?&gt;", "", x) for x in text_lines]
-            out.append({"start": start, "end": end, "text": "\n".join(text_lines)})
+            # Plain text: buang tag VTT/HTML (<i>, <c.x>, <00:01.000>) lalu decode entity.
+            # Escaping HTML dilakukan frontend (parseVtt) saat render, bukan di sini.
+            text_lines = [_html.unescape(_re.sub(r"<[^>]*>", "", ln)).strip() for ln in buf]
+            text_lines = [x for x in text_lines if x]
+            if text_lines:
+                out.append({"start": start, "end": end, "text": "\n".join(text_lines)})
         start = -1.0
         end = -1.0
         buf = []
@@ -158,215 +163,530 @@ def _extract_err(resp):
     return raw_msg
 
 
-def _parse_llm_response(content: str, is_google: bool = False):
-    """Robust parser untuk respons LLM berupa JSON array atau multi-line strings."""
+# ---------------------------------------------------------------------------
+# Tier 1: AI Fansub (LLM, OpenAI-compatible)
+# ---------------------------------------------------------------------------
+
+# Model Ollama Cloud yang masuk Free plan (khusus gpt-oss)
+OLLAMA_FREE_MODELS = ["gpt-oss:20b", "gpt-oss:120b"]
+
+# Normalisasi penamaan model lama ke gpt-oss:20b
+_LEGACY_MODEL_UPGRADE = {
+    "ollama": {
+        "gemma4:31b": "gpt-oss:20b",
+        "gemma3:12b": "gpt-oss:20b",
+        "gemma4": "gpt-oss:20b",
+        "gpt-oss:20b-cloud": "gpt-oss:20b",
+        "gpt-oss-20b": "gpt-oss:20b",
+    },
+}
+
+_DEFAULT_MODEL = {
+    "ollama": "gpt-oss:20b",
+    "ollama_local": "gpt-oss:20b",
+    "google": "gemini-3.1-flash-lite",
+    "groq": "llama-3.3-70b-versatile",
+    "openrouter": "google/gemini-2.0-flash-exp:free",
+    "openai": "gpt-4o-mini",
+    "custom": "gpt-4o-mini",
+}
+
+# batch = jumlah cue per request, conc = request paralel.
+_PROVIDER_CFG = {
+    "google": {"batch": 80, "conc": 2},
+    "ollama": {"batch": 30, "conc": 3},
+    "ollama_local": {"batch": 20, "conc": 1},
+    "groq": {"batch": 40, "conc": 2},
+    "openrouter": {"batch": 40, "conc": 2},
+    "openai": {"batch": 60, "conc": 3},
+    "custom": {"batch": 40, "conc": 2},
+}
+
+_PROVIDER_LABEL = {
+    "google": "Google AI Studio", "ollama": "Ollama Cloud", "ollama_local": "Ollama Lokal",
+    "groq": "Groq", "openrouter": "OpenRouter", "openai": "OpenAI", "custom": "OpenAI-compatible",
+}
+
+
+def is_local_llm(apiurl: str) -> bool:
+    """True kalau endpoint LLM berjalan di mesin lokal (tidak butuh API key)."""
+    u = (apiurl or "").lower()
+    return any(h in u for h in ("://localhost", "://127.0.0.1", "://0.0.0.0", "://[::1]"))
+
+
+def detect_provider(apiurl: str) -> str:
+    u = (apiurl or "").lower()
+    if "googleapis.com" in u:
+        return "google"
+    if "ollama.com" in u:
+        return "ollama"
+    if is_local_llm(u):
+        return "ollama_local"
+    if "groq.com" in u:
+        return "groq"
+    if "openrouter.ai" in u:
+        return "openrouter"
+    if "openai.com" in u:
+        return "openai"
+    return "custom"
+
+
+def _model_chain(prov: str, model: str):
+    """Urutan model yang dicoba; model berikutnya dipakai saat limit/402/404."""
+    chain = [model]
+    if prov == "ollama":
+        chain += OLLAMA_FREE_MODELS
+    elif prov == "google":
+        chain.append("gemini-3.8-flash" if "flash-lite" in model else "gemini-3.1-flash-lite")
+    elif prov == "groq":
+        chain.append("llama-3.3-70b-versatile")
+    seen, out = set(), []
+    for m in chain:
+        if m and m not in seen:
+            seen.add(m)
+            out.append(m)
+    return out
+
+
+_FANSUB_PROMPT_ID = """Kamu adalah penerjemah fansub anime Indonesia berpengalaman. Terjemahkan subtitle {src} menjadi bahasa Indonesia yang luwes, enak dibaca, dan adaptif mengikuti situasi adegan (scene) — BUKAN bahasa kaku ala mesin penerjemah.
+
+Aturan Nada Bahasa Sesuai Konteks Adegan:
+1. Adegan Formal / Berwibawa / Kerajaan / Militer:
+   - Situasi: Audiensi raja/bangsawan/tetua, ksatria melapor ke komandan, pidato resmi, pelayan/maid melayani tuannya, adegan ritual.
+   - Kata ganti: "Saya/Anda", "Tuan/Nona", "Paduka/Yang Mulia", "Hamba", "Pangeran/Tuan Putri".
+   - Nada bicara: Baku, sopan, berwibawa, dan elegan ("tidak", "sudah", "hanya", "mohon", "baiklah").
+   - DILARANG menyisipkan partikel gaul santai ("nggak", "kok", "sih", "deh", "dong") ke dalam dialog formal ini.
+
+2. Adegan Santai / Sehari-hari / Komedi / Sekolah:
+   - Situasi: Percakapan teman sebaya, keluarga, interaksi di kedai, komedi/romansa.
+   - Kata ganti: "aku/kamu" (default).
+   - Nada bicara: Bahasa lisan santai fansub ("nggak", "udah", "aja", "banget", "kok", "sih", "deh", "kan", "nih", "lho", "gimana", "kenapa", "kayak", "emang", "beneran", "dengerin", "liat").
+   - Panggilan pihak ketiga: "cowok itu", "cewek itu", "dia" (JANGAN gunakan "lelaki itu", "wanita itu", "gadis tersebut").
+
+3. Adegan Kasar / Preman / Musuh:
+   - Situasi: Karakter berandalan/kasar, musuh meremehkan lawan, umpatan pertarungan.
+   - Kata ganti: "gue/lo", dengan umpatan wajar ("brengsek", "sialan", "kurang ajar").
+
+Kosakata Game, Isekai & Job System:
+- Terjemahkan istilah game & isekai secara wajar dan alami (bisa memakai padanan umum Indonesia yang lazim di fansub):
+  * "Quest / Mission" -> "Misi" (atau "quest")
+  * "Party" -> "Kelompok" / "Tim" (atau "party")
+  * "Skill" -> "Keahlian" / "Jurus" / "Kemampuan" / "Skill"
+  * "Magic" -> "Sihir"
+  * "Item" -> "Barang" / "Item"
+  * "Dungeon" -> "Dungeon" / "Labirin" (JANGAN gunakan istilah kaku "penjara bawah tanah")
+  * "Monster" -> "Monster"
+  * "Level up" -> "Naik level"
+  * "Inventory" -> "Penyimpanan" / "Inventori"
+  * "Boss" -> "Bos" / "Boss"
+  * "Guild" -> "Guild"
+- Sistem Profesi / Job System:
+  * "Job / Class" -> "Kelas" / "Profesi" / "Job" (misal: "What is your job/class?" -> "Apa kelasmu? / Apa profesimu?")
+  * "Job change / Class advancement" -> "Ganti job" / "Pindah kelas" / "Naik kelas"
+  * "Role" -> "Peran" (Tank, DPS, Healer, Support)
+  * "Warrior / Fighter" -> "Pejuang" / "Petarung" / "Warrior"
+  * "Knight / Paladin" -> "Ksatria" / "Paladin"
+  * "Swordsman" -> "Pendekar Pedang" / "Ahli Pedang"
+  * "Berserker" -> "Berserker"
+  * "Tank / Guardian" -> "Tank" / "Pelindung"
+  * "Archer / Hunter" -> "Pemanah" / "Pemburu"
+  * "Ranger" -> "Ranger" / "Pengembara"
+  * "Thief / Rogue" -> "Pencuri" / "Rogue"
+  * "Assassin" -> "Pembunuh bayaran" / "Assassin"
+  * "Mage / Wizard" -> "Penyihir" / "Mage"
+  * "Necromancer" -> "Necromancer" / "Pembangkit mayat"
+  * "Sage" -> "Sage" / "Orang Bijak"
+  * "Healer / Priest / Cleric" -> "Penyembuh" / "Pendeta" / "Cleric" / "Healer"
+  * "Saint / Saintess" -> "Orang Suci" / "Santa"
+  * "Tamer / Beast Tamer" -> "Penjinak" / "Penjinak Monster"
+  * "Summoner" -> "Pemanggil" / "Summoner"
+  * "Blacksmith" -> "Pandai Besi"
+  * "Alchemist" -> "Alkemis"
+  * "Hero" -> "Pahlawan"
+  * "Demon Lord" -> "Raja Iblis"
+  * "Novice" -> "Pemula" / "Novice"
+
+Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
+- "I see" / "I get it" -> "Begitu rupanya" / "Ooh, begitu ya" / "Paham" (JANGAN: "Aku melihat").
+- "Hold on" / "Wait" -> "Tunggu sebentar!" / "Tunggu dulu!" (JANGAN: "Bertahanlah").
+- "Shut up" -> "Diem!" / "Berisik!" / "Diam!" (JANGAN: "Tutup mulutmu").
+- "Are you alright?" -> "Kamu nggak apa-apa?" (JANGAN: "Apakah kamu baik-baik saja").
+- "Damn it" / "Damn" -> "Sial!" / "Brengsek!" / "Cih!" (JANGAN: "Terkutuklah").
+- "No way" -> "Nggak mungkin!" / "Mustahil!" (JANGAN: "Tidak ada jalan").
+- "Never mind" -> "Lupakan saja" / "Bukan apa-apa" / "Nggak jadi".
+- "Get lost" -> "Pergi sana!" / "Enyah!".
+- "Bring it on!" -> "Sini maju kalau berani!" / "Ayo lawan!".
+- Pertahankan nama orang, tempat, honorifik Jepang (-san, -kun, -chan, -sama, Senpai, Sensei), gagap & interjeksi emosi ("A-Apa?!", "Tch", "Hmph").
+- Pertahankan token <br> untuk ganti baris dalam 1 cue.
+
+Format Keluaran (WAJIB):
+- Satu baris per input, format persis "N|terjemahan" (N = nomor input yang sama).
+- Jumlah & nomor baris harus sama persis dengan input. Tanpa penjelasan atau markdown.
+
+Contoh Multi-Scene:
+Input:
+1|Your Majesty, the vanguard knights are ready. We shall not fail your trust.
+2|My class is Beast Tamer. Let us form a party and take on this rank-A mission!
+3|Hey, are you alright? Don't worry, it's nothing to stress over!
+Output:
+1|Yang Mulia, pasukan ksatria garis depan telah bersiap. Kami tidak akan mengecewakan kepercayaan Anda.
+2|Kelasku Penjinak Monster. Ayo bentuk kelompok dan ambil misi peringkat A ini!
+3|Hei, kamu nggak apa-apa? Tenang aja, bukan masalah besar kok!"""
+
+_FANSUB_PROMPT_GENERIC = """You are an experienced anime fansub translator. Translate {src} subtitles into natural, casual, spoken {tgt} as a popular fansub release would — not stiff, literal machine translation.
+- Translate meaning and emotion, not word-for-word; keep lines short and readable.
+- Keep names, honorifics (-san, -kun, -chan, Senpai, Sensei), skill names and common gamer/anime terms.
+- Keep stutters, interjections and emotional punctuation (?!, ..., ~). Keep the <br> token (line break inside a cue).
+Output format (MANDATORY): one line per input as "N|translation" with the same N, same count and numbering, no merging/splitting, no explanations or markdown."""
+
+
+def _fansub_system_prompt(src_name: str, tgt: str, tgt_name: str) -> str:
+    if (tgt or "").lower() == "id":
+        return _FANSUB_PROMPT_ID.format(src=src_name)
+    return _FANSUB_PROMPT_GENERIC.format(src=src_name, tgt=tgt_name)
+
+
+def _prep_line(text: str) -> str:
+    """Cue text -> satu baris untuk prompt (newline jadi token <br>)."""
+    t = (text or "").replace("\r", "")
+    t = " <br> ".join(p.strip() for p in t.split("\n") if p.strip())
+    return _re.sub(r"\s+", " ", t).strip()
+
+
+def _restore_line(text: str) -> str:
+    """Hasil model -> cue text (token <br> jadi newline, normalisasi karakter aneh)."""
+    t = (text or "").replace("\u2011", "-").replace("\u2010", "-").replace("\u00a0", " ")
+    t = _re.sub(r"\s*<br\s*/?>\s*", "\n", t, flags=_re.I)
+    lines = [_re.sub(r"[ \t]+", " ", x).strip() for x in t.split("\n")]
+    return "\n".join(x for x in lines if x)
+
+
+# ---------------------------------------------------------------------------
+# Post-Processing Lexicon Sanitizer (Normalisasi Diksi Fansub Indonesia)
+# ---------------------------------------------------------------------------
+
+_FORMAL_INDICATORS_RE = _re.compile(
+    r"\b(paduka|yang mulia|baginda|hamba|tuan putri|pangeran|yang terhormat|jenderal|komandan|"
+    r"nona besar|tuan muda|tuanku|saya mohon)\b",
+    _re.I
+)
+
+# Aturan universal: selalu dikoreksi (karena merupakan blunder/calque harfiah).
+_UNIVERSAL_FANSUB_RULES = [
+    (r"\bapakah kamu\b", "kamu"),
+    (r"\bapakah kau\b", "kamu"),
+    (r"\bapakah anda\b", "Anda"),
+    (r"\bapakah dia\b", "dia"),
+    (r"\bapakah mereka\b", "mereka"),
+    (r"\bapakah kita\b", "kita"),
+    (r"\bapakah ini\b", "ini"),
+    (r"\bapakah itu\b", "itu"),
+    (r"\bapakah ada\b", "ada"),
+    (r"\bapakah bisa\b", "bisa"),
+    (r"\bapakah benar\b", "beneran"),
+    (r"\bapakah sungguh\b", "beneran"),
+    (r"\bterkutuklah\b", "sial"),
+    (r"\bbawalah itu\b", "sini maju"),
+    (r"\bpenjara bawah tanah\b", "dungeon"),
+    (r"\bserikat petualang\b", "guild petualang"),
+]
+
+# Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
+_CASUAL_FANSUB_RULES = [
+    (r"\btidak apa-apa\b", "nggak apa-apa"),
+    (r"\btak apa-apa\b", "nggak apa-apa"),
+    (r"\btak apa\b", "nggak apa-apa"),
+    (r"\bbaik-baik saja\b", "nggak apa-apa"),
+    (r"\btutup mulutmu\b", "diem"),
+    (r"\btidak ada jalan\b", "nggak mungkin"),
+    (r"\btidak mungkin\b", "nggak mungkin"),
+    (r"\btidak bisa\b", "nggak bisa"),
+    (r"\btak bisa\b", "nggak bisa"),
+    (r"\btidak dapat\b", "nggak bisa"),
+    (r"\btidak akan\b", "nggak bakal"),
+    (r"\btak akan\b", "nggak bakal"),
+    (r"\btidak tahu\b", "nggak tahu"),
+    (r"\btak tahu\b", "nggak tahu"),
+    (r"\btidak mau\b", "nggak mau"),
+    (r"\btak mau\b", "nggak mau"),
+    (r"\btidak pernah\b", "nggak pernah"),
+    (r"\btak pernah\b", "nggak pernah"),
+    (r"\btidak perlu\b", "nggak usah"),
+    (r"\btak perlu\b", "nggak usah"),
+    (r"\btidak usah\b", "nggak usah"),
+    (r"\btidak boleh\b", "nggak boleh"),
+    (r"\btak boleh\b", "nggak boleh"),
+    (r"\btidak ada\b", "nggak ada"),
+    (r"\btak ada\b", "nggak ada"),
+    (r"\bsudah\b", "udah"),
+    (r"\bsaja\b", "aja"),
+    (r"\bhanya saja\b", "cuma"),
+    (r"\bhanya\b", "cuma"),
+    (r"\bmengapa kamu\b", "kenapa kamu"),
+    (r"\bmengapa kau\b", "kenapa kamu"),
+    (r"\bmengapa dia\b", "kenapa dia"),
+    (r"\bmengapa\b", "kenapa"),
+    (r"\bbagaimana kalau\b", "gimana kalau"),
+    (r"\bbagaimana jika\b", "gimana kalau"),
+    (r"\bbagaimana cara\b", "gimana cara"),
+    (r"\bbagaimana bisa\b", "gimana bisa"),
+    (r"\blelaki itu\b", "cowok itu"),
+    (r"\bpria itu\b", "cowok itu"),
+    (r"\bwanita itu\b", "cewek itu"),
+    (r"\bgadis itu\b", "cewek itu"),
+    (r"\bwanita tersebut\b", "cewek itu"),
+    (r"\blelaki tersebut\b", "cowok itu"),
+    (r"\btersesatlah\b", "pergi sana"),
+    (r"\bjangan khawatir\b", "tenang aja"),
+    (r"\btak perlu khawatir\b", "tenang aja"),
+    (r"\bterima kasih banyak\b", "makasih banyak"),
+    (r"\bterima kasih\b", "makasih"),
+    (r"\bdengarkan aku\b", "dengerin aku"),
+    (r"\bdengarkan\b", "dengerin"),
+]
+
+_COMPILED_UNIVERSAL = [(_re.compile(pat, _re.IGNORECASE), repl) for pat, repl in _UNIVERSAL_FANSUB_RULES]
+_COMPILED_CASUAL = [(_re.compile(pat, _re.IGNORECASE), repl) for pat, repl in _CASUAL_FANSUB_RULES]
+
+
+def _sanitize_fansub_id(text: str) -> str:
+    """Normalisasi kata kaku/literal secara adaptif (menjaga adegan formal tetap sopan)."""
+    if not text:
+        return text
+
+    def _replace_match(m, repl):
+        orig = m.group(0)
+        if orig and orig[0].isupper():
+            return repl[0].upper() + repl[1:]
+        return repl
+
+    result = text
+    # 1. Jalankan koreksi universal
+    for rx, repl in _COMPILED_UNIVERSAL:
+        result = rx.sub(lambda m, r=repl: _replace_match(m, r), result)
+
+    # 2. Jalankan normalisasi santai jika BUKAN adegan formal/kerajaan
+    is_formal = bool(_FORMAL_INDICATORS_RE.search(result))
+    if not is_formal:
+        for rx, repl in _COMPILED_CASUAL:
+            result = rx.sub(lambda m, r=repl: _replace_match(m, r), result)
+
+    return result
+
+
+_ID_LINE_RE = _re.compile(r"^\s*(?:\*\*)?(\d{1,4})(?:\*\*)?\s*[|｜]\s?(.*)$")
+
+
+def _parse_id_lines(content: str, valid_ids) -> dict:
+    """Parse respons "N|teks" -> {N: teks}. Abaikan reasoning, markdown, ID di luar batch."""
     if not content:
-        return []
-    text = content.strip()
-    if text.startswith("```"):
-        text = _re.sub(r"^```[a-zA-Z]*\n?", "", text)
-        text = _re.sub(r"\n?```$", "", text).strip()
-
-    if is_google or text.startswith("["):
-        # 1. Coba standard json.loads
-        try:
-            val = _json.loads(text)
-            if isinstance(val, list):
-                return [str(x).strip() for x in val]
-        except Exception:
-            pass
-
-        # 2. Ekstrak blok JSON array [ ... ] dengan regex jika ada quote bermasalah
-        m = _re.search(r"\[\s*(.*)\s*\]", text, _re.DOTALL)
-        if m:
-            inner = m.group(1)
-            items = _re.findall(r"\"((?:[^\"\\]|\\.)*)\"", inner)
-            if items:
-                out = []
-                for x in items:
-                    try:
-                        out.append(x.encode("utf-8").decode("unicode_escape").strip())
-                    except Exception:
-                        out.append(x.strip())
-                return out
-
-    # 3. Fallback: line-by-line parsing (OpenAI format atau numbering)
-    lines = []
+        return {}
+    text = _re.sub(r"<think>.*?</think>", "", content, flags=_re.S | _re.I)
+    text = _re.sub(r"```[a-zA-Z]*", "", text)
+    out = {}
     for line in text.split("\n"):
-        line = line.strip()
-        if not line:
+        m = _ID_LINE_RE.match(line)
+        if not m:
             continue
-        # Bersihkan leading bullet / numbering seperti "1. Halo" atau "1) Halo"
-        cleaned = _re.sub(r"^\d+[\.\)]\s*", "", line).strip()
-        if cleaned:
-            lines.append(cleaned)
-    return lines
+        i = int(m.group(1))
+        t = m.group(2).strip()
+        if i in valid_ids and i not in out and t:
+            out[i] = t
+    return out
 
 
-async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=60.0):
-    """Translate via OpenAI-compatible /chat/completions with chunked batches.
-    cues: list[{start,end,text}]. Returns translated cues (text replaced, timing preserved)."""
+class _FatalLLMError(RuntimeError):
+    """Key invalid / akses ditolak — hentikan seluruh job LLM."""
+
+
+class _ModelUnavailable(RuntimeError):
+    """Model tidak ada / tidak termasuk plan gratis — pindah ke model berikutnya."""
+
+
+class _RateLimited(RuntimeError):
+    """429 — tunggu atau pindah model."""
+
+
+async def _chat_completion(client, apiurl, headers, payload) -> str:
+    r = await client.post(apiurl + "/chat/completions", json=payload, headers=headers)
+    if r.status_code == 400 and any(k in payload for k in ("reasoning_format", "reasoning_effort")):
+        payload = {k: v for k, v in payload.items() if k not in ("reasoning_format", "reasoning_effort")}
+        r = await client.post(apiurl + "/chat/completions", json=payload, headers=headers)
+    if r.status_code == 429:
+        raise _RateLimited(f"Rate limit (429): {_extract_err(r)}")
+    if r.status_code in (401, 403):
+        raise _FatalLLMError(f"HTTP {r.status_code}: {_extract_err(r)}")
+    if r.status_code in (402, 404):
+        raise _ModelUnavailable(f"HTTP {r.status_code}: {_extract_err(r)}")
+    if r.status_code == 400:
+        msg = _extract_err(r)
+        if "model" in msg.lower():
+            raise _ModelUnavailable(f"HTTP 400: {msg}")
+        if "api key" in msg.lower() or "api_key" in msg.lower():
+            raise _FatalLLMError(f"HTTP 400: {msg}")
+        raise RuntimeError(f"HTTP 400: {msg}")
+    if r.status_code >= 400:
+        raise RuntimeError(f"HTTP {r.status_code}: {_extract_err(r)}")
+    d = r.json()
+    msg = (d.get("choices") or [{}])[0].get("message") or {}
+    return (msg.get("content") or "").strip()
+
+
+async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=120.0, fill_with_gtx=True):
+    """Terjemahan gaya fansub via OpenAI-compatible /chat/completions.
+
+    - Format ber-ID "N|teks" -> tidak ada pergeseran baris; ID yang hilang di-retry.
+    - Batch paralel (per-provider), konteks 4 baris sebelumnya dikirim sebagai referensi.
+    - Rotasi model saat 429/402/404 (mis. Ollama Cloud free: gpt-oss:20b -> gpt-oss:120b).
+    - Cue yang tetap gagal diisi Google GTX (hybrid), bukan membuang seluruh episode.
+
+    Return (translated_cues, stats). Raise RuntimeError kalau tidak ada satu baris pun
+    yang berhasil diterjemahkan LLM.
+    """
+    stats = {"provider": "", "model": "", "models": {}, "llm_lines": 0, "gtx_lines": 0,
+             "total": len(cues or []), "error": ""}
     if not cues:
-        return cues
+        return cues, stats
     apikey = (apikey or "").strip().strip("\"'").strip()
-    apiurl = (apiurl or "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/")
-    is_google = "googleapis.com" in apiurl
-    is_ollama = "ollama.com" in apiurl
-    # Model reasoning seperti gpt-oss di Ollama Cloud jauh lebih cepat & stabil dengan line-by-line text
-    use_json_mode = is_google or (not is_ollama and ("groq.com" in apiurl or "openai.com" in apiurl))
-
-    if is_google:
-        if not model or model in ("gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-3.8-flash"):
-            model = "gemini-3.1-flash-lite"
-        BATCH_SIZE = 200
-    elif is_ollama:
-        BATCH_SIZE = 25
-    else:
-        BATCH_SIZE = 60
+    apiurl = (apiurl or "https://ollama.com/v1").strip().rstrip("/")
+    prov = detect_provider(apiurl)
+    model = (model or "").strip() or _DEFAULT_MODEL[prov]
+    model = _LEGACY_MODEL_UPGRADE.get(prov, {}).get(model, model)
+    cfg = _PROVIDER_CFG[prov]
+    stats["provider"] = prov
 
     src_name = LANG_NAMES.get((src or "").lower(), src or "English")
     tgt_name = LANG_NAMES.get((tgt or "").lower(), tgt or "Indonesian")
-    
-    headers = {
-        "Authorization": "Bearer " + apikey,
-        "x-goog-api-key": apikey,
-        "Content-Type": "application/json",
-    }
-    
-    batches = [cues[i:i + BATCH_SIZE] for i in range(0, len(cues), BATCH_SIZE)]
-    all_translated = []
+    system_prompt = _fansub_system_prompt(src_name, tgt, tgt_name)
+
+    headers = {"Content-Type": "application/json"}
+    if apikey:
+        headers["Authorization"] = "Bearer " + apikey
+    if prov == "google":
+        headers["x-goog-api-key"] = apikey
+    if prov == "openrouter":
+        headers["HTTP-Referer"] = "http://127.0.0.1"
+        headers["X-Title"] = "Tatap"
+
+    src_lines = [_prep_line(c["text"]) for c in cues]
+    n = len(cues)
+    B = cfg["batch"]
+    ranges = [(lo, min(n, lo + B)) for lo in range(0, n, B)]
+    state = {"models": _model_chain(prov, model), "fatal": "", "last_err": "",
+             "used": _collections.Counter()}
+    sem = _asyncio.Semaphore(cfg["conc"])
     t_start = _time.time()
-    prov_name = "Google AI Studio" if is_google else ("Ollama Cloud" if is_ollama else ("Groq" if "groq.com" in apiurl else "OpenAI-compatible"))
     log_translate(
-        f"Mulai translate {len(cues)} cues ({src_name} -> {tgt_name}) | Provider: {prov_name} | Model: {model} | Batches: {len(batches)}"
+        f"Mulai AI Fansub {n} cues ({src_name} -> {tgt_name}) | Provider: {_PROVIDER_LABEL[prov]} | "
+        f"Model: {' > '.join(state['models'])} | Batches: {len(ranges)} x{B} (paralel {cfg['conc']})"
     )
-    
-    timeout_cfg = _httpx.Timeout(timeout, connect=20.0)
-    async with _httpx.AsyncClient(timeout=timeout_cfg, trust_env=True) as c:
-        for idx, batch in enumerate(batches):
-            t_batch = _time.time()
-            if idx > 0:
-                await _asyncio.sleep(0.3)  # Jeda aman per batch
-            lines = [cue["text"].replace("\n", " ").strip() for cue in batch]
-            
-            system_prompt = (
-                f"You are a professional anime fansub translator. Translate dialogue into natural, colloquial, spoken {tgt_name} (santai, luwes, tidak kaku, gunakan 'aku/kamu').\n"
-                f"Rules:\n"
-                f"1. Keep gamer/anime terms as is (e.g. NPC, quest, level, raid, guild, party, skill, boss, inventory).\n"
-                f"2. Do not translate anime titles (e.g. 'Overgeared' must remain 'Overgeared').\n"
-                f"3. Maintain original tone, emotion, and punctuation."
+
+    def _payload(cur_model, ids, lo):
+        ctx = [src_lines[j] for j in range(max(0, lo - 4), lo)]
+        parts = []
+        if ctx:
+            parts.append("Konteks (baris sebelumnya, JANGAN diterjemahkan, hanya untuk pemahaman):\n"
+                         + "\n".join("- " + x for x in ctx))
+        parts.append(f"Terjemahkan {len(ids)} baris berikut:\n"
+                     + "\n".join(f"{i}|{src_lines[lo + i - 1]}" for i in ids))
+        reasoning = "gpt-oss" in cur_model
+        p = {
+            "model": cur_model,
+            "messages": [{"role": "system", "content": system_prompt},
+                         {"role": "user", "content": "\n\n".join(parts)}],
+            "temperature": 0.4,
+            "max_tokens": min(8192, len(ids) * 70 + 300 + (2500 if reasoning else 0)),
+        }
+        if reasoning:
+            p["reasoning_effort"] = "low"
+            if prov == "groq":
+                p["reasoning_format"] = "hidden"
+        return p
+
+    async def run_batch(bidx, lo, hi, client):
+        async with sem:
+            got = {}
+            pending = list(range(1, hi - lo + 1))
+            attempts = 0
+            t_b = _time.time()
+            while pending and attempts < 4 and not state["fatal"] and state["models"]:
+                attempts += 1
+                cur_model = state["models"][0]
+                try:
+                    content = await _chat_completion(client, apiurl, headers, _payload(cur_model, pending, lo))
+                    parsed = _parse_id_lines(content, set(pending))
+                    got.update(parsed)
+                    state["used"][cur_model] += len(parsed)
+                    pending = [i for i in pending if i not in got]
+                    if not parsed:
+                        state["last_err"] = f"{cur_model}: respon kosong / format tidak sesuai"
+                except _FatalLLMError as e:
+                    state["fatal"] = str(e)
+                    state["last_err"] = str(e)
+                except (_ModelUnavailable, _RateLimited) as e:
+                    state["last_err"] = f"{cur_model}: {e}"
+                    only_one = len(state["models"]) == 1
+                    if isinstance(e, _RateLimited) and only_one:
+                        await _asyncio.sleep(2.0 * attempts + 1.0)
+                        continue
+                    if cur_model in state["models"] and not only_one:
+                        state["models"].remove(cur_model)
+                        log_translate(f"Model {cur_model} tidak tersedia/limit -> pindah ke {state['models'][0]}")
+                    elif only_one:
+                        state["models"].clear()
+                except Exception as e:
+                    state["last_err"] = f"{cur_model}: {e}"
+                    await _asyncio.sleep(1.0 * attempts)
+            log_translate(
+                f"Batch {bidx + 1}/{len(ranges)}: {len(got)}/{hi - lo} baris AI dalam {_time.time() - t_b:.1f}s"
+                + (f" (sisa {len(pending)} -> GTX)" if pending else "")
             )
-            if is_ollama:
-                system_prompt += "\nDo NOT explain or output reasoning thoughts. Output direct translations immediately, exactly one line per line."
-            
-            if use_json_mode:
-                prompt = (
-                    f"Translate the following JSON array of anime dialogue strings into natural, colloquial {tgt_name}.\n"
-                    f"Return ONLY a valid JSON array of strings with the exact same length ({len(lines)} items) in the exact same order.\n"
-                    f"Output raw JSON without markdown formatting or code blocks."
-                )
-                body_content = prompt + "\n\n" + _json.dumps(lines, ensure_ascii=False)
-                calc_tokens = min(8192, max(2048, len(lines) * 45))
-            else:
-                body_text = "\n".join(lines)
-                prompt = (
-                    f"Translate each anime dialogue line below into natural, spoken {tgt_name} fansub.\n"
-                    f"Return exactly one translated line per input line ({len(lines)} lines total), in the same order.\n"
-                    f"Output only the translations in {tgt_name}, no numbering, explanations, or commentary."
-                )
-                body_content = prompt + "\n\n" + body_text
-                calc_tokens = max(1024, min(4096, len(lines) * 60))
+            return {lo + i - 1: got[i] for i in got}
 
-            payload = {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": body_content},
-                ],
-                "temperature": 0.2 if use_json_mode else 0.3,
-                "max_tokens": calc_tokens,
-            }
-            if "groq.com" in apiurl and "gpt-oss" in model:
-                payload["reasoning_format"] = "hidden"
-            
-            translated = []
-            last_batch_err = None
-            models_to_try = [model]
-            if is_google:
-                # Siapkan fallback otomatis jika model utama terkena rate limit (429)
-                alt = "gemini-3.8-flash" if "flash-lite" in model else "gemini-3.1-flash-lite"
-                models_to_try.append(alt)
+    results = {}
+    timeout_cfg = _httpx.Timeout(timeout, connect=20.0)
+    async with _httpx.AsyncClient(timeout=timeout_cfg, trust_env=True) as client:
+        parts = await _asyncio.gather(*[run_batch(b, lo, hi, client) for b, (lo, hi) in enumerate(ranges)])
+    for p in parts:
+        results.update(p)
 
-            for cur_model in models_to_try:
-                payload["model"] = cur_model
-                for attempt in range(2):
-                    try:
-                        r = await c.post(apiurl + "/chat/completions", json=payload, headers=headers)
-                        if r.status_code == 400 and "reasoning_format" in payload:
-                            payload.pop("reasoning_format", None)
-                            r = await c.post(apiurl + "/chat/completions", json=payload, headers=headers)
-                        if r.status_code == 429:
-                            last_batch_err = f"Rate limit (429): {_extract_err(r)}"
-                            await _asyncio.sleep(2.0)
-                            if is_google:
-                                break
-                            continue
-                        if r.status_code >= 400:
-                            msg = _extract_err(r)
-                            last_batch_err = f"HTTP {r.status_code}: {msg}"
-                            if r.status_code in (400, 401, 403):
-                                raise RuntimeError(last_batch_err)
-                            await _asyncio.sleep(1.0)
-                            continue
-                        
-                        r.raise_for_status()
-                        d = r.json()
-                        msg = (d.get("choices") or [{}])[0].get("message", {})
-                        content = msg.get("content", "").strip()
-                        translated = _parse_llm_response(content, is_google=use_json_mode)
-                        
-                        if translated:
-                            break
-                        else:
-                            last_batch_err = "Respon model kosong atau tidak menghasilkan translasi"
-                    except RuntimeError:
-                        raise
-                    except Exception as ex:
-                        last_batch_err = str(ex)
-                        translated = []
+    if not results:
+        err = state["fatal"] or state["last_err"] or "Model tidak menghasilkan terjemahan"
+        log_translate(f"AI Fansub GAGAL total: {err}")
+        raise RuntimeError(err)
 
-                if translated:
-                    break
+    missing = [i for i in range(n) if i not in results]
+    gtx_filled = {}
+    if missing and fill_with_gtx:
+        try:
+            sub = await call_gtx_translate([cues[i] for i in missing], src, tgt)
+            gtx_filled = {i: sub[k]["text"] for k, i in enumerate(missing)}
+        except Exception as e:
+            log_translate(f"Isi GTX untuk {len(missing)} cue gagal: {e}")
 
-            if not translated and last_batch_err:
-                log_translate(f"Batch {idx+1}/{len(batches)} GAGAL: {last_batch_err}")
-                raise RuntimeError(last_batch_err)
-            
-            dur_batch = _time.time() - t_batch
-            log_translate(f"Batch {idx+1}/{len(batches)} selesai ({len(translated)} cues) dalam {dur_batch:.2f}s via {payload.get('model', model)}")
-            
-            # Pad / truncate to match batch cue count
-            if len(translated) < len(lines):
-                translated = translated + lines[len(translated):]
-            elif len(translated) > len(lines):
-                translated = translated[:len(lines)]
-            
-            all_translated.extend(translated)
-    
-    # Validasi: pastikan ada baris yang berhasil diterjemahkan
-    changed_count = sum(1 for i, c in enumerate(cues) if i < len(all_translated) and all_translated[i] != c["text"])
-    if changed_count == 0:
-        log_translate("Translasi gagal: tidak ada baris yang berubah.")
-        raise RuntimeError("Translation returned no translated lines")
-    
-    total_dur = _time.time() - t_start
-    log_translate(f"Translasi AI sukses {len(cues)} cues dalam {total_dur:.2f}s ({changed_count} baris diterjemahkan)")
-    
     out = []
     for i, c in enumerate(cues):
-        tr_text = all_translated[i] if i < len(all_translated) else c["text"]
-        out.append({"start": c["start"], "end": c["end"], "text": tr_text})
-    return out
+        if i in results:
+            txt = _restore_line(results[i])
+        else:
+            txt = gtx_filled.get(i, c["text"])
+        if (tgt or "").lower() == "id":
+            txt = _sanitize_fansub_id(txt)
+        out.append({"start": c["start"], "end": c["end"], "text": txt or c["text"]})
+
+    used = state["used"]
+    stats.update({
+        "model": used.most_common(1)[0][0] if used else model,
+        "models": dict(used),
+        "llm_lines": len(results),
+        "gtx_lines": len(gtx_filled),
+        "error": state["last_err"] if missing else "",
+    })
+    log_translate(
+        f"AI Fansub selesai {n} cues dalam {_time.time() - t_start:.1f}s | AI: {len(results)} | "
+        f"GTX: {len(gtx_filled)} | model: {dict(used)}"
+    )
+    return out, stats
 
 
 async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0):
@@ -385,7 +705,7 @@ async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0):
     batches = [cues[i:i + BATCH_SIZE] for i in range(0, len(cues), BATCH_SIZE)]
     all_translated = []
     t_start = _time.time()
-    log_translate(f"Mulai translate Tier 1 (Google GTX HTML-Preserved): {len(cues)} cues | {len(batches)} batches")
+    log_translate(f"Mulai translate Google GTX (HTML-Preserved): {len(cues)} cues | {len(batches)} batches")
     
     def _fetch_batch_sync(batch_lines):
         html_chunks = []
@@ -427,10 +747,12 @@ async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0):
             raise e
 
     dur = _time.time() - t_start
-    log_translate(f"Sukses translate Tier 1 (Google GTX HTML): {len(cues)} cues dalam {dur:.2f}s")
+    log_translate(f"Sukses translate Google GTX (HTML): {len(cues)} cues dalam {dur:.2f}s")
     out = []
     for i, c in enumerate(cues):
         tr_text = all_translated[i] if i < len(all_translated) else c["text"]
+        if (tgt or "").lower() == "id":
+            tr_text = _sanitize_fansub_id(tr_text)
         out.append({"start": c["start"], "end": c["end"], "text": tr_text})
     return out
 
@@ -455,6 +777,8 @@ async def call_mymemory_translate(cues, src, tgt, timeout=30.0):
                     tr = text
             except Exception:
                 tr = text
+            if (tgt or "").lower() == "id":
+                tr = _sanitize_fansub_id(tr)
             out.append({"start": cue["start"], "end": cue["end"], "text": tr})
     return out
 

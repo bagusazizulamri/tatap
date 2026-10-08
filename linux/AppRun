@@ -1,0 +1,74 @@
+#!/bin/bash
+set -e
+
+# Resolve absolute path to AppDir
+HERE="$(dirname "$(readlink -f "${0}")")"
+export APPDIR="${HERE}"
+
+# Setup runtime environment
+export PATH="${HERE}/usr/bin:${PATH}"
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
+export PYTHONHOME="${HERE}/usr"
+export PYTHONPATH="${HERE}/usr/lib/python3.11/site-packages:${HERE}/backend:${PYTHONPATH}"
+export PYTHONUNBUFFERED=1
+
+# Storage directory (writable)
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/tatap"
+mkdir -p "${DATA_DIR}/cache"
+export TATAP_DATABASE_PATH="${DATA_DIR}/anime.db"
+export TATAP_CACHE_DIR="${DATA_DIR}/cache"
+
+# Cleanup function on exit
+cleanup() {
+    if [ -n "$SERVER_PID" ]; then
+        kill "$SERVER_PID" 2>/dev/null || true
+        wait "$SERVER_PID" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT INT TERM
+
+# Start backend server
+"${HERE}/usr/bin/python3" "${HERE}/backend/main.py" &
+SERVER_PID=$!
+
+# Wait for server ready (max 10 seconds)
+READY=0
+for i in {1..20}; do
+    if curl -s --max-time 1 http://127.0.0.1:8767/api/health >/dev/null 2>&1; then
+        READY=1
+        break
+    fi
+    sleep 0.5
+done
+
+if [ "$READY" -ne 1 ]; then
+    echo "Gagal memulai backend Tatap."
+    exit 1
+fi
+
+# Detect browser for App Mode (frameless window)
+APP_URL="http://127.0.0.1:8767"
+BROWSER_CMD=""
+
+for candidate in google-chrome google-chrome-stable chromium chromium-browser brave-browser microsoft-edge; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        BROWSER_CMD="$candidate"
+        break
+    fi
+done
+
+if [ -n "$BROWSER_CMD" ]; then
+    # Run in application window mode
+    "$BROWSER_CMD" --app="$APP_URL" --window-size=1280,720 --class=tatap >/dev/null 2>&1 &
+    BROWSER_PID=$!
+    wait "$BROWSER_PID"
+else
+    # Fallback to default system browser
+    if command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$APP_URL" >/dev/null 2>&1
+    elif command -v sensible-browser >/dev/null 2>&1; then
+        sensible-browser "$APP_URL" >/dev/null 2>&1
+    fi
+    # Wait for backend process
+    wait "$SERVER_PID"
+fi

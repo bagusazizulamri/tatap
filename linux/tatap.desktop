@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Tatap
+Comment=Pemutar anime lokal ringan tanpa akun
+Exec=AppRun
+Icon=tatap
+Categories=AudioVideo;Player;Video;
+Terminal=false
+StartupWMClass=tatap

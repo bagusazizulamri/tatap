@@ -354,8 +354,10 @@ function switchSubtitleTrack(url, langCode){
     if(!r.ok)throw new Error("HTTP "+r.status);
     var tier=r.headers.get("X-Translate-Tier")||"";
     var trErr=r.headers.get("X-Translate-Error")||"";
+    var trModel=r.headers.get("X-Translate-Model")||"";
+    var trMixed=r.headers.get("X-Translate-Mixed")||"";
     return r.text().then(function(t){
-      return {text:t, tier:tier, error:trErr};
+      return {text:t, tier:tier, error:trErr, model:trModel, mixed:trMixed};
     });
   }).then(function(res){
     clearOverlay();
@@ -368,11 +370,19 @@ function switchSubtitleTrack(url, langCode){
         else msg+=" (menampilkan subtitle asli)";
         toast(msg, 6000);
       }else{
-        var tierLabel = "AI Fansub";
-        if(res.tier === "tier2") tierLabel = "Google GTX";
-        else if(res.tier === "tier3") tierLabel = "MyMemory";
-        else if(res.tier === "cached") tierLabel = "Tersimpan";
-        toast("Subtitle Indonesia siap ("+tierLabel+")! ("+cur.cues.length+" baris)");
+        var tierLabel = "AI Fansub" + (res.model ? " · "+res.model : "");
+        if(res.tier === "tier2") tierLabel = "Google GTX — kaku";
+        else if(res.tier === "tier3") tierLabel = "MyMemory — kaku";
+        else if(res.tier === "cached") tierLabel = "AI Fansub, tersimpan";
+        else if(res.tier === "cached-mt") tierLabel = "Google GTX tersimpan — kaku";
+        var extra = "";
+        if(res.mixed) extra = " · "+res.mixed+" baris via GTX";
+        toast("Subtitle Indonesia siap ("+tierLabel+")! ("+cur.cues.length+" baris"+extra+")", 5000);
+        if(res.tier === "tier2" || res.tier === "tier3" || res.tier === "cached-mt"){
+          setTimeout(function(){
+            toast(res.error ? ("AI Fansub gagal: "+res.error) : "Untuk gaya fansub santai, pasang API key gratis: ketik :apikey <key> di command bar (Ollama Cloud / Gemini / Groq)", 8000);
+          }, 5200);
+        }
       }
     }
   }).catch(function(err){

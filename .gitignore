@@ -1,7 +1,7 @@
 venv/
 __pycache__/
 *.pyc
-backend/anime.db*
+*.db*
 cache/*
 !.gitkeep
 .env
@@ -10,7 +10,7 @@ dist/
 .build_cache/
 
 # Internal/local-only — tidak di-share:
-# - tools/build_windows_portable.py: script build internal (mungkin proprietary)
+# - tools/: script build internal
 # - plan.md: working doc pribadi
-tools/build_windows_portable.py
+tools/
 plan.md

@@ -618,7 +618,8 @@ async def proxy_sub(url: str = Query(""),
                    lang: str = Query("", pattern="^(en|id|ja|es|fr|de|pt|ko|zh)$|^$"),
                    src: str = Query("en", pattern="^(en|ja|es|fr|de|pt|ko|zh)$")):
     """Proxy subtitle VTT. Jika `lang` diisi dan berbeda dari source, jalankan
-    multi-tier fallback translate (Tier 1 OpenAI API → Tier 2 MyMemory → Tier 3 source)."""
+    multi-tier fallback translate (Tier 1 AI Fansub LLM → Tier 2 Google GTX →
+    Tier 3 MyMemory → Tier 4 source)."""
     if not url.startswith("http"):
         return Response(status_code=400)
     # Helper fetcher yang mendukung desync bila host terblokir DPI
@@ -643,72 +644,116 @@ async def proxy_sub(url: str = Query(""),
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"gagal mengambil subtitle: {e}")
 
-    # Cache key: hash dari URL+referer+lang (deterministic).
+    # Cache sadar-kualitas: hasil AI Fansub ("llm") disimpan terpisah dari hasil mesin
+    # literal ("mt" = GTX/MyMemory). Saat LLM aktif, cache "mt" diabaikan supaya episode
+    # yang dulu diterjemahkan GTX otomatis di-upgrade ke versi fansub.
     import hashlib
-    cache_key = "sub|" + hashlib.sha1(
+    base_hash = hashlib.sha1(
         (url + "|" + (referer or "") + "|" + lang).encode("utf-8")
     ).hexdigest()
-    hit = await get_subtitle_cache(cache_key)
+    llm_on = await _llm_enabled()
+    key_llm = "sub2|llm|" + base_hash
+    key_mt = "sub2|mt|" + base_hash
+    hit = await get_subtitle_cache(key_llm)
+    hit_tier = "cached"
+    if hit is None and not llm_on:
+        hit = await get_subtitle_cache(key_mt, ttl=7 * 24 * 3600)
+        hit_tier = "cached-mt"
     if hit is not None:
         try:
             from api.translate import log_translate
-            log_translate(f"Cache HIT subtitle [{lang}]: dimuat instan dari database lokal")
+            log_translate(f"Cache HIT subtitle [{lang}] ({hit_tier}): dimuat instan dari database lokal")
         except Exception:
             pass
         resp = Response(content=hit, media_type="text/vtt")
-        resp.headers["X-Translate-Tier"] = "cached"
+        resp.headers["X-Translate-Tier"] = hit_tier
         return resp
-    # Fetch source subtitle.
+
+    # Dedup in-flight: request ganda (ganti track / reload) menunggu job yang sama.
+    job_key = base_hash + ("|llm" if llm_on else "|mt")
+    fut = _SUB_INFLIGHT.get(job_key)
+    if fut is None:
+        fut = asyncio.ensure_future(_translate_sub_job(url, referer, src, lang, key_llm, key_mt, _fetch_sub_text))
+        _SUB_INFLIGHT[job_key] = fut
+        fut.add_done_callback(lambda _f, k=job_key: _SUB_INFLIGHT.pop(k, None))
     try:
-        text = await _fetch_sub_text(url, referer)
+        new_text, tier = await asyncio.shield(fut)
+    except HTTPException:
+        raise
+    resp = Response(content=new_text, media_type="text/vtt")
+    resp.headers["X-Translate-Tier"] = tier.get("level", "source")
+    if tier.get("model"):
+        resp.headers["X-Translate-Model"] = re.sub(r"[^\w.:/\-]", "", str(tier["model"]))[:60]
+    if tier.get("gtx_lines"):
+        resp.headers["X-Translate-Mixed"] = f'{tier.get("gtx_lines")}/{tier.get("total", 0)}'
+    if tier.get("error"):
+        # Bersihkan newline & non-latin1 dari header agar valid HTTP header
+        clean_err = re.sub(r"[\r\n]+", " ", str(tier["error"])).strip()
+        resp.headers["X-Translate-Error"] = clean_err.encode("latin-1", "replace").decode("latin-1")[:200]
+    return resp
+
+
+_SUB_INFLIGHT = {}
+
+
+async def _llm_enabled():
+    """Tier 1 aktif kalau ada API key, atau endpoint LLM lokal (Ollama di localhost)."""
+    from api.translate import is_local_llm
+    apikey = await get_setting("translate_apikey", "")
+    apiurl = await get_setting("translate_apiurl", "")
+    return bool(apikey) or is_local_llm(apiurl)
+
+
+async def _translate_sub_job(url, referer, src, lang, key_llm, key_mt, fetcher):
+    """Fetch + translate + cache. Return (vtt_text, tier_dict)."""
+    try:
+        text = await fetcher(url, referer)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"gagal mengambil subtitle: {e}")
-    # Multi-tier translate.
     try:
-        from api.translate import parse_vtt, build_vtt, call_openai_translate, call_mymemory_translate
+        from api.translate import parse_vtt, build_vtt
         cues = parse_vtt(text)
         if not cues:
-            resp = Response(content=text, media_type="text/vtt")
-            resp.headers["X-Translate-Tier"] = "source"
-            resp.headers["X-Translate-Error"] = "Subtitle kosong atau format tidak didukung"
-            return resp
+            return text, {"level": "source", "error": "Subtitle kosong atau format tidak didukung"}
         tier = await _translate_with_fallback(cues, src, lang)
         new_text = build_vtt(tier["cues"])
     except Exception as e:
-        new_text = text
-        tier = {"cues": None, "level": "source", "error": str(e)}
-    # Cache hasil jika berhasil diterjemahkan (tier1, tier2, tier3).
-    # Jangan cache jika jatuh ke source fallback agar user bisa retry saat set apikey.
-    if tier.get("level") in ("tier1", "tier2", "tier3"):
-        await set_subtitle_cache(cache_key, new_text)
-    resp = Response(content=new_text, media_type="text/vtt")
-    resp.headers["X-Translate-Tier"] = tier.get("level", "source")
-    if tier.get("error"):
-        # Bersihkan newline dari header agar valid HTTP header
-        clean_err = re.sub(r"[\r\n]+", " ", str(tier["error"])).strip()
-        resp.headers["X-Translate-Error"] = clean_err[:200]
-    return resp
+        return text, {"cues": None, "level": "source", "error": str(e)}
+    # Cache: hasil AI (>= 80% baris dari LLM) -> slot "llm" 30 hari. Hasil mesin / hybrid
+    # dominan GTX -> slot "mt" 7 hari (di-upgrade otomatis saat LLM tersedia).
+    # Jangan cache source fallback agar user bisa retry.
+    lvl = tier.get("level")
+    if lvl == "tier1":
+        total = max(1, tier.get("total") or len(cues))
+        if tier.get("llm_lines", 0) / total >= 0.8:
+            await set_subtitle_cache(key_llm, new_text)
+        else:
+            await set_subtitle_cache(key_mt, new_text)
+    elif lvl in ("tier2", "tier3"):
+        await set_subtitle_cache(key_mt, new_text)
+    return new_text, tier
 
 
 async def _translate_with_fallback(cues, src, tgt):
     """Multi-tier translate:
-    Tier 1 (Jika API Key disetel): AI LLM (Groq / Ollama Cloud / Gemini / OpenAI)
+    Tier 1 (API key / LLM lokal): AI Fansub LLM (Ollama Cloud / Gemini / Groq / OpenRouter / OpenAI)
+            — hybrid: baris yang gagal diisi GTX.
     Tier 2 (Default / Fallback): Google GTX Web RPC (HTML-Preserved, Unmetered, Zero-Key)
     Tier 3: MyMemory Public REST (Cadangan cloud gratis)
     Tier 4: Source original fallback (Safety net, tanpa crash)
-    Return {"cues": [...], "level": "tier1|tier2|tier3|source", "error": "..."}."""
+    Return {"cues": [...], "level": "tier1|tier2|tier3|source", "error": "...", ...stats}."""
     from api.translate import call_openai_translate, call_gtx_translate, call_mymemory_translate, estimate_chars
     import datetime as _dt
     last_err = ""
 
-    # Tier 1: AI LLM (OpenAI / Groq / Ollama Cloud / Gemini) jika API key disetel
-    apikey = await get_setting("translate_apikey", "")
-    if apikey:
-        model = await get_setting("translate_model", "gpt-oss-20b")
-        apiurl = await get_setting("translate_apiurl", "https://api.groq.com/openai/v1")
+    # Tier 1: AI Fansub LLM
+    if await _llm_enabled():
+        apikey = await get_setting("translate_apikey", "")
+        model = await get_setting("translate_model", "")
+        apiurl = await get_setting("translate_apiurl", "https://generativelanguage.googleapis.com/v1beta/openai")
         try:
-            translated = await call_openai_translate(cues, src, tgt, apikey, model, apiurl)
-            return {"cues": translated, "level": "tier1", "error": ""}
+            translated, stats = await call_openai_translate(cues, src, tgt, apikey, model, apiurl)
+            return {"cues": translated, "level": "tier1", **stats}
         except Exception as e:
             last_err = f"Tier 1 (AI LLM) error: {e}"
             print(f"[TRANSLATE TIER 1 ERROR] {e}")
@@ -716,7 +761,7 @@ async def _translate_with_fallback(cues, src, tgt):
     # Tier 2: Google GTX Web RPC (HTML-Preserved, Zero-Key, Unmetered)
     try:
         translated = await call_gtx_translate(cues, src, tgt)
-        return {"cues": translated, "level": "tier2", "error": ""}
+        return {"cues": translated, "level": "tier2", "error": last_err}
     except Exception as e:
         if not last_err:
             last_err = f"Tier 2 (Google GTX) error: {e}"
@@ -731,7 +776,7 @@ async def _translate_with_fallback(cues, src, tgt):
         try:
             translated = await call_mymemory_translate(cues, src, tgt)
             await add_today_char_count(day, needed)
-            return {"cues": translated, "level": "tier3", "error": ""}
+            return {"cues": translated, "level": "tier3", "error": last_err}
         except Exception as e:
             if not last_err:
                 last_err = f"MyMemory error: {e}"

@@ -26,13 +26,12 @@ TROUBLESHOOTING:
 - Jika ingin melihat log server atau jika Tatap.exe tidak merespons, jalankan "run-console.bat".
 - Seluruh aplikasi ini 100% portable: Anda dapat memindahkan folder ini ke flashdisk/drive lain tanpa perlu install ulang.
 
-SUBTITLE INDONESIA (AI TRANSLATE):
-- Subtitle Indonesia tersedia via translate AI otomatis dari track English.
-- Aktifkan toggle 🌐 ID di player foot bar (sebelah tombol ukuran S/M/L).
-- Pilih "Indonesian (AI)" di dropdown subtitle → backend translate otomatis.
-- API key gratis diperlukan untuk terjemahan berkualitas tinggi:
-  - Daftar gratis di console.groq.com (Groq) atau platform.openai.com.
-  - Di terminal Tatap (ketik judul), masukkan: :apikey gsk_... (Groq) atau :apikey sk-... (OpenAI).
-  - Apikey otomatis terdeteksi: Groq → apiurl & model otomatis, OpenAI → auto-set juga.
-  - Lihat status: :apikey | Hapus: :apikey clear | Ganti model: :model llama-3.3-70b-versatile
-  - Fallback gratis: MyMemory (5000 char/hari per IP) jika belum set API key.
+SUBTITLE INDONESIA (AI FANSUB — BYOK):
+- Subtitle Indonesia tersedia via translate AI otomatis dari track English (gaya fansub santai).
+- Aktifkan toggle 🌐 ID di player foot bar atau pilih "Indonesian (AI)" di dropdown subtitle.
+- Pasang API key Ollama Cloud gratis milikmu:
+  - Di terminal Tatap (kotak input pencarian), ketik: :ollama <api_key_kamu>
+  - Tatap otomatis mengatur provider ke Ollama Cloud dan model gpt-oss:20b (cadangan: gpt-oss:120b).
+- Perintah terminal:
+  - Cek status: :apikey | Hapus key: :apikey clear | Ganti model: :model gpt-oss:20b
+- Tanpa API Key? Google GTX (Zero-Key) otomatis aktif sebagai fallback gratis.

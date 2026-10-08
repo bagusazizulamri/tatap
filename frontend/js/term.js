@@ -370,7 +370,7 @@ var Tui = (function () {
       log("apiurl : "+(d.translate_apiurl||"(default)"),"ok");
       if(!d.translate_apikey){
         log("Belum ada API key AI. Preset otomatis yang didukung:", "err");
-        log("  • Ollama Cloud : :apikey ollama_... (model: gpt-oss:20b-cloud)", "dim");
+        log("  • Ollama Cloud : :apikey <key>     (gratis, model: gpt-oss:20b)", "dim");
         log("  • Groq (Gratis) : :apikey gsk_...    (model: llama-3.3-70b-versatile)", "dim");
         log("  • Google AI     : :apikey AQ...      (model: gemini-3.1-flash-lite)", "dim");
         log("  • OpenAI        : :apikey sk-...      (model: gpt-4o-mini)", "dim");
@@ -400,7 +400,7 @@ var Tui = (function () {
       if(isOllamaKey){
         payload.translate_apiurl = "https://ollama.com/v1";
         payload.translate_model = "gpt-oss:20b";
-        extra = " (auto: apiurl=Ollama Cloud, model=gpt-oss:20b)";
+        extra = " (auto: apiurl=Ollama Cloud, model=gpt-oss:20b, cadangan gpt-oss:120b)";
       }else if(cmd === "gemini" || args.indexOf("AQ.") === 0 || args.indexOf("AIza") === 0 || args.indexOf("AQ") === 0){
         // Google Gemini key (Google AI Studio: AQ. baru / AIza legacy) -> auto-set apiurl + model Gemini Flash Lite.
         payload.translate_apiurl = "https://generativelanguage.googleapis.com/v1beta/openai";
