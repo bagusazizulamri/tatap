@@ -259,7 +259,7 @@ Aturan Nada Bahasa Sesuai Konteks Adegan:
 
 2. Adegan Santai / Sehari-hari / Komedi / Sekolah:
    - Situasi: Percakapan teman sebaya, keluarga, interaksi di kedai, komedi/romansa.
-   - Kata ganti: "aku/kamu" (default).
+   - KONSISTENSI PERSONA SEKOLAH: Di lingkungan sekolah antar sesama murid/teman, WAJIB KONSISTEN memakai "aku/kamu" (atau "gue/lo"). DILARANG mencampur kata "saya/Anda" di tengah obrolan santai anak sekolah! (Contoh SALAH: "dia di kelas saya" -> BENAR: "dia di kelasku").
    - Nada bicara: Bahasa lisan santai fansub ("nggak", "udah", "aja", "banget", "kok", "sih", "deh", "kan", "nih", "lho", "gimana", "kenapa", "kayak", "emang", "beneran", "dengerin", "liat").
    - Panggilan pihak ketiga: "cowok itu", "cewek itu", "dia" (JANGAN gunakan "lelaki itu", "wanita itu", "gadis tersebut").
 
@@ -307,6 +307,11 @@ Kosakata Game, Isekai & Job System:
   * "Novice" -> "Pemula" / "Novice"
 
 Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
+- "Aiming high" -> "Incaranmu tinggi juga" / "Seleramu tinggi juga" / "Pasang target tinggi" (JANGAN: "Banjir tinggi").
+- "If you ask me" -> "Kalau menurutku sih" / "Menurutku" (JANGAN: "Kalau dengerin saya").
+- "Hotties / Cuties" -> "Cewek-cewek cakep / cewek-cewek manis" (JANGAN: "Koleksi hot").
+- "It goes without saying" -> "Nggak usah ditanya lagi" / "Sudah jelas" (JANGAN: "Gak usah dikira").
+- "High school debut" -> "Awal baru di SMA" / "Mulai masa SMA" (JANGAN: "Debut SMA saya").
 - "I see" / "I get it" -> "Begitu rupanya" / "Ooh, begitu ya" / "Paham" (JANGAN: "Aku melihat").
 - "Hold on" / "Wait" -> "Tunggu sebentar!" / "Tunggu dulu!" (JANGAN: "Bertahanlah").
 - "Shut up" -> "Diem!" / "Berisik!" / "Diam!" (JANGAN: "Tutup mulutmu").
@@ -316,6 +321,14 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "Never mind" -> "Lupakan saja" / "Bukan apa-apa" / "Nggak jadi".
 - "Get lost" -> "Pergi sana!" / "Enyah!".
 - "Bring it on!" -> "Sini maju kalau berani!" / "Ayo lawan!".
+- "Give me a break" -> "Yang bener aja!" / "Jangan bercanda!".
+- "Make a move" -> "Mendekati dia" / "Mengambil tindakan".
+- "Cut it out" -> "Sudahlah!" / "Hentikan!".
+- "For real?" -> "Beneran?" / "Serius?".
+- "No big deal" -> "Bukan masalah besar" / "Nggak apa-apa kok".
+- DILARANG MEMBIARKAN KATA SIFAT INGGRIS TANPA TERJEMAHAN:
+  * "Embarrassing" -> "Memalukan" / "Bikin malu" (DILARANG: "sangat embarrassing").
+  * "Gross" -> "Jijik" / "Menjijikkan".
 - Pertahankan nama orang, tempat, honorifik Jepang (-san, -kun, -chan, -sama, Senpai, Sensei), gagap & interjeksi emosi ("A-Apa?!", "Tch", "Hmph").
 - Pertahankan token <br> untuk ganti baris dalam 1 cue.
 
@@ -326,12 +339,12 @@ Format Keluaran (WAJIB):
 Contoh Multi-Scene:
 Input:
 1|Your Majesty, the vanguard knights are ready. We shall not fail your trust.
-2|My class is Beast Tamer. Let us form a party and take on this rank-A mission!
-3|Hey, are you alright? Don't worry, it's nothing to stress over!
+2|Great collection of hotties, huh? Aiming high, aren't you? Nibutani, huh?
+3|Pretty sweet, if you ask me. It goes without saying, it was so embarrassing!
 Output:
 1|Yang Mulia, pasukan ksatria garis depan telah bersiap. Kami tidak akan mengecewakan kepercayaan Anda.
-2|Kelasku Penjinak Monster. Ayo bentuk kelompok dan ambil misi peringkat A ini!
-3|Hei, kamu nggak apa-apa? Tenang aja, bukan masalah besar kok!"""
+2|Cewek-cewek cakepnya mantap, kan? Incaranmu tinggi juga ya? Nibutani, kan?
+3|Kalau menurutku sih cakep banget. Nggak usah ditanya lagi, itu memalukan banget!"""
 
 _FANSUB_PROMPT_GENERIC = """You are an experienced anime fansub translator. Translate {src} subtitles into natural, casual, spoken {tgt} as a popular fansub release would — not stiff, literal machine translation.
 - Translate meaning and emotion, not word-for-word; keep lines short and readable.
@@ -389,10 +402,18 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bbawalah itu\b", "sini maju"),
     (r"\bpenjara bawah tanah\b", "dungeon"),
     (r"\bserikat petualang\b", "guild petualang"),
+    (r"\bbanjir tinggi\b", "incaranmu tinggi juga"),
+    (r"\bsangat embarrassing\b", "memalukan banget"),
+    (r"\bembarrassing\b", "memalukan"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
 _CASUAL_FANSUB_RULES = [
+    (r"\bkoleksi hotnya\b", "cewek-cewek cakepnya"),
+    (r"\bkoleksi hot\b", "cewek-cewek cakep"),
+    (r"\bkalau dengerin saya\b", "kalau menurutku sih"),
+    (r"\bkalau dengerin aku\b", "kalau menurutku sih"),
+    (r"\bgak usah dikira\b", "nggak usah ditanya lagi"),
     (r"\btidak apa-apa\b", "nggak apa-apa"),
     (r"\btak apa-apa\b", "nggak apa-apa"),
     (r"\btak apa\b", "nggak apa-apa"),
