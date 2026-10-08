@@ -337,6 +337,17 @@ Kosakata Supranatural & Cerita Hantu Sekolah (Supernatural / School Ghost Storie
 - "Pull yourself together!" -> "Kuatkan dirimu! / Tenangkan dirimu! / Sadarlah!" (JANGAN: "Kumpulin diri!").
 - "Echoing" (in empty hallway) -> "Bergema" (JANGAN: "Yang gema").
 
+Kosakata Misteri Sekolah & Klub Sastra (School Mystery / Club Anime - e.g. Hyouka):
+- "Classic Lit Club / Classic Literature Club" -> "Klub Sastra Klasik" (JANGAN biarkan "Classic Lit").
+- "Pay my respects" (kunjungan ke klub/salam kenal) -> "Memberi salam / menyapa" (JANGAN diartikan "ngelamun").
+- "Energy conservation / energy-conserving / energy saver" -> "Hemat energi / menghemat energi"
+- "Energy-consuming" -> "Boros energi / menghabiskan banyak energi" (JANGAN tertukar jadi "hemat energi").
+- "I'm curious! / I am curious" -> "Aku penasaran! / Aku penasaran sekali!"
+- "A database cannot draw conclusions" -> "Database tidak bisa menarik kesimpulan"
+- "Peeping Tom" -> "Tukang intip / pengintip"
+- "After-school rendezvous" -> "Pertemuan sepulang sekolah / kencan sepulang sekolah"
+- Karakter perempuan anggun/sopan (seperti Chitanda): Wajib bertutur kata sopan ("aku/kamu", santun), JANGAN gunakan "gue/lo".
+
 Kosakata Anime Olahraga (Sports Anime):
 - "Match" -> "Pertandingan" (JANGAN biarkan "match" jika mengacu ke permainan).
 - "View" -> "Pemandangan" (JANGAN biarkan "view").
@@ -596,6 +607,11 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bwarga harta karun\b", "warga kehormatan"),
     (r"\bcheckmate\b", "skakmat"),
     (r"\bCheckmate\b", "Skakmat"),
+    (r"\bklub classic lit\b", "Klub Sastra Klasik"),
+    (r"\bKlub Classic Lit\b", "Klub Sastra Klasik"),
+    (r"\bdatang buat ngelamun\b", "datang untuk memberi salam"),
+    (r"\bpeeping tom\b", "tukang intip"),
+    (r"\bPeeping Tom\b", "tukang intip"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).

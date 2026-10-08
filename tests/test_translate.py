@@ -147,6 +147,9 @@ def test_sanitize_fansub_id():
     raw19 = "Siapa yang memegang tali di balik sel ini? Dia pikir seorang warga harta karun akan menari tepat ke perangkap musuh?!"
     assert T._sanitize_fansub_id(raw19) == "Siapa yang mengendalikan semuanya di balik sel ini? Dia pikir seorang warga kehormatan akan masuk tepat ke perangkap musuh?!"
 
+    raw20 = "Aku gabung ke Klub Classic Lit, jadi datang buat ngelamun. Jangan jadi peeping tom di sini!"
+    assert T._sanitize_fansub_id(raw20) == "Aku gabung ke Klub Sastra Klasik, jadi datang untuk memberi salam. Jangan jadi tukang intip di sini!"
+
     # 2. Formal / Kerajaan / Militer (Harus mempertahankan kata baku & sopan)
     raw_formal1 = "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
     assert T._sanitize_fansub_id(raw_formal1) == "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
