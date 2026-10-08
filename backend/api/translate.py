@@ -415,6 +415,7 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bmata pertama\b", "pandangan pertama"),
     (r"\bngeplug\b", "menutup"),
     (r"\bngegoblok\b", "bertingkah konyol"),
+    (r"\bkelewatan satu sama lain\b", "berpapasan"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
@@ -424,6 +425,9 @@ _CASUAL_FANSUB_RULES = [
     (r"\bkalau dengerin saya\b", "kalau menurutku sih"),
     (r"\bkalau dengerin aku\b", "kalau menurutku sih"),
     (r"\bgak usah dikira\b", "nggak usah ditanya lagi"),
+    (r"\bbertahanlah\b", "tunggu sebentar"),
+    (r"\baku melihat\b", "begitu rupanya"),
+    (r"\bkulihat\b", "begitu rupanya"),
     (r"\btidak apa-apa\b", "nggak apa-apa"),
     (r"\btak apa-apa\b", "nggak apa-apa"),
     (r"\btak apa\b", "nggak apa-apa"),
