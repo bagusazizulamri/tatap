@@ -329,6 +329,12 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "How long was I out?" / "pass out / knock out" -> "Berapa lama aku pingsan / tak sadarkan diri?" (JANGAN: "Berapa lama aku keluar").
 - "Make a fortune" -> "Kaya mendadak / untung besar / dapet banyak uang" (JANGAN: "Ngasih duit jahat").
 - "At this rate" -> "Kalau begini terus / kalau kayak gini terus" (JANGAN: "Dengan kecepatan kayak gini").
+- "Roger that / Copy that" -> "Dimengerti / Siap / Terima" (JANGAN: "Sanggah").
+- "Optical decoy" -> "Umpan optik / ilusi optik" (JANGAN: "Penipu optik").
+- "Paint the coordinates" -> "Tandai / kunci koordinatnya" (JANGAN: "Cat koordinat").
+- "Wipe [them] off the map" -> "Ratakan [mereka] dengan tanah / lenyapkan mereka" (JANGAN: "Hapus mereka dari peta").
+- "Corporal" -> "Kopral" (JANGAN: "Korpul").
+- "Pillbox" (military bunker) -> "Bunker / pos perlindungan" (JANGAN: "Kotak obat").
 - "On a royal tear / on a tear / on a rampage" -> "Mengamuk hebat / bikin onar tak terkendali" (JANGAN: "Kemarahan kerajaan").
 - "Harm [someone] / do harm" -> "Melukai / menyakiti [seseorang]" (JANGAN: "Ngelakuin luka").
 - "Eliminate [an opponent in battle]" -> "Menghabisi / melenyapkan" (JANGAN: "Menghapus Anda").
@@ -415,7 +421,8 @@ def _restore_line(text: str) -> str:
 
 _FORMAL_INDICATORS_RE = _re.compile(
     r"\b(paduka|yang mulia|baginda|hamba|tuan putri|pangeran|yang terhormat|jenderal|komandan|"
-    r"nona besar|tuan muda|tuanku|saya mohon)\b",
+    r"nona besar|tuan muda|tuanku|saya mohon|letnan|kapten|mayor|kolonel|sersan|kopral|markas besar|"
+    r"kekaisaran|pasukan|prajurit|panglima|inspektur)\b",
     _re.I
 )
 
@@ -466,6 +473,10 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bngelakuin luka\b", "melukai"),
     (r"\bmenghapus anda\b", "menghabisi Anda"),
     (r"\bmenghapus kamu\b", "menghabisi kamu"),
+    (r"\bpenipu optik\b", "umpan optik"),
+    (r"\bkorpul\b", "kopral"),
+    (r"\bsanggah, ma'am\b", "siap, Ma'am"),
+    (r"\bsanggah, sir\b", "siap, Sir"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
