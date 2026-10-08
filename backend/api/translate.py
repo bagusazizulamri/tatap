@@ -312,6 +312,11 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "Hotties / Cuties" -> "Cewek-cewek cakep / cewek-cewek manis" (JANGAN: "Koleksi hot").
 - "It goes without saying" -> "Nggak usah ditanya lagi" / "Sudah jelas" (JANGAN: "Gak usah dikira").
 - "High school debut" -> "Awal baru di SMA" / "Mulai masa SMA" (JANGAN: "Debut SMA saya").
+- "Plug the hole / plug" -> "Menutup lubang / menyumbat" (JANGAN: "Ngeplug").
+- "Clowning around / acting stupid" -> "Bercanda / main-main / konyol" (JANGAN gunakan kata terlalu kasar/aneh seperti "ngegoblok").
+- "Forbidden / restricted area" -> "Dilarang masuk / area terlarang" (JANGAN: "Diharamkan masuk").
+- "At first sight / glance" -> "Pandangan pertama / saat pertama kali bertemu" (JANGAN: "Mata pertama").
+- "Miss each other / pass by" -> "Berpapasan / saling melewatkan" (JANGAN: "Kelewatan satu sama lain").
 - "I see" / "I get it" -> "Begitu rupanya" / "Ooh, begitu ya" / "Paham" (JANGAN: "Aku melihat").
 - "Hold on" / "Wait" -> "Tunggu sebentar!" / "Tunggu dulu!" (JANGAN: "Bertahanlah").
 - "Shut up" -> "Diem!" / "Berisik!" / "Diam!" (JANGAN: "Tutup mulutmu").
@@ -405,6 +410,11 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bbanjir tinggi\b", "incaranmu tinggi juga"),
     (r"\bsangat embarrassing\b", "memalukan banget"),
     (r"\bembarrassing\b", "memalukan"),
+    (r"\bdiharamkan masuk\b", "dilarang masuk"),
+    (r"\bdi mata pertama\b", "pada pandangan pertama"),
+    (r"\bmata pertama\b", "pandangan pertama"),
+    (r"\bngeplug\b", "menutup"),
+    (r"\bngegoblok\b", "bertingkah konyol"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).

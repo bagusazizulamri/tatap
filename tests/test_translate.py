@@ -101,9 +101,12 @@ def test_sanitize_fansub_id():
     raw4 = "Mengapa kamu tidak mau makan? Tenang saja, tidak apa-apa."
     assert T._sanitize_fansub_id(raw4) == "Kenapa kamu nggak mau makan? Tenang aja, nggak apa-apa."
 
-    # Idiom & Diksi aneh (Chuunibyou Ep 1 calque fixes)
+    # Idiom & Diksi aneh (Chuunibyou Ep 1 calque fixes & awkward slang)
     raw5 = "Banjir tinggi, ya? Kalau dengerin saya, koleksi hotnya sangat embarrassing."
     assert T._sanitize_fansub_id(raw5) == "Incaranmu tinggi juga, ya? Kalau menurutku sih, cewek-cewek cakepnya memalukan banget."
+
+    raw6 = "Area ini diharamkan masuk! Mereka mau ngeplug lubang itu di mata pertama."
+    assert T._sanitize_fansub_id(raw6) == "Area ini dilarang masuk! Mereka mau menutup lubang itu pada pandangan pertama."
 
     # 2. Formal / Kerajaan / Militer (Harus mempertahankan kata baku & sopan)
     raw_formal1 = "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
