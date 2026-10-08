@@ -141,6 +141,12 @@ def test_sanitize_fansub_id():
     raw17 = "Jangan jadi kucing takut, Keiichiro. Kumpulin diri! Buku ini bilang cara ngendang roh jahat supaya tidur dan tutup banyak hantu."
     assert T._sanitize_fansub_id(raw17) == "Jangan jadi penakut, Keiichiro. Kuatkan dirimu! Buku ini bilang cara menenangkan roh jahat dan menyegel banyak hantu."
 
+    raw18 = "Semua unit, segera keluar! Ambil tindakan menghindar sebelum terkena pukulan langsung! Tembak sesuai keinginan! Semua bersorak Britannia!"
+    assert T._sanitize_fansub_id(raw18) == "Semua unit, segera meluncur! Lakukan manuver menghindar sebelum terkena tembakan langsung! Bebas tembak! Hidup Britannia!"
+
+    raw19 = "Siapa yang memegang tali di balik sel ini? Dia pikir seorang warga harta karun akan menari tepat ke perangkap musuh?!"
+    assert T._sanitize_fansub_id(raw19) == "Siapa yang mengendalikan semuanya di balik sel ini? Dia pikir seorang warga kehormatan akan masuk tepat ke perangkap musuh?!"
+
     # 2. Formal / Kerajaan / Militer (Harus mempertahankan kata baku & sopan)
     raw_formal1 = "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
     assert T._sanitize_fansub_id(raw_formal1) == "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."

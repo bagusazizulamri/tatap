@@ -304,8 +304,25 @@ Kosakata Game, Isekai & Job System:
   * "Alchemist" -> "Alkemis"
   * "Hero" -> "Pahlawan"
   * "Demon Lord" -> "Raja Iblis"
-  * "Demon Lord" -> "Raja Iblis"
   * "Novice" -> "Pemula" / "Novice"
+
+Kosakata Mecha & Pertempuran Robot / Taktis Militer (Mecha & Tactical Sci-Fi):
+- "All units, sortie! / Sortie immediately!" -> "Semua unit, segera meluncur / berangkat bertempur / bersiap berangkat!" (JANGAN: "segera keluar").
+- "Target locked on / lock-on" -> "Target terkunci!"
+- "Take evasive action!" -> "Lakukan manuver menghindar! / Menghindar!" (JANGAN: "Ambil tindakan menghindar").
+- "Direct hit / took a direct hit" -> "Kena telak! / Terkena tembakan langsung!" (JANGAN: "Pukulan langsung").
+- "Emergency ejection system / eject!" -> "Sistem ejeksi darurat / lontarkan diri!" (JANGAN: "Sistem peluncuran darurat").
+- "Energy filler / energy pack" -> "Energy filler / paket energi / cadangan energi" (JANGAN: "Penampung energi").
+- "Fire at will!" -> "Bebas tembak! / Tembak sesuka hati!" (JANGAN: "Tembak sesuai keinginan").
+- "All hail [Empire/Britannia]!" -> "Hidup [Britannia]! / Jayalah [Britannia]!" (JANGAN: "Semua bersorak").
+- "Checkmate" -> "Skakmat" (JANGAN biarkan "Checkmate" jika teks dialog fansub).
+- "Caught in the crossfire" -> "Terjebak dalam baku tembak / terkena baku tembak" (JANGAN: "Tertangkap dalam tembakan silang").
+- "Surrender unconditionally" -> "Menyerahlah tanpa syarat!" (JANGAN: "Tundukkan tanpa syarat").
+- "In the belly of the beast" -> "Di sarang musuh / di mulut singa" (JANGAN harfiah: "Di perut binatang").
+- "Dance right into my trap" -> "Masuk tepat ke dalam jebakanku / masuk ke perangkapku" (JANGAN: "Menari ke jebakan").
+- "Pulling the strings / who is pulling the strings?" -> "Mengendalikan semuanya / siapa dalang di balik semua ini?" (JANGAN: "memegang tali").
+- "Honorary citizen" -> "Warga kehormatan" (JANGAN: "warga harta karun").
+- "Ceasefire / cease fire!" -> "Gencatan senjata! / Hentikan tembakan!"
 
 Kosakata Supranatural & Cerita Hantu Sekolah (Supernatural / School Ghost Stories):
 - "Old school building / old schoolhouse" -> "Gedung sekolah lama / gedung sekolah tua"
@@ -559,6 +576,26 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bkucing takut\b", "penakut"),
     (r"\bkumpulin diri\b", "kuatkan dirimu"),
     (r"\byang gema di lorong\b", "yang bergema di lorong"),
+    (r"\bsemua unit, segera keluar\b", "semua unit, segera meluncur"),
+    (r"\bsegera keluar bertempur\b", "segera meluncur"),
+    (r"\bambil tindakan menghindar\b", "lakukan manuver menghindar"),
+    (r"\bterkena pukulan langsung\b", "terkena tembakan langsung"),
+    (r"\bpukulan langsung ke\b", "tembakan telak ke"),
+    (r"\bsistem peluncuran darurat\b", "sistem ejeksi darurat"),
+    (r"\btembak sesuai keinginan\b", "bebas tembak"),
+    (r"\bsemua bersorak britannia\b", "hidup Britannia"),
+    (r"\btertangkap dalam tembakan silang\b", "terjebak dalam baku tembak"),
+    (r"\btundukkan tanpa syarat\b", "menyerahlah tanpa syarat"),
+    (r"\bdi perut binatang\b", "di sarang musuh"),
+    (r"\bmenari langsung ke jebakan\b", "masuk langsung ke jebakan"),
+    (r"\bmenari tepat ke perangkap\b", "masuk tepat ke perangkap"),
+    (r"\bmenari ke perangkap\b", "masuk ke perangkap"),
+    (r"\bmenari tepat ke jebakan\b", "masuk tepat ke jebakan"),
+    (r"\bmenari ke jebakan\b", "masuk ke jebakan"),
+    (r"\bmemegang tali\b", "mengendalikan semuanya"),
+    (r"\bwarga harta karun\b", "warga kehormatan"),
+    (r"\bcheckmate\b", "skakmat"),
+    (r"\bCheckmate\b", "Skakmat"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
