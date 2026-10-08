@@ -347,6 +347,12 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "I will see you executed" -> "Aku akan memastikanmu dieksekusi" (JANGAN: "Aku akan melihatmu dieksekusi").
 - "Righteous people" -> "Orang-orang saleh / orang-orang jujur" (JANGAN: "Orang-orang yang benar").
 - "Heart failure / heart attack" -> "Serangan jantung" (JANGAN: "Gagal jantung" jika konteks death note serangan mendadak).
+- "Morgue" -> "Kamar jenazah / kamar mayat" (JANGAN biarkan "morgue").
+- "My poor [someone] / other half" -> "[Seseorang]ku yang malang / belahan jiwaku yang malang" (JANGAN: "yang miskin").
+- "Hate being questioned" -> "Benci ditanya-tanya / tidak suka diinterogasi" (JANGAN: "Susah dipengetan").
+- "Don't say that out loud" -> "Jangan katakan itu keras-keras / jangan bicara sembarangan" (JANGAN: "Jangan bilang di luar").
+- "Second basement level / B2" -> "Lantai bawah tanah kedua / lantai B2" (JANGAN: "Lantai bawah dua").
+- "Ghosting someone / act like someone doesn't exist" -> "Mengabaikan / menganggapnya tak kasat mata" (JANGAN biarkan "ghosting").
 - "On a royal tear / on a tear / on a rampage" -> "Mengamuk hebat / bikin onar tak terkendali" (JANGAN: "Kemarahan kerajaan").
 - "Harm [someone] / do harm" -> "Melukai / menyakiti [seseorang]" (JANGAN: "Ngelakuin luka").
 - "Eliminate [an opponent in battle]" -> "Menghabisi / melenyapkan" (JANGAN: "Menghapus Anda").
@@ -501,6 +507,9 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bsatu-satunya jahat yang tersisa\b", "satu-satunya penjahat yang tersisa"),
     (r"\bsatu-satunya jahat\b", "satu-satunya penjahat"),
     (r"\bmelihatmu dieksekusi\b", "memastikanmu dieksekusi"),
+    (r"\blantai bawah dua\b", "lantai bawah tanah kedua"),
+    (r"\bmorgue\b", "kamar jenazah"),
+    (r"\bjangan bilang itu di luar\b", "jangan katakan itu keras-keras"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
