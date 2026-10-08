@@ -334,7 +334,11 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "Solo player" -> "Pemain solo" (JANGAN: "Saya sendiri").
 - "Pry into" -> "Mencari tahu / ikut campur urusan" (JANGAN: "Nanya ke").
 - "Clowning around / acting stupid" -> "Bercanda / main-main / konyol" (JANGAN gunakan kata terlalu kasar/aneh seperti "ngegoblok").
-- "Forbidden / restricted area" -> "Dilarang masuk / area terlarang" (JANGAN: "Diharamkan masuk").
+- "Butt heads" -> "Berselisih / bentrok / bersitegang" (JANGAN: "Bertembung kepala").
+- "Rot in hell" -> "Persetan / mampus sana / pergi ke neraka" (JANGAN: "Berputus di neraka").
+- "There you go again!" -> "Mulai lagi, kan!" / "Kamu kumat lagi!" (JANGAN: "Kamu lagi!").
+- "Packed you a lunch / pack a lunch" -> "Membawakanmu bekal" (JANGAN: "Bungkus makan siang").
+- "Mongrel" (as anime insult) -> "Anjing kampung / hewan buduk" (JANGAN: "Anjing campuran").
 - "At first sight / glance" -> "Pandangan pertama / saat pertama kali bertemu" (JANGAN: "Mata pertama").
 - "Miss each other / pass by" -> "Berpapasan / saling melewatkan" (JANGAN: "Kelewatan satu sama lain").
 - "I see" / "I get it" -> "Begitu rupanya" / "Ooh, begitu ya" / "Paham" (JANGAN: "Aku melihat").
@@ -359,6 +363,7 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 
 Format Keluaran (WAJIB):
 - Satu baris per input, format persis "N|terjemahan" (N = nomor input yang sama).
+- DILARANG mengulang teks bahasa Inggris asal (JANGAN: "N|Teks Inggris|Terjemahan"). Cukup "N|terjemahan".
 - Jumlah & nomor baris harus sama persis dengan input. Tanpa penjelasan atau markdown.
 
 Contoh Multi-Scene:
@@ -448,6 +453,10 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\blihat\? katanya\b", "tuh, kan! Apa kubilang"),
     (r"\bkatanya\! kamu harus santai\b", "apa kubilang! Kamu harus santai"),
     (r"\bngomong balas\b", "membantah"),
+    (r"\bbertembung kepala\b", "berselisih"),
+    (r"\bbertembung\b", "bentrok"),
+    (r"\bberputus di neraka\b", "mampus di neraka"),
+    (r"\banjing campuran\b", "anjing buduk"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
@@ -545,7 +554,8 @@ _ID_LINE_RE = _re.compile(r"^\s*(?:\*\*)?(\d{1,4})(?:\*\*)?\s*[|｜]\s?(.*)$")
 
 
 def _parse_id_lines(content: str, valid_ids) -> dict:
-    """Parse respons "N|teks" -> {N: teks}. Abaikan reasoning, markdown, ID di luar batch."""
+    """Parse respons "N|teks" -> {N: teks}. Abaikan reasoning, markdown, ID di luar batch.
+    Jika model mengulang teks sumber (N|source|terjemahan), ambil bagian terakhir."""
     if not content:
         return {}
     text = _re.sub(r"<think>.*?</think>", "", content, flags=_re.S | _re.I)
@@ -557,6 +567,11 @@ def _parse_id_lines(content: str, valid_ids) -> dict:
             continue
         i = int(m.group(1))
         t = m.group(2).strip()
+        # Jika model mengulang teks input: "1|English text|Terjemahan Indonesia"
+        if "|" in t or "｜" in t:
+            subparts = [p.strip() for p in _re.split(r"[|｜]", t) if p.strip()]
+            if len(subparts) >= 2:
+                t = subparts[-1]
         if i in valid_ids and i not in out and t:
             out[i] = t
     return out

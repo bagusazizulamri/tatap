@@ -21,7 +21,7 @@ def test_prep_restore_roundtrip():
 
 
 def test_parse_id_lines_ignores_noise_and_out_of_range():
-    content = "<think>hmm</think>\n```\n1|Hei!\n**2**| Kamu ngapain?\n9|nyasar\nteks bebas\n3|\n```"
+    content = "<think>hmm</think>\n```\n1|Hello|Hei!\n**2**| Kamu ngapain?\n9|nyasar\nteks bebas\n3|\n```"
     got = T._parse_id_lines(content, {1, 2, 3})
     assert got == {1: "Hei!", 2: "Kamu ngapain?"}
 
@@ -113,6 +113,9 @@ def test_sanitize_fansub_id():
 
     raw8 = "Ini basis rahasia kita! Jangan ngomong balas ke orang tua! Lihat? Katanya!"
     assert T._sanitize_fansub_id(raw8) == "Ini markas rahasia kita! Jangan membantah ke orang tua! Tuh, kan! Apa kubilang!"
+
+    raw9 = "Kita bertembung kepala, dasar anjing campuran! Pergi dan berputus di neraka!"
+    assert T._sanitize_fansub_id(raw9) == "Kita berselisih, dasar anjing buduk! Pergi dan mampus di neraka!"
 
     # 2. Formal / Kerajaan / Militer (Harus mempertahankan kata baku & sopan)
     raw_formal1 = "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
