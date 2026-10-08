@@ -316,6 +316,12 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "How suspicious is that?" / "How suspicious!" -> "Mencurigakan banget, kan?" / "Mencurigakan sekali" (JANGAN: "Berapa curiga itu").
 - "How [adjective] / How [suspicious/cute/etc.]" -> "Betapa / Begitu / Banget / Sekali" (JANGAN diterjemahkan "Berapa [kata sifat]").
 - "How long was I out?" / "pass out / knock out" -> "Berapa lama aku pingsan / tak sadarkan diri?" (JANGAN: "Berapa lama aku keluar").
+- "Make a fortune" -> "Kaya mendadak / untung besar / dapet banyak uang" (JANGAN: "Ngasih duit jahat").
+- "At this rate" -> "Kalau begini terus / kalau kayak gini terus" (JANGAN: "Dengan kecepatan kayak gini").
+- "Face aside / [X] aside" -> "Terlepas dari wajahnya / kesampingkan soal wajahnya" (JANGAN: "Tinggalkan wajah").
+- "Sustain heavy damage / heavy casualties" -> "Mengalami kerugian/kerusakan besar" (JANGAN: "Menanggung kerusakan").
+- "Solo player" -> "Pemain solo" (JANGAN: "Saya sendiri").
+- "Pry into" -> "Mencari tahu / ikut campur urusan" (JANGAN: "Nanya ke").
 - "Clowning around / acting stupid" -> "Bercanda / main-main / konyol" (JANGAN gunakan kata terlalu kasar/aneh seperti "ngegoblok").
 - "Forbidden / restricted area" -> "Dilarang masuk / area terlarang" (JANGAN: "Diharamkan masuk").
 - "At first sight / glance" -> "Pandangan pertama / saat pertama kali bertemu" (JANGAN: "Mata pertama").
@@ -423,6 +429,10 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bberapa curiganya\b", "mencurigakan"),
     (r"\bberapa curiga\b", "mencurigakan"),
     (r"\bberapa lama aku keluar\b", "berapa lama aku pingsan"),
+    (r"\bduit jahat\b", "untung besar"),
+    (r"\buang jahat\b", "untung besar"),
+    (r"\bdengan kecepatan kayak gini\b", "kalau begini terus"),
+    (r"\btinggalkan wajah\b", "terlepas dari wajah"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
