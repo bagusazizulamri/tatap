@@ -324,6 +324,13 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "Secret base" -> "Markas rahasia" (JANGAN: "Basis rahasia").
 - "Cicadas" -> "Tonggeret / garengpung" (JANGAN: "Katak katak").
 - "Bug" (in nature context) -> "Serangga / kumbang" (JANGAN biarkan "bug" atau "kutu komputer").
+- "Like hell I would! / As if!" -> "Ogah banget! / Mana sudi!" (JANGAN: "Gak bakal, bro" kaku).
+- "There is no way / no way in hell" -> "Nggak mungkin banget / mana mungkin" (JANGAN: "Gak ada cara aku ngelakuin").
+- "Pervert" -> "Mesum / cowok mesum / cabul" (JANGAN biarkan "pervert").
+- "Defenseless" -> "Gampang tersingkap / nggak ada pertahanan" (JANGAN: "Gak aman").
+- "You guys tricked me!" -> "Kalian ngerjain aku, ya?!" (JANGAN: "Kalian ngapain ngapain!").
+- "The wind is troubled today..." -> "Sepertinya angin hari ini sedang resah..." (gaya puitis/dramatis).
+- "Hurry, let us make haste" -> "Ayo cepat, mari bergegas" (gaya puitis komedi).
 - "How suspicious is that?" / "How suspicious!" -> "Mencurigakan banget, kan?" / "Mencurigakan sekali" (JANGAN: "Berapa curiga itu").
 - "How [adjective] / How [suspicious/cute/etc.]" -> "Betapa / Begitu / Banget / Sekali" (JANGAN diterjemahkan "Berapa [kata sifat]").
 - "How long was I out?" / "pass out / knock out" -> "Berapa lama aku pingsan / tak sadarkan diri?" (JANGAN: "Berapa lama aku keluar").
@@ -477,6 +484,14 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bkorpul\b", "kopral"),
     (r"\bsanggah, ma'am\b", "siap, Ma'am"),
     (r"\bsanggah, sir\b", "siap, Sir"),
+    (r"\bkalian ngapain ngapain\b", "kalian ngerjain aku ya"),
+    (r"\bgak ada cara aku ngelakuin itu\b", "mana sudi aku ngelakuin itu"),
+    (r"\bgak ada cara aku ngelakuin\b", "mana sudi aku ngelakuin"),
+    (r"\bdasar kau pervert\b", "dasar mesum"),
+    (r"\bdasar kamu pervert\b", "dasar mesum"),
+    (r"\bkau pervert\b", "dasar mesum"),
+    (r"\bkamu pervert\b", "dasar mesum"),
+    (r"\bpervert\b", "mesum"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
