@@ -108,6 +108,9 @@ def test_sanitize_fansub_id():
     raw6 = "Area ini diharamkan masuk! Mereka mau ngeplug lubang itu di mata pertama."
     assert T._sanitize_fansub_id(raw6) == "Area ini dilarang masuk! Mereka mau menutup lubang itu pada pandangan pertama."
 
+    raw7 = "Berapa curiga itu? Berapa lama aku keluar?"
+    assert T._sanitize_fansub_id(raw7) == "Mencurigakan banget, kan? Berapa lama aku pingsan?"
+
     # 2. Formal / Kerajaan / Militer (Harus mempertahankan kata baku & sopan)
     raw_formal1 = "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
     assert T._sanitize_fansub_id(raw_formal1) == "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."

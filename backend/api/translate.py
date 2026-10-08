@@ -313,6 +313,9 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "It goes without saying" -> "Nggak usah ditanya lagi" / "Sudah jelas" (JANGAN: "Gak usah dikira").
 - "High school debut" -> "Awal baru di SMA" / "Mulai masa SMA" (JANGAN: "Debut SMA saya").
 - "Plug the hole / plug" -> "Menutup lubang / menyumbat" (JANGAN: "Ngeplug").
+- "How suspicious is that?" / "How suspicious!" -> "Mencurigakan banget, kan?" / "Mencurigakan sekali" (JANGAN: "Berapa curiga itu").
+- "How [adjective] / How [suspicious/cute/etc.]" -> "Betapa / Begitu / Banget / Sekali" (JANGAN diterjemahkan "Berapa [kata sifat]").
+- "How long was I out?" / "pass out / knock out" -> "Berapa lama aku pingsan / tak sadarkan diri?" (JANGAN: "Berapa lama aku keluar").
 - "Clowning around / acting stupid" -> "Bercanda / main-main / konyol" (JANGAN gunakan kata terlalu kasar/aneh seperti "ngegoblok").
 - "Forbidden / restricted area" -> "Dilarang masuk / area terlarang" (JANGAN: "Diharamkan masuk").
 - "At first sight / glance" -> "Pandangan pertama / saat pertama kali bertemu" (JANGAN: "Mata pertama").
@@ -416,6 +419,10 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bngeplug\b", "menutup"),
     (r"\bngegoblok\b", "bertingkah konyol"),
     (r"\bkelewatan satu sama lain\b", "berpapasan"),
+    (r"\bberapa curiga itu\b", "mencurigakan banget, kan"),
+    (r"\bberapa curiganya\b", "mencurigakan"),
+    (r"\bberapa curiga\b", "mencurigakan"),
+    (r"\bberapa lama aku keluar\b", "berapa lama aku pingsan"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
