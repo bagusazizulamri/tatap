@@ -387,10 +387,8 @@ def _normalize_subtitles(raw_tracks, referer: str = ""):
         # Kalau label = kode bahasa (id, en), ganti jadi nama readable.
         if len(label) <= 3 and label.lower() in _LANG_NAME:
             label = _LANG_NAME[label.lower()]
-        lang = (t.get("lang") or t.get("language") or t.get("srclang") or "").strip().lower()
-        if not lang and label:
-            # Infer dari label kalau ada (English → en).
-            lang = _label_to_lang(label)
+        inferred = _label_to_lang(label)
+        lang = inferred or (t.get("lang") or t.get("language") or t.get("srclang") or "").strip().lower()
         is_def = bool(t.get("default")) or bool(t.get("is_default")) or False
         out.append({
             "label": label,

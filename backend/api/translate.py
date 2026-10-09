@@ -344,7 +344,32 @@ Kosakata Dunia Ninja & Pertarungan Shonen (Ninja / Shinobi - e.g. Naruto):
 - "Once in a lifetime request / request of a lifetime" -> "Permintaan sekali seumur hidup" (JANGAN kaku harfiah: "sekali seumur hidup permintaanku").
 - "Bring [someone] back" -> "Membawa [seseorang] kembali / pulangkan [dia]" (JANGAN: "Bawakan kembali").
 
-Kosakata Supranatural & Cerita Hantu Sekolah (Supernatural / School Ghost Stories):
+Kosakata Dunia Kutukan & Penyihir Modern (Jujutsu / Sorcery - e.g. Jujutsu Kaisen):
+- "Cursed Object / Cursed Item" -> "Benda terkutuk / jimat kutukan".
+- "Cursed Spirit / Curse" -> "Kutukan / roh terkutuk" (JANGAN: "roh" biasa jika roh jahat kutukan).
+- "Cursed Energy" -> "Energi terkutuk / hawa kutukan".
+- "Domain Expansion" -> "Ryoiki Tenkai / Perluasan Domain".
+- "Jujutsu High / Jujutsu Tech" -> "SMK Jujutsu / SMA Jujutsu".
+- "Jujutsu Sorcerer" -> "Penyihir Jujutsu".
+- "Occult Research Club / Occult Club" -> "Klub Penelitian Ilmu Gaib / Klub Gaib".
+- "Secret execution" -> "Eksekusi rahasia" (JANGAN: "eksekusi secara diam-diam").
+- "Stevenson screen" -> "Kotak Stevenson / sangkar cuaca Stevenson" (JANGAN: "Layar Stevenson").
+- "Sea angel / clione" -> "Clione / malaikat laut".
+- "Council president" -> "Ketua OSIS" (JANGAN: "Presiden" jika konteks sekolah).
+- "Leave me alone!" -> "Jangan ganggu aku! / Biarkan aku sendiri!" (JANGAN: "Tinggalkan aku sendiri").
+
+Kosakata Petualangan Fantasi Abadi & Elf (High Fantasy / Elf - e.g. Frieren):
+- "Beyond Journey's End" -> "Melampaui Akhir Perjalanan / Setelah Akhir Petualangan".
+- "Hero Himmel" -> "Himmel sang Pahlawan".
+- "Warrior Eisen" -> "Eisen sang Kesatria / Eisen sang Pejuang".
+- "Priest Heiter" -> "Heiter sang Pendeta".
+- "Mage Frieren" -> "Frieren sang Penyihir".
+- "Mimic" -> "Mimic / monster peti".
+- "Corrupt priest" -> "Pendeta bejat / pendeta pemabuk" (JANGAN: "pendeta yang korup").
+- "Now, now... / There, there..." -> "Sudahlah... / Tenanglah..." (JANGAN diterjemahkan harfiah: "Sekarang, sekarang...").
+- "Equal / call it even" -> "Impang / kita impas" (JANGAN: "kita setara").
+- "Take [someone] down a peg / teach a lesson" -> "Memberi mereka pelajaran" (JANGAN: "mencuci sepatu").
+- "Wash your shoes" -> "Menjilat sepatu / mencuci sepatu".
 - "Old school building / old schoolhouse" -> "Gedung sekolah lama / gedung sekolah tua"
 - "Ghost journal / spiritual diary" -> "Buku harian hantu / jurnal hantu / buku catatan hantu" (JANGAN: "Buku spiritual").
 - "Put [evil spirits / ghosts] to sleep / put to rest" -> "Menidurkan / menenangkan [roh / arwah / hantu]" (JANGAN: "Ngendang roh supaya tidur").
@@ -728,6 +753,20 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bseperti yang diharapkan\b", "sudah kuduga"),
     (r"\bSeperti yang diharapkan\b", "Sudah kuduga"),
     (r"\bmemutuskan yang mana kata sandi\b", "menentukan kata sandinya"),
+    (r"\blayar stevenson\b", "kotak Stevenson"),
+    (r"\bLayar Stevenson\b", "Kotak Stevenson"),
+    (r"\bjujutsu tech\b", "SMK Jujutsu"),
+    (r"\bJujutsu Tech\b", "SMK Jujutsu"),
+    (r"\bpendeta yang korup\b", "pendeta bejat"),
+    (r"\bPendeta yang korup\b", "Pendeta bejat"),
+    (r"\bsekarang, sekarang, frieren\b", "sudahlah, Frieren"),
+    (r"\bSekarang, sekarang, Frieren\b", "Sudahlah, Frieren"),
+    (r"\bsekarang, sekarang\b", "sudahlah"),
+    (r"\bSekarang, sekarang\b", "Sudahlah"),
+    (r"\bkita bilang dia jebakan\b", "kan udah dibilang itu jebakan"),
+    (r"\btuan tanah orochimaru\b", "antek Orochimaru"),
+    (r"\btinggalkan aku sendiri\b", "jangan ganggu aku"),
+    (r"\bTinggalkan aku sendiri\b", "Jangan ganggu aku"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
