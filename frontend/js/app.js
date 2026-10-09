@@ -97,6 +97,10 @@ function openPlayer(ep, resumeTime){
     // (cur.subLang) atau default: true. Simpan URL track yang aktif.
     cur.activeSub = pickSubtitleUrl(r.data.subtitles || [], cur.subLang);
     renderSubtitles(r.data.subtitles || [], cur.activeSub);
+    // Prefetch subtitle segera secara paralel sebelum video selesai buffering
+    if(cur.activeSub){
+      prefetchSubtitleTrack(cur.activeSub, r.data.referer);
+    }
     playUrl(picked.url,r.data.referer,cur.activeSub,r.data.referer,resumeTime);
     window.Tatap.saveHist({slug:cur.slug,title:cur.title,episode:ep,mode:cur.mode}).then(function(){renderContinue();});
   });
@@ -319,6 +323,38 @@ function paintCue(){
   }
   if(s._last!==html){s.innerHTML=html;s._last=html;}
 }
+function prefetchSubtitleTrack(url, ref, langCode){
+  if(!url)return null;
+  var targetUrl = url;
+  var targetLang = langCode || "";
+  if(targetUrl.indexOf("ai:")===0){
+    targetUrl = targetUrl.slice(3);
+    if(!targetLang) targetLang = "id";
+  }
+  var qs = "url=" + encodeURIComponent(targetUrl) + "&referer=" + encodeURIComponent(ref || "");
+  if(targetLang) qs += "&lang=" + encodeURIComponent(targetLang);
+  var prox = "/api/player/sub?" + qs;
+
+  // Cek apakah promise untuk URL yang sama sudah berjalan
+  if(cur._subPrefetch && cur._subPrefetch.prox === prox){
+    return cur._subPrefetch.promise;
+  }
+
+  var p = fetch(prox).then(function(r){
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    var tier=r.headers.get("X-Translate-Tier")||"";
+    var trErr=r.headers.get("X-Translate-Error")||"";
+    var trModel=r.headers.get("X-Translate-Model")||"";
+    var trMixed=r.headers.get("X-Translate-Mixed")||"";
+    return r.text().then(function(t){
+      return {text:t, tier:tier, error:trErr, model:trModel, mixed:trMixed};
+    });
+  });
+
+  cur._subPrefetch = {prox: prox, promise: p};
+  return p;
+}
+
 function switchSubtitleTrack(url, langCode){
   // Render subtitle milik app (overlay div), bukan <track> native.
   // Style tidak lagi mengikuti setting caption Windows.
@@ -331,6 +367,7 @@ function switchSubtitleTrack(url, langCode){
   cur.cues=[];
   clearOverlay();
   if(!url)return;
+  var originalUrl = url;
   if(url.indexOf("ai:")===0){
     url=url.slice(3);
     if(!langCode) langCode="id";
@@ -347,19 +384,8 @@ function switchSubtitleTrack(url, langCode){
     }
   }
   var ref=cur.res&&cur.res.referer||"";
-  var qs="url="+encodeURIComponent(url)+"&referer="+encodeURIComponent(ref);
-  if(langCode) qs+="&lang="+encodeURIComponent(langCode);
-  var prox="/api/player/sub?"+qs;
-  fetch(prox).then(function(r){
-    if(!r.ok)throw new Error("HTTP "+r.status);
-    var tier=r.headers.get("X-Translate-Tier")||"";
-    var trErr=r.headers.get("X-Translate-Error")||"";
-    var trModel=r.headers.get("X-Translate-Model")||"";
-    var trMixed=r.headers.get("X-Translate-Mixed")||"";
-    return r.text().then(function(t){
-      return {text:t, tier:tier, error:trErr, model:trModel, mixed:trMixed};
-    });
-  }).then(function(res){
+  var subPromise = prefetchSubtitleTrack(originalUrl, ref, langCode);
+  subPromise.then(function(res){
     clearOverlay();
     cur.cues=parseVtt(res.text);
     paintCue();

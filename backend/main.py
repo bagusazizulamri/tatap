@@ -369,12 +369,32 @@ async def resolve(slug: str = Query(""), ep: int = Query(1), mode: str = Query("
         # Cache key mencakup source agar stream tidak tertukar
         cache_slug = f"{active_source}:{slug}" if active_source != "hianime" else slug
         hit = await get_episode_cache(cache_slug, ep, mode)
+        async def _check_and_prewarm(ep_data):
+            try:
+                sub_lang = (await get_setting("sub_lang", "Indonesian")).strip().lower()
+                auto_tr = await get_setting("tatap_translate", "1")
+                # Jika preferensi pengguna adalah Indonesia atau auto-translate aktif
+                if sub_lang in ("indonesian", "id") or auto_tr in ("1", "true"):
+                    subs = ep_data.get("subtitles") or []
+                    en_url = ""
+                    for s in subs:
+                        l = (s.get("lang") or "").lower()
+                        lbl = (s.get("label") or "").lower()
+                        if l == "en" or lbl.startswith("english") or lbl == "en":
+                            en_url = s.get("url") or ""
+                            break
+                    if en_url:
+                        asyncio.create_task(_prewarm_sub_translation(en_url, ep_data.get("referer") or "", "en", "id"))
+            except Exception:
+                pass
+
         if hit:
             picked = hi.select_quality(hit["variants"], q)
             hit["picked"] = picked
             hit["cached"] = True
             hit["subtitles"] = hit.get("subtitles") or []
             hit["source"] = active_source
+            await _check_and_prewarm(hit)
             return ok(hit)
 
         loop = asyncio.get_running_loop()
@@ -423,6 +443,7 @@ async def resolve(slug: str = Query(""), ep: int = Query(1), mode: str = Query("
                                 got.get("sub"), got.get("sub_lang"),
                                 got.get("referer"), got.get("server"),
                                 subtitles=got["subtitles"])
+        await _check_and_prewarm(got)
         return ok(got)
     except Exception as e:
         return fail(str(e))
@@ -608,6 +629,52 @@ async def _pipe_video(url: str, referer: str):
         # agar HLS.js deteksi networkError, bukan hang di buffering.
         raise HTTPException(status_code=502, detail=f"upstream error: {type(e).__name__}")
 
+async def _fetch_sub_text(target_url, ref):
+    """Helper fetcher yang mendukung desync bila host terblokir DPI."""
+    from api.hianime import _host_from, _BLOCKED_DPI_HOSTS
+    h = _host_from(target_url)
+    if h in _BLOCKED_DPI_HOSTS:
+        from api.desync import tls_desync_request
+        loop = asyncio.get_running_loop()
+        raw = await loop.run_in_executor(None, lambda: tls_desync_request(target_url, headers={"Referer": ref} if ref else {}))
+        return raw.decode("utf-8", errors="replace")
+    async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as c:
+        r = await c.get(target_url, headers={"User-Agent": HI_UA,
+                                             **({"Referer": ref} if ref else {})})
+        return r.text
+
+
+_SUB_INFLIGHT = {}
+
+
+async def _prewarm_sub_translation(url: str, referer: str, src: str = "en", lang: str = "id"):
+    """Trigger background translation prefetch if not cached and not already running."""
+    if not url or not url.startswith("http") or not lang or lang == src:
+        return
+    import hashlib
+    base_hash = hashlib.sha1((url + "|" + (referer or "") + "|" + lang).encode("utf-8")).hexdigest()
+    llm_on = await _llm_enabled()
+    key_llm = "sub2|llm|" + base_hash
+    key_mt = "sub2|mt|" + base_hash
+    hit = await get_subtitle_cache(key_llm)
+    if hit is None and not llm_on:
+        hit = await get_subtitle_cache(key_mt, ttl=7 * 24 * 3600)
+    if hit is not None:
+        return  # Sudah ada di cache, tidak perlu prefetch
+
+    job_key = base_hash + ("|llm" if llm_on else "|mt")
+    fut = _SUB_INFLIGHT.get(job_key)
+    if fut is None:
+        try:
+            from api.translate import log_translate
+            log_translate(f"Prefetch subtitle [{lang}] dimulai di background...")
+        except Exception:
+            pass
+        fut = asyncio.ensure_future(_translate_sub_job(url, referer, src, lang, key_llm, key_mt, _fetch_sub_text))
+        _SUB_INFLIGHT[job_key] = fut
+        fut.add_done_callback(lambda _f, k=job_key: _SUB_INFLIGHT.pop(k, None))
+
+
 @app.get("/favicon.ico")
 async def favicon():
     return Response(status_code=204)
@@ -622,19 +689,6 @@ async def proxy_sub(url: str = Query(""),
     Tier 3 MyMemory → Tier 4 source)."""
     if not url.startswith("http"):
         return Response(status_code=400)
-    # Helper fetcher yang mendukung desync bila host terblokir DPI
-    async def _fetch_sub_text(target_url, ref):
-        from api.hianime import _host_from, _BLOCKED_DPI_HOSTS
-        h = _host_from(target_url)
-        if h in _BLOCKED_DPI_HOSTS:
-            from api.desync import tls_desync_request
-            loop = asyncio.get_running_loop()
-            raw = await loop.run_in_executor(None, lambda: tls_desync_request(target_url, headers={"Referer": ref} if ref else {}))
-            return raw.decode("utf-8", errors="replace")
-        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as c:
-            r = await c.get(target_url, headers={"User-Agent": HI_UA,
-                                                 **({"Referer": ref} if ref else {})})
-            return r.text
 
     # Lang kosong → return source apa adanya.
     if not lang or lang == src:
@@ -691,9 +745,6 @@ async def proxy_sub(url: str = Query(""),
         clean_err = re.sub(r"[\r\n]+", " ", str(tier["error"])).strip()
         resp.headers["X-Translate-Error"] = clean_err.encode("latin-1", "replace").decode("latin-1")[:200]
     return resp
-
-
-_SUB_INFLIGHT = {}
 
 
 async def _llm_enabled():
