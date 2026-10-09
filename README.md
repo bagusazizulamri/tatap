@@ -2,6 +2,8 @@
 
 > *Nonton santai di lokal* — pemutar anime berbasis web, ringan, tanpa akun, berjalan 100% di komputermu sendiri.
 
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/L5J028GNTA)
+
 ---
 
 ## Fitur Utama
@@ -67,6 +69,14 @@ chmod +x Tatap-x86_64.AppImage
 1. Unduh dan ekstrak **`tatap-windows-x64-portable.zip`**.
 2. Klik ganda **`Tatap.exe`** (memerlukan Microsoft Edge WebView2 bawaan Windows 10/11).
 3. Backend dan pemutar akan berjalan otomatis dalam jendela native tanpa perlu instalasi Python.
+
+---
+
+## Dukungan / Donasi
+
+Jika Tatap bermanfaat buatmu dan ingin mentraktir kopi:
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/L5J028GNTA)
 
 ---
 
