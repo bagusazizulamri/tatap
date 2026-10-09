@@ -302,6 +302,26 @@ public class MainActivity extends Activity {
                 resetFiltersToTab("musim");
                 break;
 
+            case "ai":
+            case "aitranslate":
+                showAiSettingsDialog();
+                break;
+
+            case "apikey":
+            case "ollama":
+            case "groq":
+            case "gemini":
+            case "openai":
+            case "model":
+            case "apiurl":
+                cmdTranslateSetting(cmd, args);
+                break;
+
+            case "logs":
+            case "translog":
+                showTranslateLogsDialog();
+                break;
+
             default:
                 showCommandOutput("> tatap$ Perintah tidak dikenal: :" + cmd + " (Ketik :help)", true);
                 break;
@@ -476,10 +496,334 @@ public class MainActivity extends Activity {
             checkBackendStatus();
         });
 
+        dialog.findViewById(R.id.cmd_item_ai).setOnClickListener(v -> {
+            dialog.dismiss();
+            showAiSettingsDialog();
+        });
+
+        dialog.findViewById(R.id.cmd_item_apikey).setOnClickListener(v -> {
+            dialog.dismiss();
+            cmdTranslateSetting("apikey", "");
+        });
+
+        dialog.findViewById(R.id.cmd_item_gemini).setOnClickListener(v -> {
+            dialog.dismiss();
+            etSearch.setText(":gemini ");
+            etSearch.setSelection(8);
+            etSearch.requestFocus();
+            showCommandOutput("> tatap$ Masukkan API key Google AI Studio (AQ...) Anda", false);
+        });
+
+        dialog.findViewById(R.id.cmd_item_groq).setOnClickListener(v -> {
+            dialog.dismiss();
+            etSearch.setText(":groq ");
+            etSearch.setSelection(6);
+            etSearch.requestFocus();
+            showCommandOutput("> tatap$ Masukkan API key Groq Cloud (gsk_...) Anda", false);
+        });
+
+        dialog.findViewById(R.id.cmd_item_ollama).setOnClickListener(v -> {
+            dialog.dismiss();
+            etSearch.setText(":ollama ");
+            etSearch.setSelection(8);
+            etSearch.requestFocus();
+            showCommandOutput("> tatap$ Masukkan API key Ollama Cloud Anda", false);
+        });
+
+        dialog.findViewById(R.id.cmd_item_model).setOnClickListener(v -> {
+            dialog.dismiss();
+            cmdTranslateSetting("model", "");
+        });
+
+        dialog.findViewById(R.id.cmd_item_logs).setOnClickListener(v -> {
+            dialog.dismiss();
+            showTranslateLogsDialog();
+        });
+
         dialog.findViewById(R.id.cmd_item_clear).setOnClickListener(v -> {
             dialog.dismiss();
             resetFiltersToTab("musim");
         });
+
+        dialog.show();
+    }
+
+    private String maskKey(String key) {
+        if (key == null || key.isEmpty()) return "(kosong)";
+        if (key.length() <= 10) return "****";
+        int prefixLen = key.startsWith("AQ.") ? 6 : (key.length() > 14 ? 8 : 4);
+        return key.substring(0, prefixLen) + "..." + key.substring(key.length() - 4);
+    }
+
+    private void cmdTranslateSetting(String cmd, String rawArgs) {
+        String args = rawArgs != null ? rawArgs.trim() : "";
+        if (cmd.equals("apikey") || cmd.equals("ollama") || cmd.equals("groq") || cmd.equals("gemini") || cmd.equals("openai")) {
+            args = args.replaceAll("^[\"']|[\"']$", "").trim();
+        }
+
+        if (args.isEmpty()) {
+            showCommandOutput("> tatap$ Membaca status AI Translate...", false);
+            new Thread(() -> {
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/settings").openConnection();
+                    conn.setConnectTimeout(3000);
+                    BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = r.readLine()) != null) sb.append(line);
+                    r.close();
+
+                    JSONObject res = new JSONObject(sb.toString());
+                    JSONObject d = res.optJSONObject("data");
+                    if (d == null) d = res;
+                    String key = d.optString("translate_apikey", "");
+                    String model = d.optString("translate_model", "gemini-3.1-flash-lite");
+                    String url = d.optString("translate_apiurl", "https://generativelanguage.googleapis.com/v1beta/openai");
+
+                    runOnUiThread(() -> {
+                        String out = "> tatap$ [AI STATUS] apikey: " + maskKey(key) + " | model: " + model;
+                        showCommandOutput(out, false);
+                        showAiSettingsDialog();
+                    });
+                } catch (Exception e) {
+                    runOnUiThread(() -> showCommandOutput("> tatap$ [ERROR] Gagal membaca setelan: " + e.getMessage(), true));
+                }
+            }).start();
+            return;
+        }
+
+        if (args.equalsIgnoreCase("clear") || args.equalsIgnoreCase("reset")) {
+            JSONObject body = new JSONObject();
+            try {
+                if (cmd.equals("model")) body.put("translate_model", "gemini-3.1-flash-lite");
+                else if (cmd.equals("apiurl")) body.put("translate_apiurl", "https://generativelanguage.googleapis.com/v1beta/openai");
+                else body.put("translate_apikey", "");
+            } catch (Exception ignored) {}
+
+            saveAiSettingsAndReport(body, cmd + " direset ke default");
+            return;
+        }
+
+        JSONObject body = new JSONObject();
+        String extra = "";
+        try {
+            if (cmd.equals("model")) {
+                body.put("translate_model", args);
+                extra = " [model disetel ke " + args + "]";
+            } else if (cmd.equals("apiurl")) {
+                body.put("translate_apiurl", args);
+                extra = " [apiurl disetel ke " + args + "]";
+            } else {
+                body.put("translate_apikey", args);
+                boolean isOllama = cmd.equals("ollama") || args.startsWith("ollama_") || args.startsWith("ol_") || args.matches("^[a-f0-9]{32}\\.[A-Za-z0-9_-]+$");
+                if (isOllama) {
+                    body.put("translate_apiurl", "https://ollama.com/v1");
+                    body.put("translate_model", "gpt-oss:20b");
+                    extra = " [Auto: Ollama Cloud (gpt-oss:20b)]";
+                } else if (cmd.equals("gemini") || args.startsWith("AQ.") || args.startsWith("AIza") || args.startsWith("AQ")) {
+                    body.put("translate_apiurl", "https://generativelanguage.googleapis.com/v1beta/openai");
+                    body.put("translate_model", "gemini-3.1-flash-lite");
+                    extra = " [Auto: Google AI Studio (gemini-3.1-flash-lite)]";
+                } else if (cmd.equals("groq") || args.startsWith("gsk_")) {
+                    body.put("translate_apiurl", "https://api.groq.com/openai/v1");
+                    body.put("translate_model", "llama-3.3-70b-versatile");
+                    extra = " [Auto: Groq Cloud (llama-3.3-70b-versatile)]";
+                } else if (args.startsWith("sk-or-")) {
+                    body.put("translate_apiurl", "https://openrouter.ai/api/v1");
+                    body.put("translate_model", "google/gemini-2.0-flash-exp:free");
+                    extra = " [Auto: OpenRouter (gemini-2.0-flash-exp)]";
+                } else if (cmd.equals("openai") || args.startsWith("sk-") || args.startsWith("sk_")) {
+                    body.put("translate_apiurl", "https://api.openai.com/v1");
+                    body.put("translate_model", "gpt-4o-mini");
+                    extra = " [Auto: OpenAI (gpt-4o-mini)]";
+                } else {
+                    extra = " [Provider Custom]";
+                }
+            }
+        } catch (Exception ignored) {}
+
+        String masked = maskKey(args);
+        saveAiSettingsAndReport(body, cmd + " disimpan (" + masked + ")" + extra);
+    }
+
+    private void saveAiSettingsAndReport(JSONObject payload, String successMsg) {
+        new Thread(() -> {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/settings").openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setDoOutput(true);
+                conn.getOutputStream().write(payload.toString().getBytes("UTF-8"));
+                conn.getInputStream().close();
+                runOnUiThread(() -> {
+                    showCommandOutput("> tatap$ [OK] " + successMsg, false);
+                    Toast.makeText(this, successMsg, Toast.LENGTH_SHORT).show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> showCommandOutput("> tatap$ [ERROR] Gagal menyimpan: " + e.getMessage(), true));
+            }
+        }).start();
+    }
+
+    private void showTranslateLogsDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_translate_logs);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+
+        TextView tvLogs = dialog.findViewById(R.id.tv_translate_logs_content);
+        Button btnClose = dialog.findViewById(R.id.btn_close_logs_dialog);
+        Button btnDismiss = dialog.findViewById(R.id.btn_dismiss_logs);
+        Button btnRefresh = dialog.findViewById(R.id.btn_refresh_logs);
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        btnDismiss.setOnClickListener(v -> dialog.dismiss());
+
+        Runnable loadLogs = () -> {
+            tvLogs.setText("Mengambil log terbaru dari server...");
+            new Thread(() -> {
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/translate/logs").openConnection();
+                    conn.setConnectTimeout(3000);
+                    BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = r.readLine()) != null) sb.append(line);
+                    r.close();
+
+                    JSONObject res = new JSONObject(sb.toString());
+                    JSONArray arr = res.getJSONObject("data").getJSONArray("logs");
+                    StringBuilder logText = new StringBuilder();
+                    for (int i = 0; i < arr.length(); i++) {
+                        logText.append("• ").append(arr.getString(i)).append("\n\n");
+                    }
+                    if (arr.length() == 0) {
+                        logText.append("(Belum ada aktivitas translasi subtitle yang tercatat)");
+                    }
+                    runOnUiThread(() -> tvLogs.setText(logText.toString().trim()));
+                } catch (Exception e) {
+                    runOnUiThread(() -> tvLogs.setText("Gagal membaca log: " + e.getMessage()));
+                }
+            }).start();
+        };
+
+        btnRefresh.setOnClickListener(v -> loadLogs.run());
+        dialog.show();
+        loadLogs.run();
+    }
+
+    private void showAiSettingsDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_ai_settings);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+
+        TextView tvKey = dialog.findViewById(R.id.tv_ai_status_key);
+        TextView tvModel = dialog.findViewById(R.id.tv_ai_status_model);
+        TextView tvUrl = dialog.findViewById(R.id.tv_ai_status_url);
+        EditText etKey = dialog.findViewById(R.id.et_ai_apikey);
+        EditText etModel = dialog.findViewById(R.id.et_ai_model);
+        EditText etUrl = dialog.findViewById(R.id.et_ai_apiurl);
+
+        Button btnClose = dialog.findViewById(R.id.btn_close_ai_dialog);
+        Button btnSave = dialog.findViewById(R.id.btn_ai_save);
+        Button btnReset = dialog.findViewById(R.id.btn_ai_reset_key);
+        Button btnLogs = dialog.findViewById(R.id.btn_ai_view_logs);
+
+        Button btnPresetGemini = dialog.findViewById(R.id.btn_preset_gemini);
+        Button btnPresetGroq = dialog.findViewById(R.id.btn_preset_groq);
+        Button btnPresetOllama = dialog.findViewById(R.id.btn_preset_ollama);
+        Button btnPresetOpenAI = dialog.findViewById(R.id.btn_preset_openai);
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+
+        btnLogs.setOnClickListener(v -> {
+            dialog.dismiss();
+            showTranslateLogsDialog();
+        });
+
+        btnPresetGemini.setOnClickListener(v -> {
+            etModel.setText("gemini-3.1-flash-lite");
+            etUrl.setText("https://generativelanguage.googleapis.com/v1beta/openai");
+            etKey.setHint("Tempel kunci Google AI (AQ...)");
+            Toast.makeText(this, "Preset Google Gemini dipilih", Toast.LENGTH_SHORT).show();
+        });
+
+        btnPresetGroq.setOnClickListener(v -> {
+            etModel.setText("llama-3.3-70b-versatile");
+            etUrl.setText("https://api.groq.com/openai/v1");
+            etKey.setHint("Tempel kunci Groq Cloud (gsk_...)");
+            Toast.makeText(this, "Preset Groq Cloud dipilih", Toast.LENGTH_SHORT).show();
+        });
+
+        btnPresetOllama.setOnClickListener(v -> {
+            etModel.setText("gpt-oss:20b");
+            etUrl.setText("https://ollama.com/v1");
+            etKey.setHint("Tempel kunci Ollama Cloud");
+            Toast.makeText(this, "Preset Ollama Cloud dipilih", Toast.LENGTH_SHORT).show();
+        });
+
+        btnPresetOpenAI.setOnClickListener(v -> {
+            etModel.setText("gpt-4o-mini");
+            etUrl.setText("https://api.openai.com/v1");
+            etKey.setHint("Tempel kunci OpenAI (sk-...)");
+            Toast.makeText(this, "Preset OpenAI dipilih", Toast.LENGTH_SHORT).show();
+        });
+
+        btnReset.setOnClickListener(v -> {
+            dialog.dismiss();
+            cmdTranslateSetting("apikey", "reset");
+        });
+
+        btnSave.setOnClickListener(v -> {
+            String newKey = etKey.getText().toString().trim();
+            String newModel = etModel.getText().toString().trim();
+            String newUrl = etUrl.getText().toString().trim();
+
+            JSONObject payload = new JSONObject();
+            try {
+                if (!newKey.isEmpty()) payload.put("translate_apikey", newKey);
+                if (!newModel.isEmpty()) payload.put("translate_model", newModel);
+                if (!newUrl.isEmpty()) payload.put("translate_apiurl", newUrl);
+            } catch (Exception ignored) {}
+
+            dialog.dismiss();
+            saveAiSettingsAndReport(payload, "Pengaturan AI Translate disimpan");
+        });
+
+        // Fetch current settings
+        new Thread(() -> {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/settings").openConnection();
+                conn.setConnectTimeout(3000);
+                BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = r.readLine()) != null) sb.append(line);
+                r.close();
+
+                JSONObject res = new JSONObject(sb.toString());
+                JSONObject d = res.optJSONObject("data");
+                if (d == null) d = res;
+                String k = d.optString("translate_apikey", "");
+                String m = d.optString("translate_model", "gemini-3.1-flash-lite");
+                String u = d.optString("translate_apiurl", "https://generativelanguage.googleapis.com/v1beta/openai");
+
+                runOnUiThread(() -> {
+                    tvKey.setText("API Key : " + maskKey(k));
+                    tvModel.setText("Model   : " + m);
+                    tvUrl.setText("API URL : " + u);
+                    etModel.setText(m);
+                    etUrl.setText(u);
+                });
+            } catch (Exception ignored) {}
+        }).start();
 
         dialog.show();
     }

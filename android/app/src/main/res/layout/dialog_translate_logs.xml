@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_dialog_card"
+    android:padding="16dp">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="📜 RIWAYAT LOG TRANSLASI AI"
+            android:textColor="#00DBEB"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <Button
+            android:id="@+id/btn_close_logs_dialog"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:text="✕"
+            android:textColor="#8892B0"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="320dp"
+        android:background="#0A0D12"
+        android:padding="10dp"
+        android:scrollbars="vertical">
+
+        <TextView
+            android:id="@+id/tv_translate_logs_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Memuat log translasi..."
+            android:textColor="#8892B0"
+            android:textSize="11sp"
+            android:fontFamily="monospace" />
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/btn_refresh_logs"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="🔄 Refresh"
+            android:textColor="#00DBEB"
+            android:backgroundTint="#161A24"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btn_dismiss_logs"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Tutup"
+            android:textColor="#8892B0"
+            android:backgroundTint="#161A24"
+            android:textSize="11sp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+</LinearLayout>

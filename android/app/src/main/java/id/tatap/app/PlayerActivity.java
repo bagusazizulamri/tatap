@@ -79,6 +79,8 @@ public class PlayerActivity extends Activity {
     private String activeSubLang = "id"; // Default Indonesian
     private String activeEngine = "aigtx"; // "aigtx" | "gtx" | "ai" | "raw"
     private boolean subEnabled = true;
+    private boolean hasAiKey = false;
+    private String configuredAiModel = "gemini-3.1-flash-lite";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -117,9 +119,31 @@ public class PlayerActivity extends Activity {
 
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
+        checkAiConfig();
         initExoPlayer();
         setupGestureControls();
         resolveAndPlayStream();
+    }
+
+    private void checkAiConfig() {
+        new Thread(() -> {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/settings").openConnection();
+                conn.setConnectTimeout(2500);
+                BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = r.readLine()) != null) sb.append(line);
+                r.close();
+                JSONObject res = new JSONObject(sb.toString());
+                JSONObject d = res.optJSONObject("data");
+                if (d == null) d = res;
+                String k = d.optString("translate_apikey", "");
+                String m = d.optString("translate_model", "gemini-3.1-flash-lite");
+                hasAiKey = !k.isEmpty();
+                if (!m.isEmpty()) configuredAiModel = m;
+            } catch (Exception ignored) {}
+        }).start();
     }
 
     private void initExoPlayer() {
@@ -374,7 +398,7 @@ public class PlayerActivity extends Activity {
 
             String engineLabel = "AIGTX (Cepat)";
             if ("gtx".equals(activeEngine)) engineLabel = "Google GTX";
-            else if ("ai".equals(activeEngine)) engineLabel = "AI Fansub LLM";
+            else if ("ai".equals(activeEngine)) engineLabel = "AI Fansub (" + configuredAiModel + ")";
             else if ("raw".equals(activeEngine)) engineLabel = "Source English";
 
             tvSubStatus.setText("Sub: " + activeSubLang.toUpperCase() + " • " + engineLabel);
@@ -394,9 +418,13 @@ public class PlayerActivity extends Activity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
         builder.setTitle("Pengaturan Subtitle & Mesin Terjemahan");
 
+        String aiOptionText = "🇮🇩 Bahasa Indonesia (AI Fansub / " + configuredAiModel + ")"
+                + (hasAiKey ? " [SIAP]" : " [Butuh Key]")
+                + (subEnabled && "id".equals(activeSubLang) && "ai".equals(activeEngine) ? " ✓" : "");
+
         String[] options = new String[]{
                 "🇮🇩 Bahasa Indonesia (AIGTX - Instan & Cerdas)" + (subEnabled && "id".equals(activeSubLang) && "aigtx".equals(activeEngine) ? " ✓" : ""),
-                "🇮🇩 Bahasa Indonesia (AI Fansub LLM / Gemini)" + (subEnabled && "id".equals(activeSubLang) && "ai".equals(activeEngine) ? " ✓" : ""),
+                aiOptionText,
                 "🇮🇩 Bahasa Indonesia (Google GTX Murni)" + (subEnabled && "id".equals(activeSubLang) && "gtx".equals(activeEngine) ? " ✓" : ""),
                 "🇬🇧 English (Original / Asli)" + (subEnabled && "en".equals(activeSubLang) ? " ✓" : ""),
                 "❌ Matikan Subtitle" + (!subEnabled ? " ✓" : "")
@@ -413,6 +441,9 @@ public class PlayerActivity extends Activity {
                     subEnabled = true;
                     activeSubLang = "id";
                     activeEngine = "ai";
+                    if (!hasAiKey) {
+                        Toast.makeText(this, "Perhatian: API Key AI belum disetel (:apikey <key> di home). Menggunakan AIGTX sebagai fallback otomatis.", Toast.LENGTH_LONG).show();
+                    }
                     break;
                 case 2:
                     subEnabled = true;
