@@ -153,8 +153,8 @@ function pickSubtitleUrl(subtitles, preferLang){
       }
     }
     // Kalau prefer Indonesian / translate on dan tidak ada track ID asli:
-    // auto-pilih track AI translate atau GTX translate dari track English.
-    if((low==="indonesian"||low==="id"||low==="indonesian (ai)"||low==="indonesian (gtx)"||cur.translate)){
+    // auto-pilih track AIGTX, AI Fansub, atau Pure GTX translate dari track English.
+    if((low==="indonesian"||low==="id"||low==="indonesian (aigtx)"||low==="indonesian (ai)"||low==="indonesian (gtx)"||cur.translate)){
       var enTrack=null;
       for(var e=0;e<subtitles.length;e++){
         var elab=(subtitles[e].label||"").toLowerCase();
@@ -165,7 +165,8 @@ function pickSubtitleUrl(subtitles, preferLang){
       }
       if(enTrack&&enTrack.url){
         if(low==="indonesian (gtx)") return "gtx:"+enTrack.url;
-        return "ai:"+enTrack.url;
+        if(low==="indonesian (ai)") return "ai:"+enTrack.url;
+        return "aigtx:"+enTrack.url;
       }
     }
   }
@@ -221,6 +222,15 @@ function renderSubtitles(subtitles, activeUrl){
     })(subtitles[i]);
   }
   if(englishTrack&&englishTrack.url){
+    var aigtxOpt=document.createElement("option");
+    aigtxOpt.value="aigtx:"+englishTrack.url;
+    aigtxOpt.textContent="Indonesian (AIGTX)";
+    aigtxOpt.setAttribute("data-aigtx-source",englishTrack.url);
+    if(activeUrl&&(activeUrl===aigtxOpt.value||(activeUrl.indexOf("aigtx:")===0&&activeUrl.slice(6)===englishTrack.url))){
+      aigtxOpt.selected=true;
+    }
+    sel.appendChild(aigtxOpt);
+
     var aiOpt=document.createElement("option");
     aiOpt.value="ai:"+englishTrack.url;
     aiOpt.textContent="Indonesian (AI Fansub)";
@@ -249,7 +259,15 @@ function renderSubtitles(subtitles, activeUrl){
   sel.onchange=function(){
     var url=sel.value;
     cur.activeSub=url||null;
-    // Track AI: synthetic URL "ai:<url>". Extract realUrl + panggil translate.
+    // Track AIGTX: synthetic URL "aigtx:<url>".
+    if(url&&url.indexOf("aigtx:")===0){
+      cur.translate=false;
+      switchSubtitleTrack(url,"id");
+      cur.subLang="Indonesian (AIGTX)";
+      window.Tatap.setSetting({sub_lang:"Indonesian (AIGTX)"}).then(function(){}).catch(function(){});
+      return;
+    }
+    // Track AI Fansub: synthetic URL "ai:<url>". Extract realUrl + panggil translate.
     if(url&&url.indexOf("ai:")===0){
       cur.translate=true;
       try{localStorage.setItem("tatap_translate","1");}catch(e){}
@@ -348,7 +366,11 @@ function prefetchSubtitleTrack(url, ref, langCode){
   var targetUrl = url;
   var targetLang = langCode || "";
   var mode = "";
-  if(targetUrl.indexOf("ai:")===0){
+  if(targetUrl.indexOf("aigtx:")===0){
+    targetUrl = targetUrl.slice(6);
+    if(!targetLang) targetLang = "id";
+    mode = "aigtx";
+  }else if(targetUrl.indexOf("ai:")===0){
     targetUrl = targetUrl.slice(3);
     if(!targetLang) targetLang = "id";
     mode = "ai";
@@ -400,17 +422,24 @@ function switchSubtitleTrack(url, langCode){
   }
   if(!url)return;
   var originalUrl = url;
-  var isGtxMode = false;
-  if(url.indexOf("ai:")===0){
+  var trackMode = "none";
+  if(url.indexOf("aigtx:")===0){
+    url=url.slice(6);
+    if(!langCode) langCode="id";
+    trackMode = "aigtx";
+  }else if(url.indexOf("ai:")===0){
     url=url.slice(3);
     if(!langCode) langCode="id";
+    trackMode = "ai";
   }else if(url.indexOf("gtx:")===0){
     url=url.slice(4);
     if(!langCode) langCode="id";
-    isGtxMode = true;
+    trackMode = "gtx";
   }
   if(langCode==="id"){
-    var waitMsg = isGtxMode ? "Menerjemahkan subtitle Google GTX..." : "Menerjemahkan subtitle AI ke bahasa Indonesia...";
+    var waitMsg = "Menerjemahkan subtitle AI ke bahasa Indonesia...";
+    if(trackMode==="aigtx") waitMsg = "Menerjemahkan subtitle AIGTX (Smart Lexicon)...";
+    else if(trackMode==="gtx") waitMsg = "Menerjemahkan subtitle Google GTX...";
     toast(waitMsg, 3000);
     var obox=$("pm-subs-overlay");
     if(obox){
@@ -435,16 +464,23 @@ function switchSubtitleTrack(url, langCode){
         toast(msg, 6000);
       }else{
         var tierLabel = "AI Fansub" + (res.model ? " · "+res.model : "");
-        if(res.tier === "tier2") tierLabel = isGtxMode ? "Google GTX" : "Google GTX (Instan)";
-        else if(res.tier === "tier3") tierLabel = "MyMemory — kaku";
-        else if(res.tier === "cached") tierLabel = "AI Fansub, tersimpan";
-        else if(res.tier === "cached-mt") tierLabel = isGtxMode ? "Google GTX" : "Google GTX tersimpan (Instan)";
+        if(res.tier === "aigtx" || res.tier === "cached-aigtx"){
+          tierLabel = res.tier === "cached-aigtx" ? "AIGTX, tersimpan" : "AIGTX Translate";
+        }else if(res.tier === "tier2"){
+          tierLabel = trackMode === "gtx" ? "Google GTX" : "AIGTX (Instan)";
+        }else if(res.tier === "cached-mt" || res.tier === "cached-gtx"){
+          tierLabel = trackMode === "gtx" ? "Google GTX, tersimpan" : "AIGTX, tersimpan";
+        }else if(res.tier === "tier3"){
+          tierLabel = "MyMemory — kaku";
+        }else if(res.tier === "cached"){
+          tierLabel = "AI Fansub, tersimpan";
+        }
         var extra = "";
         if(res.mixed) extra = " · "+res.mixed+" baris via GTX";
         toast("Subtitle Indonesia siap ("+tierLabel+")! ("+cur.cues.length+" baris"+extra+")", 4000);
 
-        // Jika mode AI dan disajikan instan via MT, upgrade di background saat AI selesai:
-        if(!isGtxMode && (res.bg === "llm-translating" || res.tier === "tier2" || res.tier === "cached-mt")){
+        // Jika mode AI Fansub dan disajikan instan via AIGTX / MT, upgrade di background saat AI selesai:
+        if(trackMode === "ai" && (res.bg === "llm-translating" || res.tier === "tier2" || res.tier === "aigtx" || res.tier === "cached-aigtx" || res.tier === "cached-mt")){
           var checkUpgrade = function(attempt){
             if(attempt > 20) return; // Maksimal ~5 menit
             cur._subUpgradeTimer = setTimeout(function(){

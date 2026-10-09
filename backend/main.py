@@ -684,10 +684,9 @@ async def proxy_sub(url: str = Query(""),
                    referer: str = Query(""),
                    lang: str = Query("", pattern="^(en|id|ja|es|fr|de|pt|ko|zh)$|^$"),
                    src: str = Query("en", pattern="^(en|ja|es|fr|de|pt|ko|zh)$"),
-                   mode: str = Query("", pattern="^(gtx|ai|)$")):
+                   mode: str = Query("", pattern="^(gtx|aigtx|ai|)$")):
     """Proxy subtitle VTT. Jika `lang` diisi dan berbeda dari source, jalankan
-    multi-tier fallback translate (Tier 1 AI Fansub LLM → Tier 2 Google GTX →
-    Tier 3 MyMemory → Tier 4 source). Jika mode='gtx', langsung gunakan Google GTX."""
+    multi-tier translate (AIGTX, pure GTX, atau AI Fansub LLM)."""
     if not url.startswith("http"):
         return Response(status_code=400)
 
@@ -699,43 +698,67 @@ async def proxy_sub(url: str = Query(""),
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"gagal mengambil subtitle: {e}")
 
-    # Mode GTX eksplisit: bypass LLM, ambil atau buat cache MT (Google GTX)
     import hashlib
     base_hash = hashlib.sha1(
         (url + "|" + (referer or "") + "|" + lang).encode("utf-8")
     ).hexdigest()
-    key_mt = "sub2|mt|" + base_hash
+    key_aigtx = "sub2|aigtx|" + base_hash
+    key_gtx = "sub2|gtx|" + base_hash
+    key_llm = "sub2|llm|" + base_hash
 
+    # Mode Pure Google GTX eksplisit
     if mode == "gtx":
-        mt_hit = await get_subtitle_cache(key_mt, ttl=7 * 24 * 3600)
-        if mt_hit:
-            resp = Response(content=mt_hit, media_type="text/vtt")
-            resp.headers["X-Translate-Tier"] = "cached-mt"
+        gtx_hit = await get_subtitle_cache(key_gtx, ttl=7 * 24 * 3600)
+        if gtx_hit:
+            resp = Response(content=gtx_hit, media_type="text/vtt")
+            resp.headers["X-Translate-Tier"] = "cached-gtx"
             return resp
         try:
             text = await _fetch_sub_text(url, referer)
             from api.translate import parse_vtt, build_vtt, call_gtx_translate
             cues = parse_vtt(text)
             if cues:
-                gtx_cues = await call_gtx_translate(cues, src, lang)
+                gtx_cues = await call_gtx_translate(cues, src, lang, mode="gtx")
                 gtx_text = build_vtt(gtx_cues)
-                await set_subtitle_cache(key_mt, gtx_text)
+                await set_subtitle_cache(key_gtx, gtx_text)
                 resp = Response(content=gtx_text, media_type="text/vtt")
-                resp.headers["X-Translate-Tier"] = "tier2"
+                resp.headers["X-Translate-Tier"] = "pure_gtx"
                 return resp
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"gagal translate GTX: {e}")
 
-    # Cache sadar-kualitas: hasil AI Fansub ("llm") disimpan terpisah dari hasil mesin
-    # literal ("mt" = GTX/MyMemory). Saat LLM aktif, cache "mt" diabaikan supaya episode
-    # yang dulu diterjemahkan GTX otomatis di-upgrade ke versi fansub.
+    # Mode AIGTX eksplisit: Google GTX + Scene Detector & Anime Lexicon
+    if mode == "aigtx":
+        aigtx_hit = await get_subtitle_cache(key_aigtx, ttl=7 * 24 * 3600)
+        if not aigtx_hit:
+            aigtx_hit = await get_subtitle_cache("sub2|mt|" + base_hash, ttl=7 * 24 * 3600)
+        if aigtx_hit:
+            resp = Response(content=aigtx_hit, media_type="text/vtt")
+            resp.headers["X-Translate-Tier"] = "cached-aigtx"
+            return resp
+        try:
+            text = await _fetch_sub_text(url, referer)
+            from api.translate import parse_vtt, build_vtt, call_gtx_translate
+            cues = parse_vtt(text)
+            if cues:
+                aigtx_cues = await call_gtx_translate(cues, src, lang, mode="aigtx")
+                aigtx_text = build_vtt(aigtx_cues)
+                await set_subtitle_cache(key_aigtx, aigtx_text)
+                resp = Response(content=aigtx_text, media_type="text/vtt")
+                resp.headers["X-Translate-Tier"] = "aigtx"
+                return resp
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"gagal translate AIGTX: {e}")
+
+    # Cache sadar-kualitas: hasil AI Fansub ("llm") disimpan terpisah dari hasil AIGTX.
     llm_on = await _llm_enabled()
-    key_llm = "sub2|llm|" + base_hash
     hit = await get_subtitle_cache(key_llm)
     hit_tier = "cached"
     if hit is None and not llm_on:
-        hit = await get_subtitle_cache(key_mt, ttl=7 * 24 * 3600)
-        hit_tier = "cached-mt"
+        hit = await get_subtitle_cache(key_aigtx, ttl=7 * 24 * 3600)
+        if not hit:
+            hit = await get_subtitle_cache("sub2|mt|" + base_hash, ttl=7 * 24 * 3600)
+        hit_tier = "cached-aigtx"
     if hit is not None:
         try:
             from api.translate import log_translate
@@ -747,47 +770,49 @@ async def proxy_sub(url: str = Query(""),
         return resp
 
     # Jika LLM aktif, jalankan background prefetch/job LLM tanpa memblokir player.
-    # Player segera disajikan versi Tier 2 (GTX instan 1-2 detik) agar penonton tidak menunggu 2-4 menit.
+    # Player segera disajikan versi AIGTX (instan 1-2 detik) agar penonton tidak menunggu 2-4 menit.
     if llm_on:
         job_key = base_hash + "|llm"
         if job_key not in _SUB_INFLIGHT:
-            fut = asyncio.ensure_future(_translate_sub_job(url, referer, src, lang, key_llm, key_mt, _fetch_sub_text))
+            fut = asyncio.ensure_future(_translate_sub_job(url, referer, src, lang, key_llm, key_aigtx, _fetch_sub_text))
             _SUB_INFLIGHT[job_key] = fut
             fut.add_done_callback(lambda _f, k=job_key: _SUB_INFLIGHT.pop(k, None))
 
-        # Cek apakah sudah ada MT cache (misal hasil GTX sebelumnya)
-        mt_hit = await get_subtitle_cache(key_mt, ttl=7 * 24 * 3600)
-        if mt_hit:
-            resp = Response(content=mt_hit, media_type="text/vtt")
-            resp.headers["X-Translate-Tier"] = "cached-mt"
+        # Cek apakah sudah ada AIGTX cache
+        aigtx_hit = await get_subtitle_cache(key_aigtx, ttl=7 * 24 * 3600)
+        if not aigtx_hit:
+            aigtx_hit = await get_subtitle_cache("sub2|mt|" + base_hash, ttl=7 * 24 * 3600)
+        if aigtx_hit:
+            resp = Response(content=aigtx_hit, media_type="text/vtt")
+            resp.headers["X-Translate-Tier"] = "cached-aigtx"
             resp.headers["X-Translate-Background"] = "llm-translating"
             return resp
 
-        # Jika belum ada MT cache, terjemahkan cepat via Tier 2 (Google GTX)
+        # Jika belum ada AIGTX cache, terjemahkan cepat via AIGTX
         try:
             text = await _fetch_sub_text(url, referer)
             from api.translate import parse_vtt, build_vtt, call_gtx_translate
             cues = parse_vtt(text)
             if cues:
-                gtx_cues = await call_gtx_translate(cues, src, lang)
-                gtx_text = build_vtt(gtx_cues)
-                await set_subtitle_cache(key_mt, gtx_text)
-                resp = Response(content=gtx_text, media_type="text/vtt")
-                resp.headers["X-Translate-Tier"] = "tier2"
+                aigtx_cues = await call_gtx_translate(cues, src, lang, mode="aigtx")
+                aigtx_text = build_vtt(aigtx_cues)
+                await set_subtitle_cache(key_aigtx, aigtx_text)
+                resp = Response(content=aigtx_text, media_type="text/vtt")
+                resp.headers["X-Translate-Tier"] = "aigtx"
                 resp.headers["X-Translate-Background"] = "llm-translating"
                 return resp
         except Exception as e:
             try:
                 from api.translate import log_translate
-                log_translate(f"Fast GTX translation gagal: {e}, fallback ke job reguler")
+                log_translate(f"Fast AIGTX translation gagal: {e}, fallback ke job reguler")
             except Exception:
                 pass
 
     # Dedup in-flight fallback / saat LLM mati
-    job_key = base_hash + ("|llm" if llm_on else "|mt")
+    job_key = base_hash + ("|llm" if llm_on else "|aigtx")
     fut = _SUB_INFLIGHT.get(job_key)
     if fut is None:
-        fut = asyncio.ensure_future(_translate_sub_job(url, referer, src, lang, key_llm, key_mt, _fetch_sub_text))
+        fut = asyncio.ensure_future(_translate_sub_job(url, referer, src, lang, key_llm, key_aigtx, _fetch_sub_text))
         _SUB_INFLIGHT[job_key] = fut
         fut.add_done_callback(lambda _f, k=job_key: _SUB_INFLIGHT.pop(k, None))
     try:
@@ -815,7 +840,7 @@ async def _llm_enabled():
     return bool(apikey) or is_local_llm(apiurl)
 
 
-async def _translate_sub_job(url, referer, src, lang, key_llm, key_mt, fetcher):
+async def _translate_sub_job(url, referer, src, lang, key_llm, key_aigtx, fetcher):
     """Fetch + translate + cache. Return (vtt_text, tier_dict)."""
     try:
         text = await fetcher(url, referer)
@@ -830,8 +855,8 @@ async def _translate_sub_job(url, referer, src, lang, key_llm, key_mt, fetcher):
         new_text = build_vtt(tier["cues"])
     except Exception as e:
         return text, {"cues": None, "level": "source", "error": str(e)}
-    # Cache: hasil AI (>= 80% baris dari LLM) -> slot "llm" 30 hari. Hasil mesin / hybrid
-    # dominan GTX -> slot "mt" 7 hari (di-upgrade otomatis saat LLM tersedia).
+    # Cache: hasil AI (>= 80% baris dari LLM) -> slot "llm" 30 hari. Hasil AIGTX / hybrid
+    # dominan GTX -> slot "aigtx" 7 hari.
     # Jangan cache source fallback agar user bisa retry.
     lvl = tier.get("level")
     if lvl == "tier1":
@@ -839,9 +864,9 @@ async def _translate_sub_job(url, referer, src, lang, key_llm, key_mt, fetcher):
         if tier.get("llm_lines", 0) / total >= 0.8:
             await set_subtitle_cache(key_llm, new_text)
         else:
-            await set_subtitle_cache(key_mt, new_text)
+            await set_subtitle_cache(key_aigtx, new_text)
     elif lvl in ("tier2", "tier3"):
-        await set_subtitle_cache(key_mt, new_text)
+        await set_subtitle_cache(key_aigtx, new_text)
     return new_text, tier
 
 
@@ -869,13 +894,13 @@ async def _translate_with_fallback(cues, src, tgt):
             last_err = f"Tier 1 (AI LLM) error: {e}"
             print(f"[TRANSLATE TIER 1 ERROR] {e}")
 
-    # Tier 2: Google GTX Web RPC (HTML-Preserved, Zero-Key, Unmetered)
+    # Tier 2: AIGTX Web RPC (HTML-Preserved, Zero-Key, Unmetered)
     try:
-        translated = await call_gtx_translate(cues, src, tgt)
+        translated = await call_gtx_translate(cues, src, tgt, mode="aigtx")
         return {"cues": translated, "level": "tier2", "error": last_err}
     except Exception as e:
         if not last_err:
-            last_err = f"Tier 2 (Google GTX) error: {e}"
+            last_err = f"Tier 2 (AIGTX) error: {e}"
         print(f"[TRANSLATE TIER 2 ERROR] {e}")
 
     # Tier 3: MyMemory dengan soft-limit per-IP per-day.

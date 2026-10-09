@@ -730,10 +730,8 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bngelamun dan memohon\b", "berlutut dan memohon"),
     (r"\bKeren banget\.\.\. Itu yang bakal dikatakan Shinomiya\b", "Manis sekali... Itu yang bakal dikatakan Shinomiya"),
     (r"\bkeren banget\.\.\. itu yang bakal dikatakan\b", "manis sekali... itu yang bakal dikatakan"),
-    (r"\brouge ninjas\b", "ninja pelarian"),
-    (r"\brouge ninja\b", "ninja pelarian"),
-    (r"\bRouge Ninjas\b", "Ninja Pelarian"),
-    (r"\bRouge Ninja\b", "Ninja Pelarian"),
+    (r"\brouge ninjas\b", "Ninja Pelarian"),
+    (r"\brouge ninja\b", "Ninja Pelarian"),
     (r"\bninja art:\b", "Jutsu:"),
     (r"\bNinja Art:\b", "Jutsu:"),
     (r"\btipe orochimaru\b", "antek Orochimaru"),
@@ -838,8 +836,19 @@ _CASUAL_FANSUB_RULES = [
     (r"\btidak melakukan apa pun\b", "nggak ngelakuin apa-apa"),
 ]
 
+_AIGTX_SMOOTH_RULES = [
+    (r"\baku melihat\b", "begitu rupanya"),
+    (r"\bkulihat\b", "begitu rupanya"),
+    (r"\btidak ada jalan\b", "tidak mungkin"),
+    (r"\btak ada jalan\b", "tidak mungkin"),
+    (r"\btersesatlah\b", "pergi sana"),
+    (r"\btak perlu khawatir\b", "tenang saja"),
+    (r"\bgak usah dikira\b", "tidak usah ditanya lagi"),
+]
+
 _COMPILED_UNIVERSAL = [(_re.compile(pat, _re.IGNORECASE), repl) for pat, repl in _UNIVERSAL_FANSUB_RULES]
 _COMPILED_CASUAL = [(_re.compile(pat, _re.IGNORECASE), repl) for pat, repl in _CASUAL_FANSUB_RULES]
+_COMPILED_AIGTX_SMOOTH = [(_re.compile(pat, _re.IGNORECASE), repl) for pat, repl in _AIGTX_SMOOTH_RULES]
 
 
 def _sanitize_fansub_id(text: str) -> str:
@@ -849,6 +858,8 @@ def _sanitize_fansub_id(text: str) -> str:
 
     def _replace_match(m, repl):
         orig = m.group(0)
+        if orig and orig.islower():
+            return repl.lower()
         if orig and orig[0].isupper():
             return repl[0].upper() + repl[1:]
         return repl
@@ -865,6 +876,37 @@ def _sanitize_fansub_id(text: str) -> str:
             result = rx.sub(lambda m, r=repl: _replace_match(m, r), result)
 
     return result
+
+
+def _sanitize_aigtx_id(text: str) -> str:
+    """AIGTX Sanitizer: Menjaga gaya bahasa alami Google GTX tanpa merombaknya
+    menjadi slang gaul berlebihan, namun menerapkan kamus istilah anime (Konoha,
+    SMK Jujutsu, Nukenin, dll) dan scene detector presisi."""
+    if not text:
+        return text
+
+    def _replace_match(m, repl):
+        orig = m.group(0)
+        if orig and orig.islower():
+            return repl.lower()
+        if orig and orig[0].isupper():
+            return repl[0].upper() + repl[1:]
+        return repl
+
+    result = text
+    # 1. Koreksi istilah anime & blunder terjemahan mesin (Universal Glossary)
+    for rx, repl in _COMPILED_UNIVERSAL:
+        result = rx.sub(lambda m, r=repl: _replace_match(m, r), result)
+
+    # 2. Scene detector: Jika formal/militer/bangsawan, pertahankan 100% gaya baku GTX.
+    # Jika dialog santai sehari-hari, haluskan hanya frasa kaku yang janggal tanpa mengubah ke slang gaul.
+    is_formal = bool(_FORMAL_INDICATORS_RE.search(result))
+    if not is_formal:
+        for rx, repl in _COMPILED_AIGTX_SMOOTH:
+            result = rx.sub(lambda m, r=repl: _replace_match(m, r), result)
+
+    return result
+
 
 
 _ID_LINE_RE = _re.compile(r"^\s*(?:\*\*)?(\d{1,4})(?:\*\*)?\s*[|｜]\s?(.*)$")
@@ -1092,7 +1134,7 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=1
     return out, stats
 
 
-async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0):
+async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0, mode="aigtx"):
     """Translate via Google GTX Web RPC (Unmetered, Zero-Key, Super Cepat).
     Menggunakan HTML preservation (<p id="i">...</p>) per batch (40 cues/batch).
     Google Translate menjaga 100% struktur tag HTML dan atribut id sehingga urutan dialog
@@ -1108,7 +1150,7 @@ async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0):
     batches = [cues[i:i + BATCH_SIZE] for i in range(0, len(cues), BATCH_SIZE)]
     all_translated = []
     t_start = _time.time()
-    log_translate(f"Mulai translate Google GTX (HTML-Preserved): {len(cues)} cues | {len(batches)} batches")
+    log_translate(f"Mulai translate Google GTX (HTML-Preserved): {len(cues)} cues | {len(batches)} batches | mode={mode}")
     
     def _fetch_batch_sync(batch_lines):
         html_chunks = []
@@ -1156,12 +1198,17 @@ async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0):
         all_translated.extend(parts)
 
     dur = _time.time() - t_start
-    log_translate(f"Sukses translate Google GTX (HTML): {len(cues)} cues dalam {dur:.2f}s")
+    log_translate(f"Sukses translate Google GTX (HTML): {len(cues)} cues dalam {dur:.2f}s | mode={mode}")
     out = []
     for i, c in enumerate(cues):
         tr_text = all_translated[i] if i < len(all_translated) else c["text"]
         if (tgt or "").lower() == "id":
-            tr_text = _sanitize_fansub_id(tr_text)
+            if mode in ("pure", "pure_gtx", "gtx"):
+                pass
+            elif mode == "fansub":
+                tr_text = _sanitize_fansub_id(tr_text)
+            else:  # "aigtx" default
+                tr_text = _sanitize_aigtx_id(tr_text)
         out.append({"start": c["start"], "end": c["end"], "text": tr_text})
     return out
 

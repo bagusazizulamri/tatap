@@ -172,3 +172,46 @@ def test_sanitize_fansub_id():
     raw_formal3 = "Letnan, kami tidak akan membiarkan musuh menembus garis pertahanan markas besar."
     assert T._sanitize_fansub_id(raw_formal3) == "Letnan, kami tidak akan membiarkan musuh menembus garis pertahanan markas besar."
 
+
+def test_sanitize_aigtx_id():
+    # 1. Istilah Anime & Blunder Diperbaiki, tapi gaya baku/alami GTX tetap utuh (tidak diubah jadi slang gaul)
+    raw1 = "Rouge Ninja dari Desa Daun Tersembunyi sudah pergi ke Jujutsu Tech."
+    assert T._sanitize_aigtx_id(raw1) == "Ninja Pelarian dari Desa Konoha sudah pergi ke SMK Jujutsu."
+
+    raw2 = "Layar Stevenson dan pendeta yang korup itu terbaring di kolam darah."
+    assert T._sanitize_aigtx_id(raw2) == "Kotak Stevenson dan pendeta bejat itu terbaring bersimbah darah."
+
+    # 2. Kata sehari-hari tidak diubah jadi slang lebay (misal "sudah" TIDAK jadi "udah", "lelaki itu" TIDAK jadi "cowok itu")
+    raw3 = "Lelaki itu sudah pergi ke serikat petualang di penjara bawah tanah."
+    assert T._sanitize_aigtx_id(raw3) == "Lelaki itu sudah pergi ke guild petualang di dungeon."
+
+    # 3. Adegan Formal / Kerajaan dipertahankan 100% baku
+    raw_formal = "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
+    assert T._sanitize_aigtx_id(raw_formal) == "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
+
+
+def test_call_gtx_translate_modes(monkeypatch):
+    cues = [{"start": 0.0, "end": 2.0, "text": "Rouge Ninja in Desa Daun"}]
+
+    def fake_fetch_sync(batch_lines):
+        # Simulasikan hasil translasi mentah dari Google Translate
+        return ["Rouge Ninja di Desa Daun"]
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def fake_run_in_executor(executor, func):
+        return fake_fetch_sync(None)
+
+    monkeypatch.setattr(loop, "run_in_executor", fake_run_in_executor)
+    monkeypatch.setattr(asyncio, "get_running_loop", lambda: loop)
+
+    # Mode pure gtx: tidak diubah
+    res_pure = loop.run_until_complete(T.call_gtx_translate(cues, mode="gtx"))
+    assert res_pure[0]["text"] == "Rouge Ninja di Desa Daun"
+
+    # Mode aigtx: menerapkan kamus istilah anime
+    res_aigtx = loop.run_until_complete(T.call_gtx_translate(cues, mode="aigtx"))
+    assert res_aigtx[0]["text"] == "Ninja Pelarian di Desa Konoha"
+
+
