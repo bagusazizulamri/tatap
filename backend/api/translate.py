@@ -495,8 +495,15 @@ Dilarang Terjemahkan Idiom Secara Harfiah (Gunakan Padanan Fansub Alami):
 - "Give me a break" -> "Yang bener aja!" / "Jangan bercanda!".
 - "Make a move" -> "Mendekati dia" / "Mengambil tindakan".
 - "Cut it out" -> "Sudahlah!" / "Hentikan!".
-- "For real?" -> "Beneran?" / "Serius?".
-- "No big deal" -> "Bukan masalah besar" / "Nggak apa-apa kok".
+- "You know" (sebagai pengisi dialog lisan) -> "Tahu nggak" / "Kan" / "Sih" / atau hilangkan jika hanya filler (JANGAN kaku harfiah: "kamu tahu").
+- "Like [someone] so much / like very much" -> "Suka banget sama [dia]" (JANGAN harfiah: "menyukai Sakura sangat banyak").
+- "As expected" -> "Sesuai dugaan / sudah kuduga / seperti dugaanku" (JANGAN kaku: "seperti yang diharapkan").
+- "Get hit" -> "Kena serangan / terpukul / terluka" (JANGAN: "kena terbentur").
+- "Decide on a password" -> "Menentukan kata sandi" (JANGAN: "memutuskan yang mana kata sandi").
+- "In the end" -> "Pada akhirnya / ujung-ujungnya" (sesuaikan gaya bicara karakter).
+- "Hidden Leaf / Leaf Village" -> "Desa Konoha" (JANGAN: "Desa Daun").
+- "Revert to your original form" -> "Kembali ke wujud asli kalian" (JANGAN: "kembali ke bentuk semula").
+- "What are you talking about?" -> "Ngomong apa sih kamu? / Apa maksudmu?" (JANGAN kaku: "Apa yang kamu bicarakan?").
 - DILARANG MEMBIARKAN KATA SIFAT INGGRIS TANPA TERJEMAHAN:
   * "Embarrassing" -> "Memalukan" / "Bikin malu" (DILARANG: "sangat embarrassing").
   * "Gross" -> "Jijik" / "Menjijikkan".
@@ -709,6 +716,18 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bsekali seumur hidup\.\.\.permintaanku\b", "permintaan sekali seumur hidupku"),
     (r"\btolong bawakan sasuke kembali\b", "tolong bawa Sasuke kembali"),
     (r"\bTolong bawakan Sasuke kembali\b", "Tolong bawa Sasuke kembali"),
+    (r"\bdesa daun tersembunyi\b", "Desa Konoha"),
+    (r"\bDesa Daun Tersembunyi\b", "Desa Konoha"),
+    (r"\bdesa daun\b", "Desa Konoha"),
+    (r"\bDesa Daun\b", "Desa Konoha"),
+    (r"\bpencinta pertarungan\b", "Fighting Dreamers"),
+    (r"\bPencinta Pertarungan\b", "Fighting Dreamers"),
+    (r"\bjalur berkendara\b", "garis lurus"),
+    (r"\bkembali ke bentuk semula\b", "kembali ke wujud semula"),
+    (r"\bkena terbentur\b", "terkena serangan"),
+    (r"\bseperti yang diharapkan\b", "sudah kuduga"),
+    (r"\bSeperti yang diharapkan\b", "Sudah kuduga"),
+    (r"\bmemutuskan yang mana kata sandi\b", "menentukan kata sandinya"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
@@ -771,6 +790,13 @@ _CASUAL_FANSUB_RULES = [
     (r"\bterima kasih\b", "makasih"),
     (r"\bdengarkan aku\b", "dengerin aku"),
     (r"\bdengarkan\b", "dengerin"),
+    (r"\bsangat banyak\b", "banget"),
+    (r"\bapa yang kamu bicarakan\b", "ngomong apa sih kamu"),
+    (r"\bapa yang kau bicarakan\b", "ngomong apa sih kamu"),
+    (r"\bbodoh sekali\b", "bodoh banget"),
+    (r"\bbagus sekali\b", "hebat banget"),
+    (r"\baku tidak melakukan apa pun\b", "aku nggak ngelakuin apa-apa"),
+    (r"\btidak melakukan apa pun\b", "nggak ngelakuin apa-apa"),
 ]
 
 _COMPILED_UNIVERSAL = [(_re.compile(pat, _re.IGNORECASE), repl) for pat, repl in _UNIVERSAL_FANSUB_RULES]
