@@ -19,11 +19,25 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import android.app.AlertDialog;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.util.TypedValue;
+import android.widget.Button;
+import android.widget.ImageButton;
+
+import androidx.media3.common.C;
+import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.MimeTypes;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
+import androidx.media3.exoplayer.source.MergingMediaSource;
+import androidx.media3.exoplayer.source.SingleSampleMediaSource;
+import androidx.media3.ui.CaptionStyleCompat;
 import androidx.media3.ui.PlayerView;
+import androidx.media3.ui.SubtitleView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -33,7 +47,9 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class PlayerActivity extends Activity {
@@ -44,12 +60,25 @@ public class PlayerActivity extends Activity {
     private View hudOsd;
     private TextView tvOsdIcon, tvOsdVal, tvRippleLeft, tvRippleRight;
     private ProgressBar pbOsdBar;
+    private TextView tvPlayerTitle, tvSubStatus;
+    private Button btnSubSelector;
+    private ImageButton btnPlayerBack;
+    private View layoutTopBar;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     private String slug;
     private int ep;
     private String title;
     private float currentBrightness = 0.5f;
+
+    // Subtitle Engine State
+    private String rawStreamUrl = "";
+    private String streamReferer = "";
+    private List<JSONObject> subtitleTracks = new ArrayList<>();
+    private String activeSubUrl = "";
+    private String activeSubLang = "id"; // Default Indonesian
+    private String activeEngine = "aigtx"; // "aigtx" | "gtx" | "ai" | "raw"
+    private boolean subEnabled = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,6 +100,21 @@ public class PlayerActivity extends Activity {
         tvRippleLeft = findViewById(R.id.tv_ripple_left);
         tvRippleRight = findViewById(R.id.tv_ripple_right);
 
+        layoutTopBar = findViewById(R.id.layout_top_bar);
+        tvPlayerTitle = findViewById(R.id.tv_player_title);
+        tvSubStatus = findViewById(R.id.tv_sub_status);
+        btnSubSelector = findViewById(R.id.btn_sub_selector);
+        btnPlayerBack = findViewById(R.id.btn_player_back);
+
+        if (title != null && !title.isEmpty()) {
+            tvPlayerTitle.setText(title + " - Ep " + ep);
+        } else {
+            tvPlayerTitle.setText("Episode " + ep);
+        }
+
+        btnPlayerBack.setOnClickListener(v -> finish());
+        btnSubSelector.setOnClickListener(v -> showSubtitleSelectorDialog());
+
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
         initExoPlayer();
@@ -81,10 +125,45 @@ public class PlayerActivity extends Activity {
     private void initExoPlayer() {
         player = new ExoPlayer.Builder(this).build();
         playerView.setPlayer(player);
+
+        // Styling native SubtitleView agar tajam dengan outline hitam kontras
+        SubtitleView subView = playerView.getSubtitleView();
+        if (subView != null) {
+            subView.setApplyEmbeddedStyles(false);
+            subView.setApplyEmbeddedFontSizes(false);
+            subView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, 19f);
+            subView.setBottomPaddingFraction(0.08f);
+
+            CaptionStyleCompat style = new CaptionStyleCompat(
+                    Color.WHITE,
+                    Color.argb(160, 0, 0, 0),
+                    Color.TRANSPARENT,
+                    CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                    Color.BLACK,
+                    Typeface.DEFAULT_BOLD
+            );
+            subView.setStyle(style);
+        }
     }
 
     private void setupGestureControls() {
         gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onSingleTapConfirmed(MotionEvent e) {
+                // Toggle visibility top bar
+                if (layoutTopBar.getVisibility() == View.VISIBLE) {
+                    layoutTopBar.setVisibility(View.GONE);
+                } else {
+                    layoutTopBar.setVisibility(View.VISIBLE);
+                    handler.postDelayed(() -> {
+                        if (player != null && player.isPlaying()) {
+                            layoutTopBar.setVisibility(View.GONE);
+                        }
+                    }, 4000);
+                }
+                return true;
+            }
+
             @Override
             public boolean onDoubleTap(MotionEvent e) {
                 float screenWidth = playerView.getWidth();
@@ -214,10 +293,30 @@ public class PlayerActivity extends Activity {
                     }
                     String referer = data.optString("referer", "");
 
-                    if (!streamUrl.isEmpty()) {
-                        final String finalUrl = streamUrl;
-                        final String finalRef = referer;
-                        runOnUiThread(() -> playHls(finalUrl, finalRef));
+                    // Simpan subtitle tracks yang tersedia
+                    JSONArray subArr = data.optJSONArray("subtitles");
+                    subtitleTracks.clear();
+                    String enSub = "";
+                    if (subArr != null) {
+                        for (int i = 0; i < subArr.length(); i++) {
+                            JSONObject s = subArr.getJSONObject(i);
+                            subtitleTracks.add(s);
+                            String lang = s.optString("lang", "").toLowerCase();
+                            String lbl = s.optString("label", "").toLowerCase();
+                            if (enSub.isEmpty() && (lang.equals("en") || lbl.contains("english"))) {
+                                enSub = s.optString("url", "");
+                            }
+                        }
+                    }
+                    if (enSub.isEmpty() && !subtitleTracks.isEmpty()) {
+                        enSub = subtitleTracks.get(0).optString("url", "");
+                    }
+                    activeSubUrl = enSub;
+                    rawStreamUrl = streamUrl;
+                    streamReferer = referer;
+
+                    if (!rawStreamUrl.isEmpty()) {
+                        runOnUiThread(this::applyCurrentStreamAndSubtitles);
                     }
                 } else {
                     runOnUiThread(() -> Toast.makeText(this, "Gagal resolve: " + res.optString("error"), Toast.LENGTH_LONG).show());
@@ -228,26 +327,113 @@ public class PlayerActivity extends Activity {
         }).start();
     }
 
-    private void playHls(String streamUrl, String referer) {
-        // Melalui proxy local Tatap agar bypass TLS desync / DPI ISP berfungsi transparan
-        String proxiedUrl = "http://127.0.0.1:8767/api/player/video?url=" + Uri.encode(streamUrl)
-                + "&referer=" + Uri.encode(referer);
+    private void applyCurrentStreamAndSubtitles() {
+        if (rawStreamUrl.isEmpty()) return;
+
+        long currentPosition = player != null ? player.getCurrentPosition() : 0;
+        boolean wasPlaying = player != null && player.isPlaying();
+
+        String proxiedVideo = "http://127.0.0.1:8767/api/player/video?url=" + Uri.encode(rawStreamUrl)
+                + "&referer=" + Uri.encode(streamReferer);
 
         Map<String, String> headers = new HashMap<>();
-        if (!referer.isEmpty()) {
-            headers.put("Referer", referer);
+        if (!streamReferer.isEmpty()) {
+            headers.put("Referer", streamReferer);
         }
 
         DefaultHttpDataSource.Factory httpDataSourceFactory = new DefaultHttpDataSource.Factory()
                 .setDefaultRequestProperties(headers)
                 .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0");
 
-        HlsMediaSource mediaSource = new HlsMediaSource.Factory(httpDataSourceFactory)
-                .createMediaSource(MediaItem.fromUri(Uri.parse(proxiedUrl)));
+        HlsMediaSource videoSource = new HlsMediaSource.Factory(httpDataSourceFactory)
+                .createMediaSource(MediaItem.fromUri(Uri.parse(proxiedVideo)));
 
-        player.setMediaSource(mediaSource);
+        if (subEnabled && !activeSubUrl.isEmpty()) {
+            // Bangun URL subtitle yang diarahkan ke backend translation proxy
+            String subModeParam = activeEngine.equals("raw") ? "" : activeEngine;
+            String proxiedSub = "http://127.0.0.1:8767/api/player/sub?url=" + Uri.encode(activeSubUrl)
+                    + "&referer=" + Uri.encode(streamReferer)
+                    + "&src=en&lang=" + Uri.encode(activeSubLang)
+                    + (subModeParam.isEmpty() ? "" : "&mode=" + subModeParam);
+
+            Format textFormat = new Format.Builder()
+                    .setSampleMimeType(MimeTypes.TEXT_VTT)
+                    .setLanguage(activeSubLang)
+                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                    .build();
+
+            SingleSampleMediaSource subSource = new SingleSampleMediaSource.Factory(httpDataSourceFactory)
+                    .createMediaSource(new MediaItem.SubtitleConfiguration.Builder(Uri.parse(proxiedSub))
+                            .setMimeType(MimeTypes.TEXT_VTT)
+                            .setLanguage(activeSubLang)
+                            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                            .build(), C.TIME_UNSET);
+
+            MergingMediaSource merged = new MergingMediaSource(true, true, videoSource, subSource);
+            player.setMediaSource(merged);
+
+            String engineLabel = "AIGTX (Cepat)";
+            if ("gtx".equals(activeEngine)) engineLabel = "Google GTX";
+            else if ("ai".equals(activeEngine)) engineLabel = "AI Fansub LLM";
+            else if ("raw".equals(activeEngine)) engineLabel = "Source English";
+
+            tvSubStatus.setText("Sub: " + activeSubLang.toUpperCase() + " • " + engineLabel);
+        } else {
+            player.setMediaSource(videoSource);
+            tvSubStatus.setText("Subtitle: Nonaktif");
+        }
+
         player.prepare();
+        if (currentPosition > 0) {
+            player.seekTo(currentPosition);
+        }
         player.play();
+    }
+
+    private void showSubtitleSelectorDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
+        builder.setTitle("Pengaturan Subtitle & Mesin Terjemahan");
+
+        String[] options = new String[]{
+                "🇮🇩 Bahasa Indonesia (AIGTX - Instan & Cerdas)" + (subEnabled && "id".equals(activeSubLang) && "aigtx".equals(activeEngine) ? " ✓" : ""),
+                "🇮🇩 Bahasa Indonesia (AI Fansub LLM / Gemini)" + (subEnabled && "id".equals(activeSubLang) && "ai".equals(activeEngine) ? " ✓" : ""),
+                "🇮🇩 Bahasa Indonesia (Google GTX Murni)" + (subEnabled && "id".equals(activeSubLang) && "gtx".equals(activeEngine) ? " ✓" : ""),
+                "🇬🇧 English (Original / Asli)" + (subEnabled && "en".equals(activeSubLang) ? " ✓" : ""),
+                "❌ Matikan Subtitle" + (!subEnabled ? " ✓" : "")
+        };
+
+        builder.setItems(options, (dialog, which) -> {
+            switch (which) {
+                case 0:
+                    subEnabled = true;
+                    activeSubLang = "id";
+                    activeEngine = "aigtx";
+                    break;
+                case 1:
+                    subEnabled = true;
+                    activeSubLang = "id";
+                    activeEngine = "ai";
+                    break;
+                case 2:
+                    subEnabled = true;
+                    activeSubLang = "id";
+                    activeEngine = "gtx";
+                    break;
+                case 3:
+                    subEnabled = true;
+                    activeSubLang = "en";
+                    activeEngine = "raw";
+                    break;
+                case 4:
+                    subEnabled = false;
+                    break;
+            }
+            applyCurrentStreamAndSubtitles();
+            Toast.makeText(this, "Subtitle diperbarui: " + (subEnabled ? activeSubLang.toUpperCase() + " [" + activeEngine + "]" : "OFF"), Toast.LENGTH_SHORT).show();
+        });
+
+        builder.setNegativeButton("Tutup", (dialog, which) -> dialog.dismiss());
+        builder.show();
     }
 
     @Override

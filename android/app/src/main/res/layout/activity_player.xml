@@ -86,7 +86,7 @@
         android:background="#22FFFFFF"
         android:visibility="gone" />
 
-    <!-- Subtitle Custom Overlay -->
+    <!-- Subtitle Custom Overlay (Jika dipakai fallback) -->
     <TextView
         android:id="@+id/tv_subtitles"
         android:layout_width="wrap_content"
@@ -102,4 +102,65 @@
         android:textStyle="bold"
         android:fontFamily="monospace"
         android:visibility="gone" />
+
+    <!-- Top Overlay Control Bar (Back, Title, Subtitle Selector [CC]) -->
+    <LinearLayout
+        android:id="@+id/layout_top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="16dp"
+        android:background="#99000000">
+
+        <ImageButton
+            android:id="@+id/btn_player_back"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_revert"
+            app:tint="#FFFFFF"
+            android:contentDescription="Kembali" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tv_player_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Memuat Video..."
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/tv_sub_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Subtitle: Auto (Indonesia)"
+                android:textColor="#38BDF8"
+                android:textSize="12sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <!-- Tombol Pilihan Subtitle Engine / Bahasa -->
+        <Button
+            android:id="@+id/btn_sub_selector"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:paddingHorizontal="12dp"
+            android:text="💬 SUB [CC]"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:background="#2563EB" />
+    </LinearLayout>
 </FrameLayout>
