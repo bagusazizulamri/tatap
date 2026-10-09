@@ -210,6 +210,16 @@ def test_sanitize_aigtx_id():
     raw_basement = "Kunci ruang bawah tanah rumah Dr. Yeager ada di laci meja."
     assert T._sanitize_aigtx_id(raw_basement) == "Kunci ruang bawah tanah rumah Dr. Yeager ada di laci meja."
 
+    # 6. Blunder calque mesin lainnya
+    raw_party = "Mungkin kita harus merekrut pengintai untuk pesta itu."
+    assert T._sanitize_aigtx_id(raw_party) == "Mungkin kita harus merekrut pengintai untuk party."
+
+    raw_charge = "Aduh. Apakah sedang mengisi daya?!"
+    assert T._sanitize_aigtx_id(raw_charge) == "Aduh. Apakah dia sedang mengumpulkan kekuatan?!"
+
+    raw_repeat = "Rencana hari ini adalah mengulangi perintah itu. dungeon dan tantang kemunculan monster bos."
+    assert T._sanitize_aigtx_id(raw_repeat) == "Rencana hari ini adalah mengulang dungeon dan tantang kemunculan monster bos."
+
 
 def test_call_gtx_translate_modes(monkeypatch):
     cues = [{"start": 0.0, "end": 2.0, "text": "Rouge Ninja in Desa Daun"}]

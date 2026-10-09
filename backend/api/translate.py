@@ -794,6 +794,13 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bbos ruang bawah tanah\b", "bos dungeon"),
     (r"\bmonster ruang bawah tanah\b", "monster dungeon"),
     (r"\blantai ruang bawah tanah\b", "lantai dungeon"),
+    (r"\bmengulangi perintah itu\.\s*dungeon\b", "mengulang dungeon"),
+    (r"\buntuk pesta itu\b", "untuk party"),
+    (r"\bapakah sedang mengisi daya\b", "apakah dia sedang mengumpulkan kekuatan"),
+    (r"\bsedang mengisi daya\b", "sedang mengumpulkan kekuatan"),
+    (r"\bparty yang dimiliki oleh\b", "party tempat bergabungnya"),
+    (r"\bpanggilanku tidak bisa digunakan untuk bertarung\b", "monster summon-ku sedang bertarung"),
+    (r"\btanpa panggilan itu\b", "tanpa monster summon itu"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
