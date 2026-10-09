@@ -1,16 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/card_episode"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="4dp">
+    android:layout_margin="4dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="2dp"
+    app:cardBackgroundColor="#121622">
 
-    <Button
-        android:id="@+id/btn_ep_num"
+    <LinearLayout
+        android:id="@+id/layout_ep_body"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:backgroundTint="#161A24"
-        android:textColor="#00DBEB"
-        android:textSize="14sp"
-        android:text="1"
-        android:fontFamily="monospace" />
-</FrameLayout>
+        android:layout_height="52dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingHorizontal="4dp"
+        android:background="?attr/selectableItemBackground">
+
+        <TextView
+            android:id="@+id/tv_ep_status_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="✓ SELESAI"
+            android:textColor="#10B981"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"
+            android:visibility="gone"
+            android:layout_marginBottom="1dp" />
+
+        <TextView
+            android:id="@+id/tv_ep_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="EP 01"
+            android:textColor="#00DBEB"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

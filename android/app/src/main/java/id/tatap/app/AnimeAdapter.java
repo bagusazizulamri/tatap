@@ -59,6 +59,10 @@ public class AnimeAdapter extends RecyclerView.Adapter<AnimeAdapter.AnimeViewHol
             Intent intent = new Intent(context, DetailActivity.class);
             intent.putExtra("slug", slug);
             intent.putExtra("title", title);
+            intent.putExtra("poster", poster);
+            intent.putExtra("type", type);
+            intent.putExtra("eps", eps);
+            intent.putExtra("sub", sub);
             context.startActivity(intent);
         });
     }

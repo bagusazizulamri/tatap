@@ -14,3 +14,4 @@ dist/
 # - plan.md: working doc pribadi
 tools/
 plan.md
+.gradle/

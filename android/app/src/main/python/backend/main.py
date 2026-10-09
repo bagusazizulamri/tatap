@@ -1101,12 +1101,17 @@ async def get_translate_logs_api():
     from api.translate import get_translate_logs
     return {"success": True, "data": {"logs": get_translate_logs()}}
 
-app.mount("/js", StaticFiles(directory=os.path.join(frontend_dir, "js")), name="js")
-app.mount("/css", StaticFiles(directory=os.path.join(frontend_dir, "css")), name="css")
+if os.path.isdir(os.path.join(frontend_dir, "js")):
+    app.mount("/js", StaticFiles(directory=os.path.join(frontend_dir, "js")), name="js")
+if os.path.isdir(os.path.join(frontend_dir, "css")):
+    app.mount("/css", StaticFiles(directory=os.path.join(frontend_dir, "css")), name="css")
 
 @app.get("/")
 async def root():
-    return FileResponse(os.path.join(frontend_dir, "index.html"))
+    idx_path = os.path.join(frontend_dir, "index.html")
+    if os.path.isfile(idx_path):
+        return FileResponse(idx_path)
+    return ok({"status": "running", "app": "Tatap Native Android Backend"})
 
 if __name__ == "__main__":
     import uvicorn

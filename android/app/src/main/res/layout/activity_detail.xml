@@ -1,18 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#08090C"
-    android:padding="16dp">
+    android:background="#08090C">
 
-    <!-- Header Detail -->
+    <!-- Top App Bar -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="56dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingBottom="12dp">
+        android:paddingHorizontal="12dp"
+        android:background="#0D0F14">
 
         <ImageButton
             android:id="@+id/btn_back"
@@ -20,7 +21,8 @@
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_menu_revert"
-            android:tint="#00DBEB" />
+            android:tint="#00DBEB"
+            android:contentDescription="Kembali" />
 
         <TextView
             android:id="@+id/tv_detail_title"
@@ -30,26 +32,150 @@
             android:layout_marginStart="8dp"
             android:text="Detail Anime"
             android:textColor="#FFFFFF"
-            android:textSize="16sp"
+            android:textSize="15sp"
             android:textStyle="bold"
             android:singleLine="true"
             android:ellipsize="end"
             android:fontFamily="monospace" />
+
+        <ProgressBar
+            android:id="@+id/pb_detail_loading"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_marginEnd="6dp"
+            android:visibility="gone"
+            android:indeterminateTint="#00DBEB" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/tv_detail_slug"
-        android:layout_width="wrap_content"
+    <!-- Hero Card Banner -->
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="memuat episode..."
-        android:textColor="#6B778D"
-        android:textSize="12sp"
-        android:fontFamily="monospace"
-        android:layout_marginBottom="12dp" />
+        android:layout_margin="12dp"
+        app:cardCornerRadius="10dp"
+        app:cardElevation="4dp"
+        app:cardBackgroundColor="#0F131C">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="12dp">
+
+            <!-- Poster Thumbnail -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="85dp"
+                android:layout_height="120dp"
+                app:cardCornerRadius="6dp"
+                app:cardElevation="0dp"
+                app:cardBackgroundColor="#161A24">
+
+                <ImageView
+                    android:id="@+id/iv_detail_poster"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:contentDescription="Poster" />
+            </androidx.cardview.widget.CardView>
+
+            <!-- Metadata Info -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:orientation="vertical"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/tv_detail_title_full"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:maxLines="2"
+                    android:ellipsize="end"
+                    android:text="Judul Anime"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/tv_detail_type_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:background="#16202E"
+                    android:paddingHorizontal="6dp"
+                    android:paddingVertical="2dp"
+                    android:text="TV SERIES"
+                    android:textColor="#00DBEB"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/tv_detail_slug"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Memuat episode..."
+                    android:textColor="#8892B0"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace" />
+
+                <Button
+                    android:id="@+id/btn_quick_play"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:layout_marginTop="8dp"
+                    android:text="▶ MULAI NONTON"
+                    android:textColor="#FFFFFF"
+                    android:backgroundTint="#0E7490"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace"
+                    android:paddingHorizontal="12dp" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Section Header (Daftar Episode & Sort Order) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="4dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="DAFTAR EPISODE"
+            android:textColor="#8892B0"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <Button
+            android:id="@+id/btn_sort_order"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:text="1 ➔ N"
+            android:textColor="#00DBEB"
+            android:backgroundTint="#141924"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:paddingHorizontal="8dp" />
+    </LinearLayout>
 
     <!-- Episode Grid -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_episodes"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:paddingHorizontal="10dp"
+        android:clipToPadding="false"
+        android:scrollbars="vertical" />
 </LinearLayout>

@@ -212,20 +212,53 @@ def _failover_proxies():
     return out
 
 
-def _fetch(url, referer=None, timeout=15):
+_shared_client = None
+
+def _get_shared_client():
+    global _shared_client
+    if _shared_client is None:
+        import httpx
+        limits = httpx.Limits(max_connections=30, max_keepalive_connections=15, keepalive_expiry=60.0)
+        _shared_client = httpx.Client(
+            follow_redirects=True,
+            timeout=httpx.Timeout(12.0, connect=5.0),
+            limits=limits,
+            headers={
+                "User-Agent": HI_UA,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9,id;q=0.8",
+                "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"Windows"',
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+                "Upgrade-Insecure-Requests": "1"
+            }
+        )
+    return _shared_client
+
+
+def _fetch(url, referer=None, timeout=12):
     last_err = ""
+    # 1. Coba via curl_cffi impersonate Chrome jika tersedia di lingkungan
     for px in _failover_proxies():
         try:
             from curl_cffi import requests as creq
             try:
-                kw = dict(headers={"User-Agent": HI_UA, "Accept": "text/html,application/json,*/*", **({"Referer": referer} if referer else {})}, impersonate="chrome124", timeout=timeout)
+                kw = dict(
+                    headers={"User-Agent": HI_UA, "Accept": "text/html,application/json,*/*", **({"Referer": referer} if referer else {})},
+                    impersonate="chrome124",
+                    timeout=timeout
+                )
                 if px:
                     kw["proxies"] = px
                 r = creq.get(url, **kw)
                 if r.status_code == 200:
                     return r.text
                 if "Just a moment" in r.text or "cf-challenge" in r.text:
-                    last_err = "Blocked by cloudflare (cf-challenge). Coba lagi nanti."
+                    last_err = "Blocked by cloudflare (cf-challenge)."
                     continue
                 last_err = f"HTTP {r.status_code} from {url}"
                 continue
@@ -235,16 +268,33 @@ def _fetch(url, referer=None, timeout=15):
         except ImportError:
             last_err = "curl_cffi missing"
             break
+
+    # 2. Coba via persistent httpx pool
     try:
-        import httpx
-        with httpx.Client(follow_redirects=True, timeout=timeout, headers={"User-Agent": HI_UA}) as c:
-            h = {"Referer": referer} if referer else {}
-            r = c.get(url, headers=h)
-            if r.status_code == 200:
+        client = _get_shared_client()
+        h = {"Referer": referer} if referer else {}
+        r = client.get(url, headers=h)
+        if r.status_code == 200:
+            if "Just a moment" in r.text or "cf-challenge" in r.text:
+                last_err = "Blocked by cloudflare (cf-challenge)."
+            else:
                 return r.text
-            raise RuntimeError(f"HTTP {r.status_code} from {url}")
+        else:
+            last_err = f"HTTP {r.status_code} from {url}"
     except Exception as e:
-        raise RuntimeError(f"{last_err} | httpx: {e}")
+        last_err = str(e)
+
+    # 3. Fallback: TLS Desync request (bypass DPI ISP block)
+    try:
+        from api.desync import tls_desync_request
+        raw = tls_desync_request(url, headers={"Referer": referer} if referer else {}, timeout=timeout)
+        txt = raw.decode("utf-8", errors="replace")
+        if txt and ("<html" in txt.lower() or "{" in txt):
+            return txt
+    except Exception as e:
+        pass
+
+    raise RuntimeError(f"Gagal memuat URL: {last_err or 'unknown error'}")
 
 def deobfuscate_blob(b64: str) -> str:
     raw = base64.b64decode(b64.strip())

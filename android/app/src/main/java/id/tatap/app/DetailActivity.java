@@ -1,17 +1,23 @@
 package id.tatap.app;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.cardview.widget.CardView;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -24,14 +30,27 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class DetailActivity extends Activity {
     private String slug;
     private String title;
-    private TextView tvTitle, tvSlug;
+    private String poster;
+    private String type;
+    private String eps;
+    private String sub;
+
+    private TextView tvTitle, tvTitleFull, tvSlug, tvTypeBadge;
+    private ImageView ivPoster;
+    private Button btnQuickPlay, btnSortOrder;
+    private ProgressBar pbLoading;
     private RecyclerView rvEpisodes;
     private EpisodeAdapter adapter;
+
+    private SharedPreferences prefs;
+    private final List<Integer> originalEpisodes = new ArrayList<>();
+    private boolean isAscending = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,14 +59,36 @@ public class DetailActivity extends Activity {
 
         slug = getIntent().getStringExtra("slug");
         title = getIntent().getStringExtra("title");
+        poster = getIntent().getStringExtra("poster");
+        type = getIntent().getStringExtra("type");
+        eps = getIntent().getStringExtra("eps");
+        sub = getIntent().getStringExtra("sub");
+
+        prefs = getSharedPreferences("tatap_history", Context.MODE_PRIVATE);
 
         tvTitle = findViewById(R.id.tv_detail_title);
+        tvTitleFull = findViewById(R.id.tv_detail_title_full);
         tvSlug = findViewById(R.id.tv_detail_slug);
+        tvTypeBadge = findViewById(R.id.tv_detail_type_badge);
+        ivPoster = findViewById(R.id.iv_detail_poster);
+        btnQuickPlay = findViewById(R.id.btn_quick_play);
+        btnSortOrder = findViewById(R.id.btn_sort_order);
+        pbLoading = findViewById(R.id.pb_detail_loading);
         ImageButton btnBack = findViewById(R.id.btn_back);
         rvEpisodes = findViewById(R.id.rv_episodes);
 
-        tvTitle.setText(title);
-        tvSlug.setText("ID: " + slug);
+        tvTitle.setText(title != null ? title : "Detail Anime");
+        tvTitleFull.setText(title != null ? title : "Anime");
+
+        String badgeText = (type != null && !type.isEmpty() ? type : "ANIME")
+                + (eps != null && !eps.isEmpty() ? " · " + eps + " EP" : "")
+                + (sub != null && !sub.isEmpty() ? " · " + sub : "");
+        tvTypeBadge.setText(badgeText);
+        tvSlug.setText("Memuat episode...");
+
+        if (poster != null && !poster.isEmpty()) {
+            ImageLoader.load(poster, ivPoster);
+        }
 
         btnBack.setOnClickListener(v -> finish());
 
@@ -55,10 +96,63 @@ public class DetailActivity extends Activity {
         adapter = new EpisodeAdapter();
         rvEpisodes.setAdapter(adapter);
 
+        btnSortOrder.setOnClickListener(v -> {
+            isAscending = !isAscending;
+            btnSortOrder.setText(isAscending ? "1 ➔ N" : "N ➔ 1");
+            updateEpisodeDisplay();
+        });
+
+        btnQuickPlay.setOnClickListener(v -> {
+            int targetEp = prefs.getInt("last_ep_" + slug, -1);
+            if (targetEp <= 0) {
+                if (!originalEpisodes.isEmpty()) {
+                    targetEp = originalEpisodes.get(0);
+                } else {
+                    targetEp = 1;
+                }
+            }
+            playEpisode(targetEp);
+        });
+
+        updateQuickPlayButton();
         loadEpisodes();
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        updateQuickPlayButton();
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
+    }
+
+    private void updateQuickPlayButton() {
+        int lastEp = prefs.getInt("last_ep_" + slug, -1);
+        if (lastEp > 0) {
+            btnQuickPlay.setText("▶ LANJUTKAN EP " + lastEp);
+            btnQuickPlay.setBackgroundColor(0xFF0E7490);
+        } else {
+            btnQuickPlay.setText("▶ MULAI EP 1");
+            btnQuickPlay.setBackgroundColor(0xFF16202E);
+        }
+    }
+
+    private void playEpisode(int ep) {
+        prefs.edit()
+                .putInt("last_ep_" + slug, ep)
+                .putBoolean("watched_" + slug + "_" + ep, true)
+                .apply();
+
+        Intent intent = new Intent(DetailActivity.this, PlayerActivity.class);
+        intent.putExtra("slug", slug);
+        intent.putExtra("ep", ep);
+        intent.putExtra("title", title);
+        startActivity(intent);
+    }
+
     private void loadEpisodes() {
+        if (pbLoading != null) pbLoading.setVisibility(View.VISIBLE);
         new Thread(() -> {
             try {
                 String u = "http://127.0.0.1:8767/api/anime/" + URLEncoder.encode(slug, "UTF-8") + "/episodes";
@@ -73,20 +167,42 @@ public class DetailActivity extends Activity {
 
                 JSONObject res = new JSONObject(sb.toString());
                 if (res.optBoolean("success")) {
-                    JSONArray eps = res.getJSONObject("data").getJSONArray("episodes");
+                    JSONArray epsArr = res.getJSONObject("data").getJSONArray("episodes");
                     List<Integer> list = new ArrayList<>();
-                    for (int i = 0; i < eps.length(); i++) {
-                        list.add(eps.getJSONObject(i).getInt("ep"));
+                    for (int i = 0; i < epsArr.length(); i++) {
+                        list.add(epsArr.getJSONObject(i).getInt("ep"));
                     }
+                    Collections.sort(list);
                     runOnUiThread(() -> {
+                        if (pbLoading != null) pbLoading.setVisibility(View.GONE);
+                        originalEpisodes.clear();
+                        originalEpisodes.addAll(list);
                         tvSlug.setText(list.size() + " Episode Tersedia");
-                        adapter.setEpisodes(list);
+                        updateEpisodeDisplay();
+                        updateQuickPlayButton();
+                    });
+                } else {
+                    runOnUiThread(() -> {
+                        if (pbLoading != null) pbLoading.setVisibility(View.GONE);
+                        tvSlug.setText("Episode tidak ditemukan");
                     });
                 }
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, "Gagal memuat episode: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> {
+                    if (pbLoading != null) pbLoading.setVisibility(View.GONE);
+                    Toast.makeText(this, "Gagal memuat episode: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    tvSlug.setText("Gagal terhubung ke backend");
+                });
             }
         }).start();
+    }
+
+    private void updateEpisodeDisplay() {
+        List<Integer> displayList = new ArrayList<>(originalEpisodes);
+        if (!isAscending) {
+            Collections.reverse(displayList);
+        }
+        adapter.setEpisodes(displayList);
     }
 
     class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.EpisodeViewHolder> {
@@ -108,14 +224,33 @@ public class DetailActivity extends Activity {
         @Override
         public void onBindViewHolder(@NonNull EpisodeViewHolder holder, int position) {
             int ep = episodes.get(position);
-            holder.btnEp.setText("EP " + ep);
-            holder.btnEp.setOnClickListener(v -> {
-                Intent intent = new Intent(DetailActivity.this, PlayerActivity.class);
-                intent.putExtra("slug", slug);
-                intent.putExtra("ep", ep);
-                intent.putExtra("title", title);
-                startActivity(intent);
-            });
+            holder.tvTitle.setText(String.format("EP %02d", ep));
+
+            int lastPlayedEp = prefs.getInt("last_ep_" + slug, -1);
+            boolean isWatched = prefs.getBoolean("watched_" + slug + "_" + ep, false);
+
+            if (ep == lastPlayedEp) {
+                // Last played episode
+                holder.card.setCardBackgroundColor(0xFF0E3A4B);
+                holder.tvTitle.setTextColor(0xFF00DBEB);
+                holder.tvBadge.setVisibility(View.VISIBLE);
+                holder.tvBadge.setText("▶ TERAKHIR");
+                holder.tvBadge.setTextColor(0xFF00DBEB);
+            } else if (isWatched) {
+                // Watched episode
+                holder.card.setCardBackgroundColor(0xFF0C131D);
+                holder.tvTitle.setTextColor(0xFF7A8B9E);
+                holder.tvBadge.setVisibility(View.VISIBLE);
+                holder.tvBadge.setText("✓ DITONTON");
+                holder.tvBadge.setTextColor(0xFF10B981);
+            } else {
+                // Unwatched episode
+                holder.card.setCardBackgroundColor(0xFF121622);
+                holder.tvTitle.setTextColor(0xFFE2E8F0);
+                holder.tvBadge.setVisibility(View.GONE);
+            }
+
+            holder.itemView.setOnClickListener(v -> playEpisode(ep));
         }
 
         @Override
@@ -124,10 +259,15 @@ public class DetailActivity extends Activity {
         }
 
         class EpisodeViewHolder extends RecyclerView.ViewHolder {
-            Button btnEp;
+            CardView card;
+            TextView tvTitle;
+            TextView tvBadge;
+
             public EpisodeViewHolder(@NonNull View itemView) {
                 super(itemView);
-                btnEp = itemView.findViewById(R.id.btn_ep_num);
+                card = itemView.findViewById(R.id.card_episode);
+                tvTitle = itemView.findViewById(R.id.tv_ep_title);
+                tvBadge = itemView.findViewById(R.id.tv_ep_status_badge);
             }
         }
     }

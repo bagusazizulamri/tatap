@@ -14,19 +14,50 @@ _DNS_CACHE = {}
 
 
 def _resolve_host(host: str) -> str:
-    """Resolve domain ke IPv4. Fallback ke IP dramahot yang diketahui jika DNS di-poison."""
+    """Resolve domain ke IPv4 dengan proteksi anti DNS-poisoning ISP.
+    Urutan: Cache -> System DNS -> DoH (Cloudflare 1.1.1.1 / Google 8.8.8.8) -> Hardcoded Fallback."""
+    if not host:
+        return host
     if host in _DNS_CACHE:
         return _DNS_CACHE[host]
+    
+    # Cek apakah host sudah merupakan IP numerik
+    if all(part.isdigit() for part in host.split(".") if part):
+        _DNS_CACHE[host] = host
+        return host
+
+    # 1. Coba resolve DNS sistem lokal
     try:
-        # Coba resolve sistem
         ip = socket.gethostbyname(host)
-        if ip and not ip.startswith("10.") and not ip.startswith("127."):
+        # Abaikan bila di-poison ke IP localhost atau private range
+        if ip and not ip.startswith("10.") and not ip.startswith("127.") and not ip.startswith("192.168."):
             _DNS_CACHE[host] = ip
             return ip
     except Exception:
         pass
-    
-    # Fallback IP CDN yang diketahui
+
+    # 2. Bypass DNS Blokir ISP via DoH (DNS-over-HTTPS)
+    for doh_url in ("https://1.1.1.1/dns-query", "https://dns.google/resolve"):
+        try:
+            import urllib.request
+            import json
+            req = urllib.request.Request(
+                f"{doh_url}?name={host}&type=A",
+                headers={"Accept": "application/dns-json", "User-Agent": HI_UA}
+            )
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    answers = data.get("Answer", [])
+                    for ans in answers:
+                        if ans.get("type") == 1 and ans.get("data"):
+                            ip = ans["data"]
+                            _DNS_CACHE[host] = ip
+                            return ip
+        except Exception:
+            pass
+
+    # 3. Fallback IP CDN yang diketahui
     known = {
         "hls.dramahot.top": "93.123.109.210",
         "dramahot.top": "93.123.109.210",
@@ -34,7 +65,7 @@ def _resolve_host(host: str) -> str:
     if host in known:
         _DNS_CACHE[host] = known[host]
         return known[host]
-    
+
     return host
 
 

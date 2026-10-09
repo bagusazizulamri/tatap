@@ -1,11 +1,21 @@
 package id.tatap.app;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.Context;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
@@ -14,6 +24,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -40,6 +51,19 @@ public class MainActivity extends Activity {
     private Button btnTabMusim, btnTabAiring, btnTabKatalog;
     private Button btnPrevPage, btnNextPage;
     private View layoutPagination;
+
+    // Command Banner & Active Filter Bar Widgets
+    private View layoutCommandBanner;
+    private TextView tvCommandOutput;
+    private Button btnCloseCommandBanner;
+    private View layoutActiveFilter;
+    private TextView tvActiveFilterLabel;
+    private Button btnClearFilter;
+
+    private final Handler bannerHandler = new Handler(Looper.getMainLooper());
+    private final Runnable hideBannerRunnable = () -> {
+        if (layoutCommandBanner != null) layoutCommandBanner.setVisibility(View.GONE);
+    };
 
     // State navigasi tampilan & paging
     private String currentView = "musim"; // "musim" | "airing" | "katalog" | "cari" | "genre" | "season_filter"
@@ -70,6 +94,14 @@ public class MainActivity extends Activity {
         btnNextPage = findViewById(R.id.btn_next_page);
         layoutPagination = findViewById(R.id.layout_pagination);
 
+        // Command HUD & Filter Bar
+        layoutCommandBanner = findViewById(R.id.layout_command_banner);
+        tvCommandOutput = findViewById(R.id.tv_command_output);
+        btnCloseCommandBanner = findViewById(R.id.btn_close_command_banner);
+        layoutActiveFilter = findViewById(R.id.layout_active_filter);
+        tvActiveFilterLabel = findViewById(R.id.tv_active_filter_label);
+        btnClearFilter = findViewById(R.id.btn_clear_filter);
+
         rvGrid.setLayoutManager(new GridLayoutManager(this, 2));
         adapter = new AnimeAdapter(this);
         rvGrid.setAdapter(adapter);
@@ -97,6 +129,8 @@ public class MainActivity extends Activity {
                         currentSearchQuery = raw;
                         currentPage = 1;
                         updateTabButtons();
+                        updateActiveFilterBar();
+                        showCommandOutput("> tatap$ cari \"" + raw + "\"", false);
                         fetchData();
                     }
                 }
@@ -105,9 +139,17 @@ public class MainActivity extends Activity {
             return false;
         });
 
-        btnTabMusim.setOnClickListener(v -> switchView("musim"));
-        btnTabAiring.setOnClickListener(v -> switchView("airing"));
-        btnTabKatalog.setOnClickListener(v -> switchView("katalog"));
+        btnTabMusim.setOnClickListener(v -> {
+            resetFiltersToTab("musim");
+        });
+
+        btnTabAiring.setOnClickListener(v -> {
+            resetFiltersToTab("airing");
+        });
+
+        btnTabKatalog.setOnClickListener(v -> {
+            resetFiltersToTab("katalog");
+        });
 
         btnPrevPage.setOnClickListener(v -> {
             if (currentPage > 1) {
@@ -120,6 +162,54 @@ public class MainActivity extends Activity {
             currentPage++;
             fetchData();
         });
+
+        if (btnCloseCommandBanner != null) {
+            btnCloseCommandBanner.setOnClickListener(v -> {
+                if (layoutCommandBanner != null) layoutCommandBanner.setVisibility(View.GONE);
+            });
+        }
+
+        if (btnClearFilter != null) {
+            btnClearFilter.setOnClickListener(v -> resetFiltersToTab("musim"));
+        }
+    }
+
+    private void showCommandOutput(String message, boolean isError) {
+        if (layoutCommandBanner == null || tvCommandOutput == null) return;
+        tvCommandOutput.setText(message);
+        tvCommandOutput.setTextColor(isError ? 0xFFEF4444 : 0xFF00DBEB);
+        layoutCommandBanner.setVisibility(View.VISIBLE);
+
+        bannerHandler.removeCallbacks(hideBannerRunnable);
+        bannerHandler.postDelayed(hideBannerRunnable, 8000);
+    }
+
+    private void updateActiveFilterBar() {
+        if (layoutActiveFilter == null || tvActiveFilterLabel == null) return;
+
+        if ("genre".equals(currentView)) {
+            layoutActiveFilter.setVisibility(View.VISIBLE);
+            tvActiveFilterLabel.setText("🏷 GENRE: " + currentGenre.toUpperCase().replace("-", " "));
+        } else if ("season_filter".equals(currentView)) {
+            layoutActiveFilter.setVisibility(View.VISIBLE);
+            tvActiveFilterLabel.setText("❄ MUSIM: " + currentSeasonName.toUpperCase() + " " + currentSeasonYear);
+        } else if ("cari".equals(currentView)) {
+            layoutActiveFilter.setVisibility(View.VISIBLE);
+            tvActiveFilterLabel.setText("🔍 CARI: \"" + currentSearchQuery + "\"");
+        } else {
+            layoutActiveFilter.setVisibility(View.GONE);
+        }
+    }
+
+    private void resetFiltersToTab(String targetTab) {
+        currentGenre = "";
+        currentSeasonName = "";
+        currentSeasonYear = 0;
+        currentSearchQuery = "";
+        etSearch.setText("");
+        switchView(targetTab);
+        updateActiveFilterBar();
+        showCommandOutput("> tatap$ Tampilan diatur ke: " + targetTab.toUpperCase(), false);
     }
 
     private void executeCommand(String commandLine) {
@@ -132,33 +222,31 @@ public class MainActivity extends Activity {
             case "help":
             case "bantuan":
             case "?":
+                showCommandOutput("> tatap$ :help [Membuka Terminal Bantuan]", false);
                 showCommandHelpDialog();
                 break;
 
             case "musim":
-                switchView("musim");
-                Toast.makeText(this, "Beralih ke: Tayang Musim Ini", Toast.LENGTH_SHORT).show();
+                resetFiltersToTab("musim");
                 break;
 
             case "season":
                 if (!args.isEmpty()) {
                     handleSeasonFilterCommand(parts);
                 } else {
-                    switchView("musim");
-                    Toast.makeText(this, "Beralih ke: Tayang Musim Ini (Gunakan :season <winter|spring|summer|fall> <tahun> untuk filter)", Toast.LENGTH_LONG).show();
+                    showCommandOutput("> tatap$ Gunakan format: :season <winter|spring|summer|fall> <tahun>", true);
+                    Toast.makeText(this, "Format: :season <winter|spring|summer|fall> <tahun> (Contoh: :season fall 2024)", Toast.LENGTH_LONG).show();
                 }
                 break;
 
             case "airing":
             case "terbaru":
-                switchView("airing");
-                Toast.makeText(this, "Beralih ke: Masih Tayang", Toast.LENGTH_SHORT).show();
+                resetFiltersToTab("airing");
                 break;
 
             case "katalog":
             case "catalog":
-                switchView("katalog");
-                Toast.makeText(this, "Beralih ke: Katalog Populer", Toast.LENGTH_SHORT).show();
+                resetFiltersToTab("katalog");
                 break;
 
             case "genre":
@@ -176,8 +264,11 @@ public class MainActivity extends Activity {
                     currentSearchQuery = args;
                     currentPage = 1;
                     updateTabButtons();
+                    updateActiveFilterBar();
+                    showCommandOutput("> tatap$ :cari \"" + args + "\" [Mencari...]", false);
                     fetchData();
                 } else {
+                    showCommandOutput("> tatap$ :cari [Gagal: Butuh kata kunci judul]", true);
                     Toast.makeText(this, "Gunakan: :cari <judul>", Toast.LENGTH_SHORT).show();
                 }
                 break;
@@ -188,11 +279,11 @@ public class MainActivity extends Activity {
                     int p = Integer.parseInt(args);
                     if (p >= 1) {
                         currentPage = p;
+                        showCommandOutput("> tatap$ :page " + p + " [Lompat ke Halaman " + p + "]", false);
                         fetchData();
-                        Toast.makeText(this, "Menuju halaman " + p, Toast.LENGTH_SHORT).show();
                     }
                 } catch (Exception e) {
-                    Toast.makeText(this, "Gunakan: :page <nomor>", Toast.LENGTH_SHORT).show();
+                    showCommandOutput("> tatap$ :page [Gagal: Masukkan nomor halaman yang valid]", true);
                 }
                 break;
 
@@ -208,15 +299,11 @@ public class MainActivity extends Activity {
 
             case "clear":
             case "reset":
-                etSearch.setText("");
-                currentGenre = "";
-                currentSeasonName = "";
-                currentSeasonYear = 0;
-                switchView("musim");
+                resetFiltersToTab("musim");
                 break;
 
             default:
-                Toast.makeText(this, "Perintah tidak dikenal: :" + cmd + " (Ketik :help untuk bantuan)", Toast.LENGTH_LONG).show();
+                showCommandOutput("> tatap$ Perintah tidak dikenal: :" + cmd + " (Ketik :help)", true);
                 break;
         }
     }
@@ -226,6 +313,7 @@ public class MainActivity extends Activity {
         if (parts.length >= 2) {
             String sName = parts[1].toLowerCase();
             if (!sName.matches("^(winter|spring|summer|fall)$")) {
+                showCommandOutput("> tatap$ Musim harus: winter, spring, summer, fall", true);
                 Toast.makeText(this, "Musim valid: winter, spring, summer, fall. Contoh: :season fall 2024", Toast.LENGTH_LONG).show();
                 return;
             }
@@ -240,10 +328,11 @@ public class MainActivity extends Activity {
             currentSeasonYear = sYear;
             currentPage = 1;
             updateTabButtons();
+            updateActiveFilterBar();
+            showCommandOutput("> tatap$ :season " + sName + " " + sYear + " [Filter Diterapkan]", false);
             fetchData();
-            Toast.makeText(this, "Filter Musim: " + sName.toUpperCase() + " " + sYear, Toast.LENGTH_SHORT).show();
         } else {
-            Toast.makeText(this, "Format: :season <winter|spring|summer|fall> <tahun>", Toast.LENGTH_LONG).show();
+            showCommandOutput("> tatap$ Format: :season <winter|spring|summer|fall> <tahun>", true);
         }
     }
 
@@ -252,12 +341,57 @@ public class MainActivity extends Activity {
         currentGenre = genreSlugOrTitle.toLowerCase().trim().replace(" ", "-");
         currentPage = 1;
         updateTabButtons();
+        updateActiveFilterBar();
+        showCommandOutput("> tatap$ :genre " + currentGenre + " [Filter Genre Aktif]", false);
         fetchData();
-        Toast.makeText(this, "Filter Genre: " + currentGenre.toUpperCase(), Toast.LENGTH_SHORT).show();
     }
 
     private void showGenreSelectorDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_genre_selector);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+
+        EditText etFilter = dialog.findViewById(R.id.et_filter_genre);
+        ProgressBar pbGenre = dialog.findViewById(R.id.pb_genre_loading);
+        RecyclerView rvGenres = dialog.findViewById(R.id.rv_genres);
+        Button btnClose = dialog.findViewById(R.id.btn_close_genre_dialog);
+        Button btnDismiss = dialog.findViewById(R.id.btn_dismiss_genre);
+        Button btnReset = dialog.findViewById(R.id.btn_reset_genre_filter);
+
+        rvGenres.setLayoutManager(new GridLayoutManager(this, 2));
+        GenreChipAdapter genreAdapter = new GenreChipAdapter((slug, title) -> {
+            dialog.dismiss();
+            setGenreFilter(slug);
+        });
+        rvGenres.setAdapter(genreAdapter);
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        btnDismiss.setOnClickListener(v -> dialog.dismiss());
+        btnReset.setOnClickListener(v -> {
+            dialog.dismiss();
+            resetFiltersToTab("musim");
+        });
+
+        etFilter.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                genreAdapter.filter(s.toString());
+            }
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+
+        dialog.show();
+
+        // Fetch genres from backend
         new Thread(() -> {
+            List<GenreItem> list = new ArrayList<>();
             try {
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/genres").openConnection();
                 conn.setConnectTimeout(6000);
@@ -270,69 +404,91 @@ public class MainActivity extends Activity {
                 JSONObject res = new JSONObject(sb.toString());
                 if (res.optBoolean("success")) {
                     JSONArray arr = res.getJSONObject("data").getJSONArray("list");
-                    List<String> titles = new ArrayList<>();
-                    List<String> slugs = new ArrayList<>();
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject g = arr.getJSONObject(i);
-                        titles.add(g.optString("title", ""));
-                        slugs.add(g.optString("slug", ""));
+                        list.add(new GenreItem(g.optString("title", ""), g.optString("slug", "")));
                     }
-                    runOnUiThread(() -> {
-                        String[] items = titles.toArray(new String[0]);
-                        new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                .setTitle("Pilih Genre Anime")
-                                .setItems(items, (dialog, which) -> {
-                                    setGenreFilter(slugs.get(which));
-                                })
-                                .setNegativeButton("Batal", (dialog, which) -> dialog.dismiss())
-                                .show();
-                    });
                 }
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    // Fallback list genre populer jika offline
-                    String[] fallback = new String[]{"Action", "Adventure", "Comedy", "Drama", "Fantasy", "Horror", "Mystery", "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural"};
-                    new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                            .setTitle("Pilih Genre Anime (Default)")
-                            .setItems(fallback, (dialog, which) -> {
-                                setGenreFilter(fallback[which].toLowerCase().replace(" ", "-"));
-                            })
-                            .setNegativeButton("Batal", (dialog, which) -> dialog.dismiss())
-                            .show();
-                });
+            } catch (Exception ignored) {}
+
+            if (list.isEmpty()) {
+                // Fallback genres
+                String[] fallback = new String[]{"Action", "Adventure", "Comedy", "Drama", "Fantasy", "Horror", "Mystery", "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Isekai", "Psychological", "Thriller", "Magic"};
+                for (String f : fallback) {
+                    list.add(new GenreItem(f, f.toLowerCase().replace(" ", "-")));
+                }
             }
+
+            runOnUiThread(() -> {
+                pbGenre.setVisibility(View.GONE);
+                genreAdapter.setData(list);
+            });
         }).start();
     }
 
     private void showCommandHelpDialog() {
-        new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Terminal Perintah Tatap (:command)")
-                .setMessage("Perintah yang tersedia:\n\n"
-                        + "• :musim - Tampilkan anime musim ini\n"
-                        + "• :season <winter|spring|summer|fall> [tahun] - Filter anime musim & tahun tertentu (misal: :season fall 2024)\n"
-                        + "• :genre [nama] - Filter anime berdasarkan genre (ketik :genre tanpa parameter untuk memilih dari daftar popup)\n"
-                        + "• :airing - Tampilkan anime sedang tayang\n"
-                        + "• :katalog - Tampilkan seluruh katalog populer\n"
-                        + "• :cari <judul> - Cari judul anime tertentu\n"
-                        + "• :page <nomor> - Lompat langsung ke halaman tertentu\n"
-                        + "• :source [hi|otaku] - Ganti sumber scraping (HiAnime / Otakudesu)\n"
-                        + "• :status / :ping - Periksa kesehatan backend lokal\n"
-                        + "• :clear - Reset kolom input & kembali ke awal\n"
-                        + "• :help - Buka bantuan perintah ini")
-                .setPositiveButton("Tutup", (dialog, which) -> dialog.dismiss())
-                .show();
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_command_help);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+
+        Button btnClose = dialog.findViewById(R.id.btn_close_help_dialog);
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.findViewById(R.id.cmd_item_musim).setOnClickListener(v -> {
+            dialog.dismiss();
+            resetFiltersToTab("musim");
+        });
+
+        dialog.findViewById(R.id.cmd_item_season).setOnClickListener(v -> {
+            dialog.dismiss();
+            etSearch.setText(":season fall 2024");
+            etSearch.setSelection(etSearch.getText().length());
+            etSearch.requestFocus();
+            showCommandOutput("> tatap$ Silakan tentukan musim & tahun lalu tekan Enter", false);
+        });
+
+        dialog.findViewById(R.id.cmd_item_genre).setOnClickListener(v -> {
+            dialog.dismiss();
+            showGenreSelectorDialog();
+        });
+
+        dialog.findViewById(R.id.cmd_item_airing).setOnClickListener(v -> {
+            dialog.dismiss();
+            resetFiltersToTab("airing");
+        });
+
+        dialog.findViewById(R.id.cmd_item_katalog).setOnClickListener(v -> {
+            dialog.dismiss();
+            resetFiltersToTab("katalog");
+        });
+
+        dialog.findViewById(R.id.cmd_item_source).setOnClickListener(v -> {
+            dialog.dismiss();
+            switchDefaultSource("otakudesu");
+        });
+
+        dialog.findViewById(R.id.cmd_item_ping).setOnClickListener(v -> {
+            dialog.dismiss();
+            checkBackendStatus();
+        });
+
+        dialog.findViewById(R.id.cmd_item_clear).setOnClickListener(v -> {
+            dialog.dismiss();
+            resetFiltersToTab("musim");
+        });
+
+        dialog.show();
     }
 
     private void switchDefaultSource(String target) {
         String s = target.toLowerCase().trim();
-        String newSrc;
-        if (s.contains("otaku")) {
-            newSrc = "otakudesu";
-        } else if (s.contains("hi")) {
-            newSrc = "hianime";
-        } else {
-            newSrc = "hianime";
-        }
+        String newSrc = s.contains("otaku") ? "otakudesu" : "hianime";
+
+        showCommandOutput("> tatap$ :source " + newSrc + " [Mengalihkan sumber...]", false);
 
         new Thread(() -> {
             try {
@@ -345,27 +501,35 @@ public class MainActivity extends Activity {
                 conn.getOutputStream().write(body.toString().getBytes("UTF-8"));
                 conn.getInputStream().close();
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "Sumber default diubah ke: " + (newSrc.equals("otakudesu") ? "Otakudesu (Sub Indo)" : "HiAnime"), Toast.LENGTH_LONG).show();
+                    String label = newSrc.equals("otakudesu") ? "Otakudesu (Sub Indo)" : "HiAnime (Multi-Sub)";
+                    showCommandOutput("> tatap$ [OK] Sumber default berhasil diubah ke " + label, false);
                     fetchData();
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, "Gagal mengubah sumber: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> showCommandOutput("> tatap$ [ERROR] Gagal ubah sumber: " + e.getMessage(), true));
             }
         }).start();
     }
 
     private void checkBackendStatus() {
+        showCommandOutput("> tatap$ :ping [Memeriksa 127.0.0.1:8767...]", false);
         new Thread(() -> {
             try {
+                long start = System.currentTimeMillis();
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/ping").openConnection();
                 conn.setConnectTimeout(2000);
-                boolean ok = conn.getResponseCode() == 200;
+                int code = conn.getResponseCode();
+                long elapsed = System.currentTimeMillis() - start;
                 conn.disconnect();
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "Status Backend: " + (ok ? "ONLINE (127.0.0.1:8767 OK)" : "OFFLINE"), Toast.LENGTH_SHORT).show();
+                    if (code == 200) {
+                        showCommandOutput("> tatap$ [PONG] Backend ONLINE (127.0.0.1:8767 OK, " + elapsed + "ms)", false);
+                    } else {
+                        showCommandOutput("> tatap$ [WARN] Backend responded HTTP " + code, true);
+                    }
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, "Status Backend: ERROR (" + e.getMessage() + ")", Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> showCommandOutput("> tatap$ [OFFLINE] Backend tidak terhubung: " + e.getMessage(), true));
             }
         }).start();
     }
@@ -374,6 +538,7 @@ public class MainActivity extends Activity {
         currentView = targetView;
         currentPage = 1;
         updateTabButtons();
+        updateActiveFilterBar();
         fetchData();
     }
 
@@ -414,7 +579,7 @@ public class MainActivity extends Activity {
             } catch (Throwable t) {
                 Log.e(TAG, "Error startEmbeddedBackend: " + t.getMessage(), t);
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "Gagal start backend: " + t.getMessage(), Toast.LENGTH_LONG).show();
+                    showCommandOutput("> tatap$ Gagal start backend: " + t.getMessage(), true);
                 });
             }
         }).start();
@@ -451,8 +616,7 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     tvStatusBadge.setText("OFFLINE (TAP)");
                     tvStatusBadge.setTextColor(0xFFEF4444);
-                    Toast.makeText(this, "Server lokal butuh waktu inisialisasi lebih lama. Ketuk badge status untuk mencoba ulang.", Toast.LENGTH_LONG).show();
-                    // Klik badge status untuk retry
+                    showCommandOutput("> tatap$ Server butuh inisialisasi lebih lama. Ketuk badge status untuk mencoba ulang.", true);
                     tvStatusBadge.setOnClickListener(v -> {
                         tvStatusBadge.setText("RETRYING...");
                         tvStatusBadge.setTextColor(0xFFF59E0B);
@@ -483,7 +647,7 @@ public class MainActivity extends Activity {
             title = "Katalog Populer (Hal " + currentPage + ")";
             endpoint = "/api/catalog?page=" + currentPage;
         } else if ("genre".equals(currentView)) {
-            title = "Genre: " + currentGenre.toUpperCase() + " (Hal " + currentPage + ")";
+            title = "Genre: " + currentGenre.toUpperCase().replace("-", " ") + " (Hal " + currentPage + ")";
             endpoint = "/api/browse?genre=" + URLEncoder.encode(currentGenre) + "&page=" + currentPage;
         } else if ("season_filter".equals(currentView)) {
             title = "Musim: " + currentSeasonName.toUpperCase() + " " + currentSeasonYear + " (Hal " + currentPage + ")";
@@ -531,15 +695,93 @@ public class MainActivity extends Activity {
                     final String err = res.optString("error", "gagal memuat data");
                     runOnUiThread(() -> {
                         pbLoading.setVisibility(View.GONE);
-                        Toast.makeText(this, "Error: " + err, Toast.LENGTH_SHORT).show();
+                        showCommandOutput("> tatap$ [ERROR] " + err, true);
                     });
                 }
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     pbLoading.setVisibility(View.GONE);
-                    Toast.makeText(this, "Gagal terhubung: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    showCommandOutput("> tatap$ [ERROR] Gagal terhubung: " + e.getMessage(), true);
                 });
             }
         }).start();
+    }
+
+    // Model & Adapter for Genre Dialog
+    static class GenreItem {
+        final String title;
+        final String slug;
+        GenreItem(String title, String slug) {
+            this.title = title;
+            this.slug = slug;
+        }
+    }
+
+    interface OnGenreClickListener {
+        void onGenreClick(String slug, String title);
+    }
+
+    static class GenreChipAdapter extends RecyclerView.Adapter<GenreChipAdapter.ViewHolder> {
+        private final List<GenreItem> allGenres = new ArrayList<>();
+        private final List<GenreItem> filteredList = new ArrayList<>();
+        private final OnGenreClickListener listener;
+
+        GenreChipAdapter(OnGenreClickListener listener) {
+            this.listener = listener;
+        }
+
+        void setData(List<GenreItem> data) {
+            allGenres.clear();
+            filteredList.clear();
+            if (data != null) {
+                allGenres.addAll(data);
+                filteredList.addAll(data);
+            }
+            notifyDataSetChanged();
+        }
+
+        void filter(String query) {
+            filteredList.clear();
+            if (query == null || query.trim().isEmpty()) {
+                filteredList.addAll(allGenres);
+            } else {
+                String q = query.toLowerCase().trim();
+                for (GenreItem item : allGenres) {
+                    if (item.title.toLowerCase().contains(q) || item.slug.toLowerCase().contains(q)) {
+                        filteredList.add(item);
+                    }
+                }
+            }
+            notifyDataSetChanged();
+        }
+
+        @NonNull
+        @Override
+        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_genre_chip, parent, false);
+            return new ViewHolder(v);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+            GenreItem item = filteredList.get(position);
+            holder.tvName.setText(item.title);
+            holder.itemView.setOnClickListener(v -> {
+                if (listener != null) listener.onGenreClick(item.slug, item.title);
+            });
+        }
+
+        @Override
+        public int getItemCount() {
+            return filteredList.size();
+        }
+
+        static class ViewHolder extends RecyclerView.ViewHolder {
+            TextView tvName;
+            ViewHolder(@NonNull View itemView) {
+                super(itemView);
+                tvName = itemView.findViewById(R.id.tv_genre_name);
+            }
+        }
     }
 }
