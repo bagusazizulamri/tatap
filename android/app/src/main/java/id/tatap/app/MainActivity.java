@@ -85,13 +85,17 @@ public class MainActivity extends Activity {
             if (actionId == EditorInfo.IME_ACTION_SEARCH ||
                     (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN)) {
                 hideKeyboard();
-                String query = etSearch.getText().toString().trim();
-                if (!query.isEmpty()) {
-                    currentView = "cari";
-                    currentSearchQuery = query;
-                    currentPage = 1;
-                    updateTabButtons();
-                    fetchData();
+                String raw = etSearch.getText().toString().trim();
+                if (!raw.isEmpty()) {
+                    if (raw.startsWith(":") || raw.startsWith("/")) {
+                        executeCommand(raw.substring(1).trim());
+                    } else {
+                        currentView = "cari";
+                        currentSearchQuery = raw;
+                        currentPage = 1;
+                        updateTabButtons();
+                        fetchData();
+                    }
                 }
                 return true;
             }
@@ -113,6 +117,150 @@ public class MainActivity extends Activity {
             currentPage++;
             fetchData();
         });
+    }
+
+    private void executeCommand(String commandLine) {
+        if (commandLine.isEmpty()) return;
+        String[] parts = commandLine.split("\\s+");
+        String cmd = parts[0].toLowerCase();
+        String args = commandLine.length() > cmd.length() ? commandLine.substring(cmd.length()).trim() : "";
+
+        switch (cmd) {
+            case "help":
+            case "bantuan":
+            case "?":
+                showCommandHelpDialog();
+                break;
+
+            case "musim":
+            case "season":
+                switchView("musim");
+                Toast.makeText(this, "Beralih ke: Tayang Musim Ini", Toast.LENGTH_SHORT).show();
+                break;
+
+            case "airing":
+            case "terbaru":
+                switchView("airing");
+                Toast.makeText(this, "Beralih ke: Masih Tayang", Toast.LENGTH_SHORT).show();
+                break;
+
+            case "katalog":
+            case "catalog":
+                switchView("katalog");
+                Toast.makeText(this, "Beralih ke: Katalog Populer", Toast.LENGTH_SHORT).show();
+                break;
+
+            case "cari":
+            case "search":
+                if (!args.isEmpty()) {
+                    currentView = "cari";
+                    currentSearchQuery = args;
+                    currentPage = 1;
+                    updateTabButtons();
+                    fetchData();
+                } else {
+                    Toast.makeText(this, "Gunakan: :cari <judul>", Toast.LENGTH_SHORT).show();
+                }
+                break;
+
+            case "page":
+            case "hal":
+                try {
+                    int p = Integer.parseInt(args);
+                    if (p >= 1) {
+                        currentPage = p;
+                        fetchData();
+                        Toast.makeText(this, "Menuju halaman " + p, Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(this, "Gunakan: :page <nomor>", Toast.LENGTH_SHORT).show();
+                }
+                break;
+
+            case "source":
+            case "switch":
+                switchDefaultSource(args);
+                break;
+
+            case "ping":
+            case "status":
+                checkBackendStatus();
+                break;
+
+            case "clear":
+            case "reset":
+                etSearch.setText("");
+                switchView("musim");
+                break;
+
+            default:
+                Toast.makeText(this, "Perintah tidak dikenal: :" + cmd + " (Ketik :help untuk bantuan)", Toast.LENGTH_LONG).show();
+                break;
+        }
+    }
+
+    private void showCommandHelpDialog() {
+        new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Terminal Perintah Tatap (:command)")
+                .setMessage("Perintah yang tersedia:\n\n"
+                        + "• :musim - Tampilkan anime musim ini\n"
+                        + "• :airing - Tampilkan anime sedang tayang\n"
+                        + "• :katalog - Tampilkan seluruh katalog populer\n"
+                        + "• :cari <judul> - Cari judul anime tertentu\n"
+                        + "• :page <nomor> - Lompat langsung ke halaman tertentu\n"
+                        + "• :source [hi|otaku] - Ganti sumber scraping (HiAnime / Otakudesu)\n"
+                        + "• :status / :ping - Periksa kesehatan backend lokal\n"
+                        + "• :clear - Reset kolom input & kembali ke musim ini\n"
+                        + "• :help - Buka bantuan perintah ini")
+                .setPositiveButton("Tutup", (dialog, which) -> dialog.dismiss())
+                .show();
+    }
+
+    private void switchDefaultSource(String target) {
+        String s = target.toLowerCase().trim();
+        String newSrc;
+        if (s.contains("otaku")) {
+            newSrc = "otakudesu";
+        } else if (s.contains("hi")) {
+            newSrc = "hianime";
+        } else {
+            newSrc = "hianime";
+        }
+
+        new Thread(() -> {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/settings").openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setDoOutput(true);
+                JSONObject body = new JSONObject();
+                body.put("preferred_source", newSrc);
+                conn.getOutputStream().write(body.toString().getBytes("UTF-8"));
+                conn.getInputStream().close();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Sumber default diubah ke: " + (newSrc.equals("otakudesu") ? "Otakudesu (Sub Indo)" : "HiAnime"), Toast.LENGTH_LONG).show();
+                    fetchData();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this, "Gagal mengubah sumber: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    private void checkBackendStatus() {
+        new Thread(() -> {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/ping").openConnection();
+                conn.setConnectTimeout(2000);
+                boolean ok = conn.getResponseCode() == 200;
+                conn.disconnect();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Status Backend: " + (ok ? "ONLINE (127.0.0.1:8767 OK)" : "OFFLINE"), Toast.LENGTH_SHORT).show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this, "Status Backend: ERROR (" + e.getMessage() + ")", Toast.LENGTH_SHORT).show());
+            }
+        }).start();
     }
 
     private void switchView(String targetView) {

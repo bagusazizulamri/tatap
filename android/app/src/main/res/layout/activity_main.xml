@@ -70,7 +70,7 @@
             android:layout_height="40dp"
             android:layout_weight="1"
             android:background="@null"
-            android:hint="cari judul anime..."
+            android:hint="cari judul atau :command (ketik :help)..."
             android:textColorHint="#404B5C"
             android:textColor="#E1E7EF"
             android:textSize="14sp"
