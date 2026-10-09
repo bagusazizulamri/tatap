@@ -189,6 +189,16 @@ def test_sanitize_aigtx_id():
     raw_formal = "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
     assert T._sanitize_aigtx_id(raw_formal) == "Yang Mulia, hamba tidak dapat menyetujui keputusan ini."
 
+    # 4. Idiom game / isekai (Hell Mode)
+    raw4 = "Dia bisa membuat guru kita kabur demi uangnya."
+    assert T._sanitize_aigtx_id(raw4) == "Dia bisa memberikan perlawanan sengit kepada guru kita."
+
+    raw5 = "Ini memulihkan 1% HP-nya setiap kedua saat melawan Iblis Tuhan."
+    assert T._sanitize_aigtx_id(raw5) == "Ini memulihkan 1% HP-nya setiap detik saat melawan Raja Iblis."
+
+    raw6 = "Berikan mereka neraka!"
+    assert T._sanitize_aigtx_id(raw6) == "Hajar mereka!"
+
 
 def test_call_gtx_translate_modes(monkeypatch):
     cues = [{"start": 0.0, "end": 2.0, "text": "Rouge Ninja in Desa Daun"}]
