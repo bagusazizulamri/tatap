@@ -329,6 +329,7 @@ Kosakata Dunia Ninja & Pertarungan Shonen (Ninja / Shinobi - e.g. Naruto):
 - "Ninja Art / Ninpo" -> "Jutsu / Seni Ninja / Ninpo" (JANGAN kaku harfiah: "Seni Ninja").
 - "Barrier / sealing barrier" -> "Kekai / dinding penghalang / segel penghalang" (JANGAN kaku: "Penghalang" jika konteks jutsu kekai).
 - "Chakra" -> "Cakra / Chakra".
+- "Kunoichi" -> "Kunoichi / ninja wanita".
 - "Genin / Chunin / Jonin / Anbu" -> "Genin / Chunin / Jonin / Anbu" (tetap gunakan istilah resmi ninja).
 - "Lord Hokage / Hokage-sama" -> "Tuan Hokage / Yang Mulia Hokage".
 - "Substitute / Body Replacement Technique" -> "Jutsu Pengganti Tubuh / Kawarimi no Jutsu".
@@ -340,6 +341,8 @@ Kosakata Dunia Ninja & Pertarungan Shonen (Ninja / Shinobi - e.g. Naruto):
 - "Sand Village / Hidden Sand" -> "Desa Suna / Desa Pasir Tersembunyi".
 - "Sound Village / Hidden Sound" -> "Desa Otogakure / Desa Bunyi Tersembunyi".
 - "Mist Village / Hidden Mist" -> "Desa Kirigakure / Desa Kabut Tersembunyi".
+- "Once in a lifetime request / request of a lifetime" -> "Permintaan sekali seumur hidup" (JANGAN kaku harfiah: "sekali seumur hidup permintaanku").
+- "Bring [someone] back" -> "Membawa [seseorang] kembali / pulangkan [dia]" (JANGAN: "Bawakan kembali").
 
 Kosakata Supranatural & Cerita Hantu Sekolah (Supernatural / School Ghost Stories):
 - "Old school building / old schoolhouse" -> "Gedung sekolah lama / gedung sekolah tua"
@@ -703,6 +706,9 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bNinja Art:\b", "Jutsu:"),
     (r"\btipe orochimaru\b", "antek Orochimaru"),
     (r"\bTipe Orochimaru\b", "Antek Orochimaru"),
+    (r"\bsekali seumur hidup\.\.\.permintaanku\b", "permintaan sekali seumur hidupku"),
+    (r"\btolong bawakan sasuke kembali\b", "tolong bawa Sasuke kembali"),
+    (r"\bTolong bawakan Sasuke kembali\b", "Tolong bawa Sasuke kembali"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
