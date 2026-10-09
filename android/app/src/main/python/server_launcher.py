@@ -24,8 +24,23 @@ def start_server(data_dir=None):
 
         import uvicorn
         print("[TATAP-SERVER] Menyalakan Uvicorn pada 127.0.0.1:8767...", flush=True)
-        # Jalankan server
-        uvicorn.run(main.app, host="127.0.0.1", port=8767, loop="asyncio", http="h11", log_level="info")
+
+        class AndroidServer(uvicorn.Server):
+            def install_signal_handlers(self):
+                # Pass karena dijalankan di secondary thread Android
+                pass
+
+        config = uvicorn.Config(
+            main.app,
+            host="127.0.0.1",
+            port=8767,
+            loop="asyncio",
+            http="h11",
+            log_level="info",
+            access_log=False
+        )
+        server = AndroidServer(config=config)
+        server.run()
     except Exception as e:
         import traceback
         print(f"[TATAP-SERVER-ERROR] {e}\n{traceback.format_exc()}", flush=True)

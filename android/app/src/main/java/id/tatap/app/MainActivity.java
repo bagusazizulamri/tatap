@@ -155,8 +155,12 @@ public class MainActivity extends Activity {
                 String dataDir = getFilesDir().getAbsolutePath();
                 Log.d(TAG, "Menjalankan server_launcher.py dengan dataDir=" + dataDir);
                 launcherMod.getClass().getMethod("callAttr", String.class, Object[].class).invoke(launcherMod, "run_in_background", new Object[]{dataDir});
+                Log.d(TAG, "server_launcher.run_in_background dipanggil dengan sukses.");
             } catch (Throwable t) {
                 Log.e(TAG, "Error startEmbeddedBackend: " + t.getMessage(), t);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Gagal start backend: " + t.getMessage(), Toast.LENGTH_LONG).show();
+                });
             }
         }).start();
     }
@@ -166,8 +170,8 @@ public class MainActivity extends Activity {
             boolean ready = false;
             try {
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/ping").openConnection();
-                conn.setConnectTimeout(600);
-                conn.setReadTimeout(600);
+                conn.setConnectTimeout(800);
+                conn.setReadTimeout(800);
                 ready = (conn.getResponseCode() == 200);
                 conn.disconnect();
             } catch (Exception ignored) {}
@@ -179,15 +183,27 @@ public class MainActivity extends Activity {
                     tvStatusBadge.setTextColor(0xFF10B981);
                     fetchData();
                 });
-            } else if (attempt < 30) {
-                try { Thread.sleep(400); } catch (Exception ignored) {}
+            } else if (attempt < 45) { // Coba sampai ~22 detik
+                runOnUiThread(() -> {
+                    if (attempt % 5 == 0 && attempt > 0) {
+                        tvStatusBadge.setText("INIT " + (attempt * 2) + "%");
+                        tvStatusBadge.setTextColor(0xFFF59E0B);
+                    }
+                });
+                try { Thread.sleep(500); } catch (Exception ignored) {}
                 waitForServerAndLoadCatalog(attempt + 1);
             } else {
                 runOnUiThread(() -> {
-                    tvStatusBadge.setText("OFFLINE");
+                    tvStatusBadge.setText("OFFLINE (TAP)");
                     tvStatusBadge.setTextColor(0xFFEF4444);
-                    Toast.makeText(this, "Server lokal butuh waktu inisialisasi lebih lama, silakan tunggu...", Toast.LENGTH_LONG).show();
-                    // Coba muat data langsung siapa tahu baru saja nyala
+                    Toast.makeText(this, "Server lokal butuh waktu inisialisasi lebih lama. Ketuk badge status untuk mencoba ulang.", Toast.LENGTH_LONG).show();
+                    // Klik badge status untuk retry
+                    tvStatusBadge.setOnClickListener(v -> {
+                        tvStatusBadge.setText("RETRYING...");
+                        tvStatusBadge.setTextColor(0xFFF59E0B);
+                        startEmbeddedBackend();
+                        waitForServerAndLoadCatalog(0);
+                    });
                     fetchData();
                 });
             }
