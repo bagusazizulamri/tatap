@@ -67,18 +67,18 @@ def season_page(name, year, page=1, per_page=25):
         if r.status_code != 200:
             return {"pageInfo": {"total": 0, "perPage": per_page, "currentPage": page,
                                  "lastPage": 1, "hasNextPage": False}, "media": []}
-            d = r.json().get("data", {}).get("Page", {})
-            d.setdefault("pageInfo", {})
-            d.setdefault("media", [])
-            # AniList PageInfo untuk season-filter sering over-report (total=5000, lastPage=200).
-            # Batas hanya didasarkan pada item terisi — kalau page ini < per_page, tidak ada next.
-            items = d.get("media") or []
-            pi = d.get("pageInfo") or {}
-            pi["hasNextPage"] = bool(pi.get("hasNextPage")) and len(items) >= per_page
-            pi["lastPage"] = max(1, pi.get("currentPage") or page)
-            pi["perPage"] = per_page
-            d["pageInfo"] = pi
-            return d
+        d = r.json().get("data", {}).get("Page", {})
+        d.setdefault("pageInfo", {})
+        d.setdefault("media", [])
+        # AniList PageInfo untuk season-filter sering over-report (total=5000, lastPage=200).
+        # Batas hanya didasarkan pada item terisi — kalau page ini < per_page, tidak ada next.
+        items = d.get("media") or []
+        pi = d.get("pageInfo") or {}
+        pi["hasNextPage"] = bool(pi.get("hasNextPage")) and len(items) >= per_page
+        pi["lastPage"] = max(1, pi.get("currentPage") or page)
+        pi["perPage"] = per_page
+        d["pageInfo"] = pi
+        return d
     except Exception:
         return {"pageInfo": {"total": 0, "perPage": per_page, "currentPage": page,
                              "lastPage": 1, "hasNextPage": False}, "media": []}

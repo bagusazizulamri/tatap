@@ -101,11 +101,10 @@ async def genres():
 async def seasonal(which: str = Query("", pattern="^(now|prev)$|^$"),
                    season: str = Query("", pattern="^(winter|spring|summer|fall)$|^$"),
                    year: int = Query(0, ge=0, le=2100),
-                   page: int = Query(1, ge=1, le=1)):
-    """Daftar anime per musim (AniList).
+                   page: int = Query(1, ge=1, le=100)):
+    """Daftar anime per musim (AniList dengan fallback HiAnime).
     which=now|prev = musim saat ini / sebelumnya.
-    season+year = musim spesifik (contoh: season=fall year=2024).
-    AniList pagination over-reports setelah page 1, jadi endpoint dikunci 1 halaman."""
+    season+year = musim spesifik (contoh: season=fall year=2024)."""
     try:
         if season and year >= 1900:
             season_name = season
@@ -134,7 +133,7 @@ async def seasonal(which: str = Query("", pattern="^(now|prev)$|^$"),
             None, lambda: al.season_page(season_name, season_year, page, 25))
 
         # Kumpulkan judul dulu, lalu batch-match slug paralel.
-        media_list = page_data.get("media") or []
+        media_list = (page_data or {}).get("media") or []
         titles = []
         media_by_title = {}
         for m in media_list:
@@ -143,7 +142,7 @@ async def seasonal(which: str = Query("", pattern="^(now|prev)$|^$"),
                 continue
             titles.append(title)
             media_by_title[title] = m
-        slug_pairs = await _match_slugs_batch(titles)
+        slug_pairs = await _match_slugs_batch(titles) if titles else []
         slug_by_title = {t: s for t, s in slug_pairs}
 
         items_out = []
@@ -165,16 +164,25 @@ async def seasonal(which: str = Query("", pattern="^(now|prev)$|^$"),
                 "matched": True,
             })
 
-        page_info = page_data.get("pageInfo") or {}
+        # Fallback jika AniList diblokir ISP / offline / kosong
+        if not items_out:
+            fallback_filter = {"sort": "trending"} if which == "now" else {"status": "currently_airing"}
+            if season and year:
+                fallback_filter["season"] = season_name
+            hi_data = await loop.run_in_executor(None, lambda: hi.browse(fallback_filter, page))
+            if hi_data and hi_data.get("items"):
+                items_out = hi_data.get("items")
+
+        page_info = (page_data or {}).get("pageInfo") or {}
         result = {
             "season": season_name,
             "year": season_year,
             "which": which,
             "items": items_out,
-            "page": 1,
-            "total_pages": 1,
+            "page": page,
+            "total_pages": max(1, page_info.get("lastPage") or 1),
             "total_items": len(items_out),
-            "has_next": False,
+            "has_next": bool(page_info.get("hasNextPage")),
             "cached": False,
         }
         await set_browse_cache(key, result)
