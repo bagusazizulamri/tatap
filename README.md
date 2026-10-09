@@ -7,36 +7,40 @@
 ## Fitur Utama
 
 - **Katalog & Streaming Cepat**: Pencarian judul, riwayat tontonan, rekomendasi seasonal, dan pemutaran episode multi-server.
-- **Player Fleksibel**: Rasio 16:9, ambient glow, mode CRT/layar tabung, selector resolusi, dan kontrol keyboard lengkap.
-- **Auto-Translate Subtitle Indonesia (AI Fansub)**: Menerjemahkan subtitle English ke Bahasa Indonesia dengan nada percakapan fansub adaptif sesuai adegan dan genre (sekolah, misteri, mecha, olahraga, pertarungan, kuliner), bebas dari idiom kaku mesin.
-- **100% Penyimpanan Lokal**: Riwayat, bookmark, dan pengaturan tersimpan di SQLite lokal (`anime.db`).
+- **Player Fleksibel**: Rasio 16:9, ambient glow, mode CRT, selector resolusi, dan kontrol keyboard lengkap.
+- **Pilihan Terjemahan Subtitle Indonesia**:
+  - **Indonesian (AIGTX)**: Terjemahan instan (1–2 detik) dengan penyesuaian istilah anime dan dialog formal/santai.
+  - **Indonesian (AI Fansub)**: Terjemahan AI bernuansa fansub santai (opsional via API key pengguna / BYOK).
+  - **Indonesian (Google GTX)**: Terjemahan langsung Google Translate tanpa modifikasi.
+- **Penyimpanan Lokal**: Riwayat, bookmark, dan pengaturan tersimpan di SQLite lokal (`anime.db`).
 - **Pilihan Player**: Web player HTML5 bawaan atau pemutar eksternal MPV.
 - **Portabel & Multi-Platform**: Tersedia executable portabel untuk Windows (WebView2) dan Linux AppImage mandiri.
 
 ---
 
-## Petunjuk Subtitle AI (BYOK)
+## Subtitle Indonesia (Pilihan Mesin)
 
-Tatap menggunakan konsep **BYOK (Bring Your Own Key)** agar kamu bisa menikmati terjemahan AI berkualitas fansub secara fleksibel dan gratis.
+Tatap menyediakan 3 opsi terjemahan subtitle di menu dropdown player:
 
-### Perintah Pemasangan Cepat di Terminal Tatap:
+1. **AIGTX Translate (Default Instan)**: Langsung aktif tanpa konfigurasi API key. Menggunakan mesin cepat dengan penyesuaian istilah anime.
+2. **AI Fansub (BYOK - Opsional)**: Menggunakan LLM untuk gaya bahasa yang lebih santai. Masukkan API key sendiri jika ingin menggunakan opsi ini.
+3. **Google GTX**: Terjemahan standar mentah.
 
-Ketik salah satu perintah berikut langsung di kotak pencarian / terminal Tatap:
+### Konfigurasi API Key (Hanya untuk AI Fansub):
 
-| Perintah | Provider | Model Utama |
-| :--- | :--- | :--- |
-| `:ollama <api_key>` | [Ollama Cloud](https://ollama.com) | `gpt-oss:20b` *(cadangan otomatis: `gpt-oss:120b`)* |
-| `:groq <api_key>` | [Groq](https://groq.com) | `llama-3.3-70b-versatile` |
-| `:gemini <api_key>` | [Google AI Studio](https://aistudio.google.com) | `gemini-3.1-flash-lite` |
-| `:openai <api_key>` | [OpenAI](https://platform.openai.com) | `gpt-4o-mini` |
+Ketik perintah berikut di kotak pencarian / terminal Tatap:
 
-### Perintah Bantuan:
-- Cek status konfigurasi: `:apikey`
+| Perintah | Provider |
+| :--- | :--- |
+| `:ollama <api_key>` | [Ollama Cloud](https://ollama.com) |
+| `:groq <api_key>` | [Groq](https://groq.com) |
+| `:gemini <api_key>` | [Google AI Studio](https://aistudio.google.com) |
+| `:openai <api_key>` | [OpenAI](https://platform.openai.com) |
+
+Perintah bantuan:
+- Cek status: `:apikey`
 - Hapus API key: `:apikey clear`
 - Ganti model manual: `:model <nama_model>`
-
-> [!TIP]
-> **Tanpa API Key?** Jika belum memasukkan API key, Tatap otomatis memakai fallback **Google GTX (Zero-Key)** sehingga subtitle Indonesia tetap langsung muncul tanpa konfigurasi awal.
 
 ---
 
