@@ -142,11 +142,26 @@ public class MainActivity extends Activity {
         });
 
         // Load local backend or configured Tatap instance
+        android.content.SharedPreferences prefs = getSharedPreferences("tatap_prefs", Context.MODE_PRIVATE);
         String serverUrl = getIntent().getStringExtra("server_url");
         if (serverUrl == null || serverUrl.isEmpty()) {
-            serverUrl = "http://127.0.0.1:8767";
+            serverUrl = prefs.getString("server_url", "http://127.0.0.1:8767");
+        } else {
+            prefs.edit().putString("server_url", serverUrl).apply();
         }
-        webView.loadUrl(serverUrl);
+
+        final String targetServer = serverUrl;
+        webView.loadUrl(targetServer);
+
+        // Fallback error handler: jika server 127.0.0.1 lokal belum aktif, tampilkan frontend bawaan
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                if (failingUrl.equals(targetServer) && !failingUrl.startsWith("file:///android_asset/")) {
+                    view.loadUrl("file:///android_asset/frontend/index.html");
+                }
+            }
+        });
     }
 
     @Override

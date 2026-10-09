@@ -26,6 +26,12 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
+      - name: Bundle frontend assets into Android app
+        run: |
+          mkdir -p android/app/src/main/assets
+          rm -rf android/app/src/main/assets/frontend
+          cp -r frontend android/app/src/main/assets/
+
       - name: Build Debug APK
         working-directory: ./android
         run: ./gradlew assembleDebug --stacktrace
