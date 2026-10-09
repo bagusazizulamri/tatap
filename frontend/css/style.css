@@ -189,7 +189,7 @@ body.no-ambient #ambient,body.no-ambient #ambient-fallback{display:none}
 .sub-picker{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:4px 8px}
 .sub-picker.hidden{display:none}
 .sub-picker .sub-icon{font-size:13px;line-height:1;color:var(--dim);user-select:none}
-.sub-picker select{background:transparent;border:0;color:var(--txt);font:inherit;font-size:11px;cursor:pointer;padding:3px 4px;outline:none;min-width:96px;max-width:160px}
+.sub-picker select{background:transparent;border:0;color:var(--txt);font:inherit;font-size:11px;cursor:pointer;padding:3px 4px;outline:none;min-width:96px;max-width:200px}
 .sub-picker select:focus{outline:1px solid var(--acc);outline-offset:-1px;border-radius:var(--r)}
 .sub-picker select option{background:var(--panel);color:var(--txt);font-family:inherit}
 .sub-size{display:flex;gap:4px}
