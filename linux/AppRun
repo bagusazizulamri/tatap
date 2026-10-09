@@ -65,9 +65,9 @@ if [ -n "$BROWSER_CMD" ]; then
 else
     # Fallback to default system browser
     if command -v xdg-open >/dev/null 2>&1; then
-        xdg-open "$APP_URL" >/dev/null 2>&1
+        xdg-open "$APP_URL" >/dev/null 2>&1 || true
     elif command -v sensible-browser >/dev/null 2>&1; then
-        sensible-browser "$APP_URL" >/dev/null 2>&1
+        sensible-browser "$APP_URL" >/dev/null 2>&1 || true
     fi
     # Wait for backend process
     wait "$SERVER_PID"
