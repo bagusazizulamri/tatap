@@ -199,6 +199,17 @@ def test_sanitize_aigtx_id():
     raw6 = "Berikan mereka neraka!"
     assert T._sanitize_aigtx_id(raw6) == "Hajar mereka!"
 
+    # 5. Kontekstual "Ruang Bawah Tanah" vs "Dungeon" vs "Basement"
+    raw_dungeon1 = "Panggilanku sedang bertarung di ruang bawah tanah peringkat A."
+    assert T._sanitize_aigtx_id(raw_dungeon1) == "Panggilanku sedang bertarung di dungeon peringkat A."
+
+    raw_dungeon2 = "Kamu akan terus menjelajahi ruang bawah tanah dan menaklukkan tiga ruang bawah tanah?"
+    assert T._sanitize_aigtx_id(raw_dungeon2) == "Kamu akan terus menjelajahi dungeon dan menaklukkan tiga dungeon?"
+
+    # Kasus arsitektur / rumah biasa (basement) -> tetap aman tidak diubah
+    raw_basement = "Kunci ruang bawah tanah rumah Dr. Yeager ada di laci meja."
+    assert T._sanitize_aigtx_id(raw_basement) == "Kunci ruang bawah tanah rumah Dr. Yeager ada di laci meja."
+
 
 def test_call_gtx_translate_modes(monkeypatch):
     cues = [{"start": 0.0, "end": 2.0, "text": "Rouge Ninja in Desa Daun"}]

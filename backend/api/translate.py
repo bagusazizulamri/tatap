@@ -783,6 +783,17 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bsungguh pengalaman yang luar biasa dari masa lalu\b", "bikin bernostalgia banget"),
     (r"\bSangat kuat! Gunakan Pengganti\b", "Steely! Gunakan Substitute"),
     (r"\bSangat kuat! Gunakan\b", "Steely! Gunakan"),
+    (r"\bruang bawah tanah peringkat ([A-Za-z0-9]+)\b", r"dungeon peringkat \1"),
+    (r"\bruang bawah tanah peringkat-([A-Za-z0-9]+)\b", r"dungeon peringkat-\1"),
+    (r"\bmenjelajahi ruang bawah tanah\b", "menjelajahi dungeon"),
+    (r"\bmenaklukkan (\d+|satu|dua|tiga|empat|lima) ruang bawah tanah\b", r"menaklukkan \1 dungeon"),
+    (r"\bmenaklukkan ruang bawah tanah\b", "menaklukkan dungeon"),
+    (r"\bmenantang satu ruang bawah tanah lagi\b", "menantang satu dungeon lagi"),
+    (r"\bmenantang ruang bawah tanah\b", "menantang dungeon"),
+    (r"\bmenyelesaikan ruang bawah tanah\b", "menyelesaikan dungeon"),
+    (r"\bbos ruang bawah tanah\b", "bos dungeon"),
+    (r"\bmonster ruang bawah tanah\b", "monster dungeon"),
+    (r"\blantai ruang bawah tanah\b", "lantai dungeon"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
@@ -875,12 +886,13 @@ def _sanitize_fansub_id(text: str) -> str:
         return text
 
     def _replace_match(m, repl):
+        expanded = m.expand(repl) if "\\" in repl else repl
         orig = m.group(0)
         if orig and orig.islower():
-            return repl.lower()
+            return expanded.lower()
         if orig and orig[0].isupper():
-            return repl[0].upper() + repl[1:]
-        return repl
+            return expanded[0].upper() + expanded[1:]
+        return expanded
 
     result = text
     # 1. Jalankan koreksi universal
@@ -904,12 +916,13 @@ def _sanitize_aigtx_id(text: str) -> str:
         return text
 
     def _replace_match(m, repl):
+        expanded = m.expand(repl) if "\\" in repl else repl
         orig = m.group(0)
         if orig and orig.islower():
-            return repl.lower()
+            return expanded.lower()
         if orig and orig[0].isupper():
-            return repl[0].upper() + repl[1:]
-        return repl
+            return expanded[0].upper() + expanded[1:]
+        return expanded
 
     result = text
     # 1. Koreksi istilah anime & blunder terjemahan mesin (Universal Glossary)
