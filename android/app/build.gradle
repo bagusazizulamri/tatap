@@ -22,7 +22,8 @@ android {
             version "3.11"
             pip {
                 install "pydantic<2"
-                install "fastapi<=0.111.0"
+                install "fastapi==0.95.2"
+                install "starlette<0.28.0"
                 install "uvicorn"
                 install "httpx"
                 install "aiosqlite"
