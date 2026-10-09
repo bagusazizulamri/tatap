@@ -23,14 +23,24 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Bundle frontend assets into Android app
+      - name: Bundle backend and frontend into Android app
         run: |
           mkdir -p android/app/src/main/assets
           rm -rf android/app/src/main/assets/frontend
           cp -r frontend android/app/src/main/assets/
+
+          mkdir -p android/app/src/main/python
+          rm -rf android/app/src/main/python/backend android/app/src/main/python/frontend
+          cp -r backend android/app/src/main/python/
+          cp -r frontend android/app/src/main/python/
 
       - name: Build Debug APK
         working-directory: ./android

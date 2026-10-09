@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.application'
+    id 'com.chaquo.python'
 }
 
 android {
@@ -12,6 +13,22 @@ android {
         targetSdk 34
         versionCode 220
         versionName "2.2.0"
+
+        ndk {
+            abiFilters "arm64-v8a", "armeabi-v7a", "x86_64"
+        }
+
+        python {
+            version "3.11"
+            pip {
+                install "fastapi"
+                install "uvicorn"
+                install "httpx"
+                install "aiosqlite"
+                install "python-dotenv"
+                install "cryptography"
+            }
+        }
     }
 
     buildTypes {

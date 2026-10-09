@@ -141,6 +141,9 @@ public class MainActivity extends Activity {
             }
         });
 
+        // Start embedded Python backend via Chaquopy if available
+        startEmbeddedBackend();
+
         // Load local backend or configured Tatap instance
         android.content.SharedPreferences prefs = getSharedPreferences("tatap_prefs", Context.MODE_PRIVATE);
         String serverUrl = getIntent().getStringExtra("server_url");
@@ -151,17 +154,56 @@ public class MainActivity extends Activity {
         }
 
         final String targetServer = serverUrl;
-        webView.loadUrl(targetServer);
+        
+        // Polling loop sampai server 127.0.0.1:8767 siap
+        waitForServerAndLoad(targetServer, 0);
+    }
 
-        // Fallback error handler: jika server 127.0.0.1 lokal belum aktif, tampilkan frontend bawaan
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                if (failingUrl.equals(targetServer) && !failingUrl.startsWith("file:///android_asset/")) {
-                    view.loadUrl("file:///android_asset/frontend/index.html");
+    private void startEmbeddedBackend() {
+        new Thread(() -> {
+            try {
+                Class<?> pyClass = Class.forName("com.chaquo.python.Python");
+                if (!(Boolean) pyClass.getMethod("isStarted").invoke(null)) {
+                    Class<?> androidPlatform = Class.forName("com.chaquo.python.android.AndroidPlatform");
+                    Object platform = androidPlatform.getConstructor(Context.class).newInstance(getApplicationContext());
+                    pyClass.getMethod("start", Class.forName("com.chaquo.python.Platform")).invoke(null, platform);
                 }
+                Object pyInstance = pyClass.getMethod("getInstance").invoke(null);
+                Object launcherMod = pyClass.getMethod("getModule", String.class).invoke(pyInstance, "server_launcher");
+                String dataDir = getFilesDir().getAbsolutePath();
+                launcherMod.getClass().getMethod("callAttr", String.class, Object[].class).invoke(launcherMod, "run_in_background", new Object[]{dataDir});
+            } catch (Throwable t) {
+                // Chaquopy not bundled or failed, fallback to external or asset mode
+                t.printStackTrace();
             }
-        });
+        }).start();
+    }
+
+    private void waitForServerAndLoad(final String targetServer, final int attempt) {
+        new Thread(() -> {
+            boolean ready = false;
+            try {
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(targetServer + "/api/ping").openConnection();
+                conn.setConnectTimeout(600);
+                conn.setReadTimeout(600);
+                ready = (conn.getResponseCode() == 200);
+                conn.disconnect();
+            } catch (Exception ignored) {}
+
+            if (ready || attempt >= 15) {
+                runOnUiThread(() -> {
+                    if (ready) {
+                        webView.loadUrl(targetServer);
+                    } else {
+                        // Fallback ke local asset
+                        webView.loadUrl("file:///android_asset/frontend/index.html");
+                    }
+                });
+            } else {
+                try { Thread.sleep(400); } catch (Exception ignored) {}
+                waitForServerAndLoad(targetServer, attempt + 1);
+            }
+        }).start();
     }
 
     @Override
