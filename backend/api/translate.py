@@ -194,7 +194,7 @@ _DEFAULT_MODEL = {
 # batch = jumlah cue per request, conc = request paralel.
 _PROVIDER_CFG = {
     "google": {"batch": 80, "conc": 2},
-    "ollama": {"batch": 40, "conc": 3},
+    "ollama": {"batch": 50, "conc": 3},
     "ollama_local": {"batch": 20, "conc": 1},
     "groq": {"batch": 40, "conc": 2},
     "openrouter": {"batch": 40, "conc": 2},
@@ -893,12 +893,16 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=1
         parts.append(f"Terjemahkan {len(ids)} baris berikut:\n"
                      + "\n".join(f"{i}|{src_lines[lo + i - 1]}" for i in ids))
         reasoning = "gpt-oss" in cur_model
+        # Direct instruction to prevent unnecessary chain-of-thought delay on reasoning models
+        user_body = "\n\n".join(parts)
+        if reasoning:
+            user_body = "JANGAN sertakan penalaran/thinking. Langsung keluarkan format N|terjemahan secara ringkas.\n\n" + user_body
         p = {
             "model": cur_model,
             "messages": [{"role": "system", "content": system_prompt},
-                         {"role": "user", "content": "\n\n".join(parts)}],
-            "temperature": 0.4,
-            "max_tokens": min(8192, len(ids) * 70 + 300 + (2500 if reasoning else 0)),
+                         {"role": "user", "content": user_body}],
+            "temperature": 0.3,
+            "max_tokens": min(8192, len(ids) * 65 + 250),
         }
         if reasoning:
             p["reasoning_effort"] = "low"
