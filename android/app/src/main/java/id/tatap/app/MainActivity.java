@@ -42,8 +42,11 @@ public class MainActivity extends Activity {
     private View layoutPagination;
 
     // State navigasi tampilan & paging
-    private String currentView = "musim"; // "musim" | "airing" | "katalog" | "cari"
+    private String currentView = "musim"; // "musim" | "airing" | "katalog" | "cari" | "genre" | "season_filter"
     private String currentSearchQuery = "";
+    private String currentGenre = "";
+    private String currentSeasonName = "";
+    private int currentSeasonYear = 0;
     private int currentPage = 1;
     private int totalPages = 1;
 
@@ -133,9 +136,17 @@ public class MainActivity extends Activity {
                 break;
 
             case "musim":
-            case "season":
                 switchView("musim");
                 Toast.makeText(this, "Beralih ke: Tayang Musim Ini", Toast.LENGTH_SHORT).show();
+                break;
+
+            case "season":
+                if (!args.isEmpty()) {
+                    handleSeasonFilterCommand(parts);
+                } else {
+                    switchView("musim");
+                    Toast.makeText(this, "Beralih ke: Tayang Musim Ini (Gunakan :season <winter|spring|summer|fall> <tahun> untuk filter)", Toast.LENGTH_LONG).show();
+                }
                 break;
 
             case "airing":
@@ -148,6 +159,14 @@ public class MainActivity extends Activity {
             case "catalog":
                 switchView("katalog");
                 Toast.makeText(this, "Beralih ke: Katalog Populer", Toast.LENGTH_SHORT).show();
+                break;
+
+            case "genre":
+                if (args.isEmpty() || args.equalsIgnoreCase("list") || args.equalsIgnoreCase("--list")) {
+                    showGenreSelectorDialog();
+                } else {
+                    setGenreFilter(args);
+                }
                 break;
 
             case "cari":
@@ -190,6 +209,9 @@ public class MainActivity extends Activity {
             case "clear":
             case "reset":
                 etSearch.setText("");
+                currentGenre = "";
+                currentSeasonName = "";
+                currentSeasonYear = 0;
                 switchView("musim");
                 break;
 
@@ -199,18 +221,103 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void handleSeasonFilterCommand(String[] parts) {
+        // Format: :season <winter|spring|summer|fall> [tahun]
+        if (parts.length >= 2) {
+            String sName = parts[1].toLowerCase();
+            if (!sName.matches("^(winter|spring|summer|fall)$")) {
+                Toast.makeText(this, "Musim valid: winter, spring, summer, fall. Contoh: :season fall 2024", Toast.LENGTH_LONG).show();
+                return;
+            }
+            int sYear = 2024;
+            if (parts.length >= 3) {
+                try {
+                    sYear = Integer.parseInt(parts[2]);
+                } catch (Exception ignored) {}
+            }
+            currentView = "season_filter";
+            currentSeasonName = sName;
+            currentSeasonYear = sYear;
+            currentPage = 1;
+            updateTabButtons();
+            fetchData();
+            Toast.makeText(this, "Filter Musim: " + sName.toUpperCase() + " " + sYear, Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "Format: :season <winter|spring|summer|fall> <tahun>", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void setGenreFilter(String genreSlugOrTitle) {
+        currentView = "genre";
+        currentGenre = genreSlugOrTitle.toLowerCase().trim().replace(" ", "-");
+        currentPage = 1;
+        updateTabButtons();
+        fetchData();
+        Toast.makeText(this, "Filter Genre: " + currentGenre.toUpperCase(), Toast.LENGTH_SHORT).show();
+    }
+
+    private void showGenreSelectorDialog() {
+        new Thread(() -> {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/genres").openConnection();
+                conn.setConnectTimeout(6000);
+                BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line);
+                reader.close();
+
+                JSONObject res = new JSONObject(sb.toString());
+                if (res.optBoolean("success")) {
+                    JSONArray arr = res.getJSONObject("data").getJSONArray("list");
+                    List<String> titles = new ArrayList<>();
+                    List<String> slugs = new ArrayList<>();
+                    for (int i = 0; i < arr.length(); i++) {
+                        JSONObject g = arr.getJSONObject(i);
+                        titles.add(g.optString("title", ""));
+                        slugs.add(g.optString("slug", ""));
+                    }
+                    runOnUiThread(() -> {
+                        String[] items = titles.toArray(new String[0]);
+                        new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                .setTitle("Pilih Genre Anime")
+                                .setItems(items, (dialog, which) -> {
+                                    setGenreFilter(slugs.get(which));
+                                })
+                                .setNegativeButton("Batal", (dialog, which) -> dialog.dismiss())
+                                .show();
+                    });
+                }
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    // Fallback list genre populer jika offline
+                    String[] fallback = new String[]{"Action", "Adventure", "Comedy", "Drama", "Fantasy", "Horror", "Mystery", "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural"};
+                    new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                            .setTitle("Pilih Genre Anime (Default)")
+                            .setItems(fallback, (dialog, which) -> {
+                                setGenreFilter(fallback[which].toLowerCase().replace(" ", "-"));
+                            })
+                            .setNegativeButton("Batal", (dialog, which) -> dialog.dismiss())
+                            .show();
+                });
+            }
+        }).start();
+    }
+
     private void showCommandHelpDialog() {
         new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle("Terminal Perintah Tatap (:command)")
                 .setMessage("Perintah yang tersedia:\n\n"
                         + "• :musim - Tampilkan anime musim ini\n"
+                        + "• :season <winter|spring|summer|fall> [tahun] - Filter anime musim & tahun tertentu (misal: :season fall 2024)\n"
+                        + "• :genre [nama] - Filter anime berdasarkan genre (ketik :genre tanpa parameter untuk memilih dari daftar popup)\n"
                         + "• :airing - Tampilkan anime sedang tayang\n"
                         + "• :katalog - Tampilkan seluruh katalog populer\n"
                         + "• :cari <judul> - Cari judul anime tertentu\n"
                         + "• :page <nomor> - Lompat langsung ke halaman tertentu\n"
                         + "• :source [hi|otaku] - Ganti sumber scraping (HiAnime / Otakudesu)\n"
                         + "• :status / :ping - Periksa kesehatan backend lokal\n"
-                        + "• :clear - Reset kolom input & kembali ke musim ini\n"
+                        + "• :clear - Reset kolom input & kembali ke awal\n"
                         + "• :help - Buka bantuan perintah ini")
                 .setPositiveButton("Tutup", (dialog, which) -> dialog.dismiss())
                 .show();
@@ -375,6 +482,12 @@ public class MainActivity extends Activity {
         } else if ("katalog".equals(currentView)) {
             title = "Katalog Populer (Hal " + currentPage + ")";
             endpoint = "/api/catalog?page=" + currentPage;
+        } else if ("genre".equals(currentView)) {
+            title = "Genre: " + currentGenre.toUpperCase() + " (Hal " + currentPage + ")";
+            endpoint = "/api/browse?genre=" + URLEncoder.encode(currentGenre) + "&page=" + currentPage;
+        } else if ("season_filter".equals(currentView)) {
+            title = "Musim: " + currentSeasonName.toUpperCase() + " " + currentSeasonYear + " (Hal " + currentPage + ")";
+            endpoint = "/api/seasonal?season=" + URLEncoder.encode(currentSeasonName) + "&year=" + currentSeasonYear + "&page=" + currentPage;
         } else {
             title = "Hasil Pencarian: " + currentSearchQuery;
             endpoint = "/api/search?q=" + URLEncoder.encode(currentSearchQuery) + "&limit=24";
