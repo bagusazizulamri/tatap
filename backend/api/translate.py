@@ -324,6 +324,23 @@ Kosakata Mecha & Pertempuran Robot / Taktis Militer (Mecha & Tactical Sci-Fi):
 - "Honorary citizen" -> "Warga kehormatan" (JANGAN: "warga harta karun").
 - "Ceasefire / cease fire!" -> "Gencatan senjata! / Hentikan tembakan!"
 
+Kosakata Dunia Ninja & Pertarungan Shonen (Ninja / Shinobi - e.g. Naruto):
+- "Rogue Ninja / missing-nin" -> "Ninja pelarian / nukenin" (JANGAN: "Rouge Ninjas").
+- "Ninja Art / Ninpo" -> "Jutsu / Seni Ninja / Ninpo" (JANGAN kaku harfiah: "Seni Ninja").
+- "Barrier / sealing barrier" -> "Kekai / dinding penghalang / segel penghalang" (JANGAN kaku: "Penghalang" jika konteks jutsu kekai).
+- "Chakra" -> "Cakra / Chakra".
+- "Genin / Chunin / Jonin / Anbu" -> "Genin / Chunin / Jonin / Anbu" (tetap gunakan istilah resmi ninja).
+- "Lord Hokage / Hokage-sama" -> "Tuan Hokage / Yang Mulia Hokage".
+- "Substitute / Body Replacement Technique" -> "Jutsu Pengganti Tubuh / Kawarimi no Jutsu".
+- "Shadow Clone" -> "Kage Bunshin / Klon Bayangan".
+- "Hand signs / seals" -> "Segel tangan / segel jari".
+- "Taijutsu / Ninjutsu / Genjutsu" -> "Taijutsu / Ninjutsu / Genjutsu".
+- "Curse Mark / Cursed Seal" -> "Segel Gaib / Tanda Kutukan / Juin".
+- "Leaf Village / Hidden Leaf" -> "Desa Konoha / Desa Daun Tersembunyi".
+- "Sand Village / Hidden Sand" -> "Desa Suna / Desa Pasir Tersembunyi".
+- "Sound Village / Hidden Sound" -> "Desa Otogakure / Desa Bunyi Tersembunyi".
+- "Mist Village / Hidden Mist" -> "Desa Kirigakure / Desa Kabut Tersembunyi".
+
 Kosakata Supranatural & Cerita Hantu Sekolah (Supernatural / School Ghost Stories):
 - "Old school building / old schoolhouse" -> "Gedung sekolah lama / gedung sekolah tua"
 - "Ghost journal / spiritual diary" -> "Buku harian hantu / jurnal hantu / buku catatan hantu" (JANGAN: "Buku spiritual").
@@ -678,6 +695,14 @@ _UNIVERSAL_FANSUB_RULES = [
     (r"\bngelamun dan memohon\b", "berlutut dan memohon"),
     (r"\bKeren banget\.\.\. Itu yang bakal dikatakan Shinomiya\b", "Manis sekali... Itu yang bakal dikatakan Shinomiya"),
     (r"\bkeren banget\.\.\. itu yang bakal dikatakan\b", "manis sekali... itu yang bakal dikatakan"),
+    (r"\brouge ninjas\b", "ninja pelarian"),
+    (r"\brouge ninja\b", "ninja pelarian"),
+    (r"\bRouge Ninjas\b", "Ninja Pelarian"),
+    (r"\bRouge Ninja\b", "Ninja Pelarian"),
+    (r"\bninja art:\b", "Jutsu:"),
+    (r"\bNinja Art:\b", "Jutsu:"),
+    (r"\btipe orochimaru\b", "antek Orochimaru"),
+    (r"\bTipe Orochimaru\b", "Antek Orochimaru"),
 ]
 
 # Aturan khusus adegan kasual/santai (tidak diterapkan jika konteks formal/kerajaan).
