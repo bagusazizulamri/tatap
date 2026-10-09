@@ -190,9 +190,10 @@ public class MainActivity extends Activity {
                 conn.disconnect();
             } catch (Exception ignored) {}
 
-            if (ready || attempt >= 15) {
+            final boolean isReady = ready;
+            if (isReady || attempt >= 15) {
                 runOnUiThread(() -> {
-                    if (ready) {
+                    if (isReady) {
                         webView.loadUrl(targetServer);
                     } else {
                         // Fallback ke local asset
