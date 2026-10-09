@@ -683,10 +683,11 @@ async def favicon():
 async def proxy_sub(url: str = Query(""),
                    referer: str = Query(""),
                    lang: str = Query("", pattern="^(en|id|ja|es|fr|de|pt|ko|zh)$|^$"),
-                   src: str = Query("en", pattern="^(en|ja|es|fr|de|pt|ko|zh)$")):
+                   src: str = Query("en", pattern="^(en|ja|es|fr|de|pt|ko|zh)$"),
+                   mode: str = Query("", pattern="^(gtx|ai|)$")):
     """Proxy subtitle VTT. Jika `lang` diisi dan berbeda dari source, jalankan
     multi-tier fallback translate (Tier 1 AI Fansub LLM → Tier 2 Google GTX →
-    Tier 3 MyMemory → Tier 4 source)."""
+    Tier 3 MyMemory → Tier 4 source). Jika mode='gtx', langsung gunakan Google GTX."""
     if not url.startswith("http"):
         return Response(status_code=400)
 
@@ -698,16 +699,38 @@ async def proxy_sub(url: str = Query(""),
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"gagal mengambil subtitle: {e}")
 
-    # Cache sadar-kualitas: hasil AI Fansub ("llm") disimpan terpisah dari hasil mesin
-    # literal ("mt" = GTX/MyMemory). Saat LLM aktif, cache "mt" diabaikan supaya episode
-    # yang dulu diterjemahkan GTX otomatis di-upgrade ke versi fansub.
+    # Mode GTX eksplisit: bypass LLM, ambil atau buat cache MT (Google GTX)
     import hashlib
     base_hash = hashlib.sha1(
         (url + "|" + (referer or "") + "|" + lang).encode("utf-8")
     ).hexdigest()
+    key_mt = "sub2|mt|" + base_hash
+
+    if mode == "gtx":
+        mt_hit = await get_subtitle_cache(key_mt, ttl=7 * 24 * 3600)
+        if mt_hit:
+            resp = Response(content=mt_hit, media_type="text/vtt")
+            resp.headers["X-Translate-Tier"] = "cached-mt"
+            return resp
+        try:
+            text = await _fetch_sub_text(url, referer)
+            from api.translate import parse_vtt, build_vtt, call_gtx_translate
+            cues = parse_vtt(text)
+            if cues:
+                gtx_cues = await call_gtx_translate(cues, src, lang)
+                gtx_text = build_vtt(gtx_cues)
+                await set_subtitle_cache(key_mt, gtx_text)
+                resp = Response(content=gtx_text, media_type="text/vtt")
+                resp.headers["X-Translate-Tier"] = "tier2"
+                return resp
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"gagal translate GTX: {e}")
+
+    # Cache sadar-kualitas: hasil AI Fansub ("llm") disimpan terpisah dari hasil mesin
+    # literal ("mt" = GTX/MyMemory). Saat LLM aktif, cache "mt" diabaikan supaya episode
+    # yang dulu diterjemahkan GTX otomatis di-upgrade ke versi fansub.
     llm_on = await _llm_enabled()
     key_llm = "sub2|llm|" + base_hash
-    key_mt = "sub2|mt|" + base_hash
     hit = await get_subtitle_cache(key_llm)
     hit_tier = "cached"
     if hit is None and not llm_on:
