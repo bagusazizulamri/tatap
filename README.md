@@ -70,6 +70,16 @@ chmod +x Tatap-x86_64.AppImage
 2. Klik ganda **`Tatap.exe`** (memerlukan Microsoft Edge WebView2 bawaan Windows 10/11).
 3. Backend dan pemutar akan berjalan otomatis dalam jendela native tanpa perlu instalasi Python.
 
+### Android
+
+- **Gesture Pemutar Video**:
+  - *Double-tap* kiri/kanan: Lompat -10s / +10s dengan animasi ripple.
+  - *Double-tap* tengah: Play / Pause.
+  - *Swipe vertikal* kiri: Pengaturan Brightness layar.
+  - *Swipe vertikal* kanan: Pengaturan Volume suara.
+  - *Swipe horizontal*: Scrubbing timeline cepat.
+- **Project Native Android**: Berada di folder `android/` (dukungan fullscreen immersive, WebView hardware accelerated, haptic feedback, dan kontrol brightness sistem).
+
 ---
 
 ## Dukungan / Donasi

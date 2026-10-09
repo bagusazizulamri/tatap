@@ -122,6 +122,15 @@
       <div id="ambient-fallback" aria-hidden="true"></div>
       <canvas id="ambient" width="96" height="54" aria-hidden="true"></canvas>
       <video id="vid" controls playsinline preload="auto"></video>
+      <div id="pm-gesture-stage" class="gesture-stage" aria-hidden="true">
+        <div id="pm-ripple-left" class="gesture-ripple left"><span class="ripple-icon">⏪</span><span class="ripple-text">-10s</span></div>
+        <div id="pm-ripple-right" class="gesture-ripple right"><span class="ripple-icon">⏩</span><span class="ripple-text">+10s</span></div>
+        <div id="pm-gesture-osd" class="gesture-osd hidden">
+          <span id="pm-osd-icon" class="osd-icon">🔊</span>
+          <div class="osd-bar-wrap"><div id="pm-osd-bar" class="osd-bar" style="width:50%"></div></div>
+          <span id="pm-osd-val" class="osd-val">50%</span>
+        </div>
+      </div>
       <div id="pm-subs-overlay" class="subs-overlay sz-m" aria-hidden="true"><span></span></div>
       <div id="pm-spinner" class="spinner hidden"><div class="ring"></div><p id="pm-status">resolving…</p></div>
     </div>

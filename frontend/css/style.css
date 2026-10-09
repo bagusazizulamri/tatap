@@ -197,6 +197,22 @@ body.no-ambient #ambient,body.no-ambient #ambient-fallback{display:none}
 .sub-size button.active{background:var(--acc);color:#04121f;border-color:var(--acc)}
 .sub-translate{background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:var(--r);padding:2px 7px;cursor:pointer;font:inherit;font-size:10px;display:inline-flex;align-items:center;gap:3px;line-height:1}
 .sub-translate[data-on="1"]{background:var(--acc);color:#04121f;border-color:var(--acc)}
+/* Gesture layer & OSD */
+.gesture-stage{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.gesture-ripple{position:absolute;top:0;bottom:0;width:40%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0.08);opacity:0;pointer-events:none;transition:opacity .25s ease,transform .25s ease}
+.gesture-ripple.left{left:0;border-radius:0 100% 100% 0/0 50% 50% 0;transform:scale(0.85)}
+.gesture-ripple.right{right:0;border-radius:100% 0 0 100%/50% 0 0 50%;transform:scale(0.85)}
+.gesture-ripple.active{opacity:1;transform:scale(1)}
+.gesture-ripple .ripple-icon{font-size:28px;line-height:1}
+.gesture-ripple .ripple-text{font-size:13px;font-weight:700;margin-top:4px;letter-spacing:1px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+
+.gesture-osd{position:absolute;z-index:5;display:flex;align-items:center;gap:10px;background:rgba(8,9,12,0.85);backdrop-filter:blur(8px);border:1px solid var(--line2);border-radius:24px;padding:8px 18px;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,0.6);pointer-events:none;transition:opacity .2s ease,transform .2s ease}
+.gesture-osd.hidden{opacity:0;transform:scale(0.9);pointer-events:none}
+.gesture-osd .osd-icon{font-size:16px;line-height:1}
+.gesture-osd .osd-bar-wrap{flex:1;height:6px;background:rgba(255,255,255,0.15);border-radius:3px;overflow:hidden}
+.gesture-osd .osd-bar{height:100%;background:var(--acc);border-radius:3px;transition:width .05s linear}
+.gesture-osd .osd-val{font-size:12px;font-weight:600;min-width:38px;text-align:right;color:var(--txt)}
+
 /* Overlay subtitle milik app: posisi di atas video, pointer tembus.
    Style tetap milik Tatap, tidak mengikuti setting caption Windows. */
 .subs-overlay{position:absolute;left:0;right:0;bottom:6%;z-index:4;display:flex;justify-content:center;pointer-events:none;padding:0 8%}

@@ -513,9 +513,158 @@ function switchSubtitleTrack(url, langCode){
     }
   });
 }
+
+var TouchGestures = {
+  startX: 0,
+  startY: 0,
+  lastTap: 0,
+  lastTapX: 0,
+  mode: null,       // 'volume' | 'brightness' | 'seek' | null
+  initVol: 1,
+  initBright: 100,
+  initTime: 0,
+  currentBright: 100,
+  osdTimer: null,
+  armed: false,
+
+  showOSD: function(icon, pct, text){
+    var el = $("pm-gesture-osd");
+    if(!el) return;
+    $("pm-osd-icon").textContent = icon;
+    $("pm-osd-bar").style.width = Math.max(0, Math.min(100, pct)) + "%";
+    $("pm-osd-val").textContent = text != null ? text : Math.round(pct) + "%";
+    el.classList.remove("hidden");
+    clearTimeout(this.osdTimer);
+    this.osdTimer = setTimeout(function(){ el.classList.add("hidden"); }, 1200);
+  },
+
+  triggerRipple: function(side, text){
+    var rip = $(side === "left" ? "pm-ripple-left" : "pm-ripple-right");
+    if(!rip) return;
+    if(text) {
+      var t = rip.querySelector(".ripple-text");
+      if(t) t.textContent = text;
+    }
+    rip.classList.remove("active");
+    void rip.offsetWidth; // force reflow
+    rip.classList.add("active");
+    setTimeout(function(){ rip.classList.remove("active"); }, 400);
+    // Haptic feedback via native bridge or Web Vibration API
+    if(window.TatapNative && window.TatapNative.vibrate){
+      window.TatapNative.vibrate(25);
+    } else if(navigator.vibrate){
+      try{ navigator.vibrate(25); }catch(e){}
+    }
+  },
+
+  bind: function(){
+    if(this.armed) return;
+    this.armed = true;
+    var stage = document.querySelector(".ambient-stage");
+    var v = $("vid");
+    if(!stage || !v) return;
+
+    var self = this;
+
+    stage.addEventListener("touchstart", function(e){
+      if(e.touches.length !== 1) return;
+      var touch = e.touches[0];
+      var rect = stage.getBoundingClientRect();
+      self.startX = touch.clientX;
+      self.startY = touch.clientY;
+      self.mode = null;
+      self.initVol = v.volume;
+      self.initBright = self.currentBright;
+      self.initTime = v.currentTime;
+    }, {passive: true});
+
+    stage.addEventListener("touchmove", function(e){
+      if(e.touches.length !== 1) return;
+      var touch = e.touches[0];
+      var rect = stage.getBoundingClientRect();
+      var dx = touch.clientX - self.startX;
+      var dy = touch.clientY - self.startY;
+      var relX = (self.startX - rect.left) / rect.width;
+
+      if(!self.mode){
+        if(Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy)){
+          self.mode = "seek";
+        } else if(Math.abs(dy) > 18 && Math.abs(dy) > Math.abs(dx)){
+          self.mode = (relX < 0.5) ? "brightness" : "volume";
+        }
+      }
+
+      if(self.mode === "seek"){
+        var dur = v.duration || 1400;
+        var scrub = (dx / rect.width) * 90; // geser penuh layar = +/- 90 detik
+        var target = Math.max(0, Math.min(dur, self.initTime + scrub));
+        var diff = Math.round(target - self.initTime);
+        var sign = diff >= 0 ? "+" : "";
+        var min = Math.floor(target / 60);
+        var sec = Math.floor(target % 60);
+        var timeStr = min + ":" + (sec < 10 ? "0" : "") + sec;
+        self.showOSD("⏩", (target / dur) * 100, timeStr + " (" + sign + diff + "s)");
+        self._targetSeek = target;
+      } else if(self.mode === "volume"){
+        var deltaV = (-dy / rect.height) * 1.5;
+        var nv = Math.max(0, Math.min(1, self.initVol + deltaV));
+        v.volume = nv;
+        v.muted = (nv === 0);
+        var ic = nv === 0 ? "🔇" : (nv < 0.5 ? "🔉" : "🔊");
+        self.showOSD(ic, nv * 100);
+      } else if(self.mode === "brightness"){
+        var deltaB = (-dy / rect.height) * 120;
+        var nb = Math.max(20, Math.min(150, self.initBright + deltaB));
+        self.currentBright = nb;
+        v.style.filter = "brightness(" + (nb / 100) + ")";
+        if(window.TatapNative && window.TatapNative.setBrightness){
+          window.TatapNative.setBrightness(nb / 100);
+        }
+        self.showOSD("☀️", (nb / 150) * 100, Math.round(nb) + "%");
+      }
+    }, {passive: true});
+
+    stage.addEventListener("touchend", function(e){
+      if(self.mode === "seek" && self._targetSeek != null){
+        v.currentTime = self._targetSeek;
+        self._targetSeek = null;
+        self.mode = null;
+        return;
+      }
+      if(self.mode){
+        self.mode = null;
+        return;
+      }
+
+      // Deteksi tap & double-tap
+      var now = Date.now();
+      var rect = stage.getBoundingClientRect();
+      var relX = (self.startX - rect.left) / rect.width;
+
+      if(now - self.lastTap < 320 && Math.abs(self.startX - self.lastTapX) < 80){
+        // Double Tap
+        self.lastTap = 0; // reset
+        if(relX < 0.35){
+          v.currentTime = Math.max(0, v.currentTime - 10);
+          self.triggerRipple("left", "-10s");
+        } else if(relX > 0.65){
+          v.currentTime = Math.min(v.duration || 99999, v.currentTime + 10);
+          self.triggerRipple("right", "+10s");
+        } else {
+          if(v.paused) v.play(); else v.pause();
+        }
+      } else {
+        self.lastTap = now;
+        self.lastTapX = self.startX;
+      }
+    }, {passive: true});
+  }
+};
+
 function armAutohide(){
   var stage=document.querySelector(".ambient-stage");
   var shell=document.querySelector(".player-shell");
+  TouchGestures.bind();
   if(!stage||stage._armed)return;
   stage._armed=true;
   var v=$("vid");
