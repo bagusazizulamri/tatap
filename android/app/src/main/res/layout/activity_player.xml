@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/player_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Native Media3 PlayerView -->
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/player_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:use_controller="true"
+        app:show_timeout="3000"
+        app:resize_mode="fit" />
+
+    <!-- Gesture HUD OSD (Volume, Brightness, Seek) -->
+    <LinearLayout
+        android:id="@+id/hud_osd"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#CC0A0D14"
+        android:paddingHorizontal="20dp"
+        android:paddingVertical="10dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tv_osd_icon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔊"
+            android:textSize="20sp" />
+
+        <ProgressBar
+            android:id="@+id/pb_osd_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="120dp"
+            android:layout_height="8dp"
+            android:layout_marginStart="12dp"
+            android:max="100"
+            android:progress="50"
+            android:progressTint="#00DBEB" />
+
+        <TextView
+            android:id="@+id/tv_osd_val"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:text="50%"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+
+    <!-- Double Tap Ripple Indicators -->
+    <TextView
+        android:id="@+id/tv_ripple_left"
+        android:layout_width="140dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:gravity="center"
+        android:text="⏪\n-10s"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:fontFamily="monospace"
+        android:background="#22FFFFFF"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tv_ripple_right"
+        android:layout_width="140dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="end"
+        android:gravity="center"
+        android:text="⏩\n+10s"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:fontFamily="monospace"
+        android:background="#22FFFFFF"
+        android:visibility="gone" />
+
+    <!-- Subtitle Custom Overlay -->
+    <TextView
+        android:id="@+id/tv_subtitles"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="48dp"
+        android:background="#B3000000"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="4dp"
+        android:text=""
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:fontFamily="monospace"
+        android:visibility="gone" />
+</FrameLayout>

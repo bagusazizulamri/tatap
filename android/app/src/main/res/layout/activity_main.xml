@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#08090C">
+
+    <!-- Top App Bar / Brand Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:background="#0D0F14">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="TATAP"
+            android:textColor="#00DBEB"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="v2.2.0"
+            android:textColor="#5A6578"
+            android:textSize="12sp"
+            android:fontFamily="monospace" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/tv_status_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ONLINE"
+            android:textColor="#10B981"
+            android:textSize="11sp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+
+    <!-- Search Input Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="10dp"
+        android:gravity="center_vertical"
+        android:background="#0A0D12">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="tatap$ "
+            android:textColor="#00DBEB"
+            android:textSize="14sp"
+            android:fontFamily="monospace" />
+
+        <EditText
+            android:id="@+id/et_search"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@null"
+            android:hint="cari judul anime..."
+            android:textColorHint="#404B5C"
+            android:textColor="#E1E7EF"
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            android:imeOptions="actionSearch"
+            android:inputType="text"
+            android:singleLine="true" />
+
+        <ProgressBar
+            android:id="@+id/pb_loading"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:visibility="gone"
+            android:indeterminateTint="#00DBEB" />
+    </LinearLayout>
+
+    <!-- Section Title & Counter -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="6dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tv_section_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Tayang Musim Ini"
+            android:textColor="#8892B0"
+            android:textSize="13sp"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/tv_item_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#5A6578"
+            android:textSize="12sp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+
+    <!-- Native Grid of Anime Cards -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_anime_grid"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="8dp"
+        android:clipToPadding="false"
+        android:scrollbars="vertical" />
+</LinearLayout>

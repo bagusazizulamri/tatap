@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="6dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="3dp"
+    app:cardBackgroundColor="#11141C">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="180dp"
+            android:background="#161A24">
+
+            <ImageView
+                android:id="@+id/iv_poster"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop" />
+
+            <TextView
+                android:id="@+id/tv_badge_ep"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_margin="6dp"
+                android:background="#D9000000"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="2dp"
+                android:text="SUB"
+                android:textColor="#00DBEB"
+                android:textSize="10sp"
+                android:fontFamily="monospace" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp">
+
+            <TextView
+                android:id="@+id/tv_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:text="Judul Anime"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/tv_meta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:text="TV · 12 Ep"
+                android:textColor="#6B778D"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

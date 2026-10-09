@@ -1,162 +1,79 @@
 package id.tatap.app;
 
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
-import android.content.pm.ActivityInfo;
-import android.graphics.Color;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
+import android.view.KeyEvent;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.Window;
-import android.view.WindowManager;
-import android.webkit.JavascriptInterface;
-import android.webkit.WebChromeClient;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.widget.FrameLayout;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity {
-    private WebView webView;
-    private FrameLayout customViewContainer;
-    private WebChromeClient.CustomViewCallback customViewCallback;
-    private View customView;
+    private EditText etSearch;
+    private ProgressBar pbLoading;
+    private TextView tvSectionTitle, tvItemCount, tvStatusBadge;
+    private RecyclerView rvGrid;
+    private AnimeAdapter adapter;
 
-    public class TatapNativeBridge {
-        private final Activity activity;
-
-        public TatapNativeBridge(Activity act) {
-            this.activity = act;
-        }
-
-        @JavascriptInterface
-        public void vibrate(long ms) {
-            Vibrator v = (Vibrator) activity.getSystemService(Context.VIBRATOR_SERVICE);
-            if (v != null && v.hasVibrator()) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
-                } else {
-                    v.vibrate(ms);
-                }
-            }
-        }
-
-        @JavascriptInterface
-        public void setBrightness(final float brightnessRatio) {
-            activity.runOnUiThread(() -> {
-                Window win = activity.getWindow();
-                WindowManager.LayoutParams lp = win.getAttributes();
-                lp.screenBrightness = Math.max(0.01f, Math.min(1.0f, brightnessRatio));
-                win.setAttributes(lp);
-            });
-        }
-
-        @JavascriptInterface
-        public void setOrientation(final String mode) {
-            activity.runOnUiThread(() -> {
-                if ("landscape".equalsIgnoreCase(mode)) {
-                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-                } else if ("portrait".equalsIgnoreCase(mode)) {
-                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
-                } else {
-                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-                }
-            });
-        }
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
 
-        // Keep screen on while playing
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        etSearch = findViewById(R.id.et_search);
+        pbLoading = findViewById(R.id.pb_loading);
+        tvSectionTitle = findViewById(R.id.tv_section_title);
+        tvItemCount = findViewById(R.id.tv_item_count);
+        tvStatusBadge = findViewById(R.id.tv_status_badge);
+        rvGrid = findViewById(R.id.rv_anime_grid);
 
-        // Immersive full-screen status/nav bars
-        Window window = getWindow();
-        window.setStatusBarColor(Color.parseColor("#08090c"));
-        window.setNavigationBarColor(Color.parseColor("#08090c"));
+        rvGrid.setLayoutManager(new GridLayoutManager(this, 2));
+        adapter = new AnimeAdapter(this);
+        rvGrid.setAdapter(adapter);
 
-        FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.parseColor("#08090c"));
-
-        webView = new WebView(this);
-        customViewContainer = new FrameLayout(this);
-        customViewContainer.setVisibility(View.GONE);
-        customViewContainer.setBackgroundColor(Color.BLACK);
-
-        root.addView(webView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        root.addView(customViewContainer, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
-        setContentView(root);
-
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
-        settings.setUseWideViewPort(true);
-        settings.setLoadWithOverviewMode(true);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        settings.setUserAgentString(settings.getUserAgentString() + " TatapAndroid/2.2.0");
-
-        webView.addJavascriptInterface(new TatapNativeBridge(this), "TatapNative");
-
-        webView.setWebViewClient(new WebViewClient());
-        webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onShowCustomView(View view, CustomViewCallback callback) {
-                if (customView != null) {
-                    callback.onCustomViewHidden();
-                    return;
+        etSearch.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEARCH ||
+                    (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN)) {
+                hideKeyboard();
+                String query = etSearch.getText().toString().trim();
+                if (!query.isEmpty()) {
+                    searchAnime(query);
                 }
-                customView = view;
-                customViewCallback = callback;
-                webView.setVisibility(View.GONE);
-                customViewContainer.setVisibility(View.VISIBLE);
-                customViewContainer.addView(view);
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                return true;
             }
-
-            @Override
-            public void onHideCustomView() {
-                if (customView == null) return;
-                webView.setVisibility(View.VISIBLE);
-                customViewContainer.setVisibility(View.GONE);
-                customViewContainer.removeView(customView);
-                if (customViewCallback != null) {
-                    customViewCallback.onCustomViewHidden();
-                }
-                customView = null;
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-            }
+            return false;
         });
 
-        // Start embedded Python backend via Chaquopy if available
+        // Nyalakan backend Python lokal
         startEmbeddedBackend();
 
-        // Load local backend or configured Tatap instance
-        android.content.SharedPreferences prefs = getSharedPreferences("tatap_prefs", Context.MODE_PRIVATE);
-        String serverUrl = getIntent().getStringExtra("server_url");
-        if (serverUrl == null || serverUrl.isEmpty()) {
-            serverUrl = prefs.getString("server_url", "http://127.0.0.1:8767");
-        } else {
-            prefs.edit().putString("server_url", serverUrl).apply();
-        }
+        // Tunggu server lokal siap lalu muat katalog seasonal awal
+        waitForServerAndLoadCatalog(0);
+    }
 
-        final String targetServer = serverUrl;
-        
-        // Polling loop sampai server 127.0.0.1:8767 siap
-        waitForServerAndLoad(targetServer, 0);
+    private void hideKeyboard() {
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
+        }
     }
 
     private void startEmbeddedBackend() {
@@ -173,17 +90,16 @@ public class MainActivity extends Activity {
                 String dataDir = getFilesDir().getAbsolutePath();
                 launcherMod.getClass().getMethod("callAttr", String.class, Object[].class).invoke(launcherMod, "run_in_background", new Object[]{dataDir});
             } catch (Throwable t) {
-                // Chaquopy not bundled or failed, fallback to external or asset mode
                 t.printStackTrace();
             }
         }).start();
     }
 
-    private void waitForServerAndLoad(final String targetServer, final int attempt) {
+    private void waitForServerAndLoadCatalog(final int attempt) {
         new Thread(() -> {
             boolean ready = false;
             try {
-                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(targetServer + "/api/ping").openConnection();
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/ping").openConnection();
                 conn.setConnectTimeout(600);
                 conn.setReadTimeout(600);
                 ready = (conn.getResponseCode() == 200);
@@ -191,30 +107,96 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {}
 
             final boolean isReady = ready;
-            if (isReady || attempt >= 15) {
+            if (isReady) {
                 runOnUiThread(() -> {
-                    if (isReady) {
-                        webView.loadUrl(targetServer);
-                    } else {
-                        // Fallback ke local asset
-                        webView.loadUrl("file:///android_asset/frontend/index.html");
-                    }
+                    tvStatusBadge.setText("LOCAL OK");
+                    tvStatusBadge.setTextColor(0xFF10B981);
+                    loadSeasonalAnime();
                 });
+            } else if (attempt < 20) {
+                try { Thread.sleep(300); } catch (Exception ignored) {}
+                waitForServerAndLoadCatalog(attempt + 1);
             } else {
-                try { Thread.sleep(400); } catch (Exception ignored) {}
-                waitForServerAndLoad(targetServer, attempt + 1);
+                runOnUiThread(() -> {
+                    tvStatusBadge.setText("OFFLINE");
+                    tvStatusBadge.setTextColor(0xFFEF4444);
+                    Toast.makeText(this, "Server backend lokal sedang bersiap...", Toast.LENGTH_SHORT).show();
+                });
             }
         }).start();
     }
 
-    @Override
-    public void onBackPressed() {
-        if (customView != null) {
-            webView.getWebChromeClient().onHideCustomView();
-        } else if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
+    private void loadSeasonalAnime() {
+        pbLoading.setVisibility(View.VISIBLE);
+        tvSectionTitle.setText("Tayang Musim Ini");
+        new Thread(() -> {
+            try {
+                String u = "http://127.0.0.1:8767/api/seasonal?which=now&page=1";
+                HttpURLConnection conn = (HttpURLConnection) new URL(u).openConnection();
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
+                BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line);
+                reader.close();
+
+                JSONObject res = new JSONObject(sb.toString());
+                if (res.optBoolean("success")) {
+                    JSONArray arr = res.getJSONObject("data").getJSONArray("results");
+                    List<JSONObject> list = new ArrayList<>();
+                    for (int i = 0; i < arr.length(); i++) {
+                        list.add(arr.getJSONObject(i));
+                    }
+                    runOnUiThread(() -> {
+                        pbLoading.setVisibility(View.GONE);
+                        tvItemCount.setText(list.size() + " judul");
+                        adapter.setData(list);
+                    });
+                }
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    pbLoading.setVisibility(View.GONE);
+                    Toast.makeText(this, "Gagal memuat katalog: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+
+    private void searchAnime(String query) {
+        pbLoading.setVisibility(View.VISIBLE);
+        tvSectionTitle.setText("Hasil Pencarian: " + query);
+        new Thread(() -> {
+            try {
+                String u = "http://127.0.0.1:8767/api/search?q=" + URLEncoder.encode(query, "UTF-8") + "&limit=20";
+                HttpURLConnection conn = (HttpURLConnection) new URL(u).openConnection();
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
+                BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line);
+                reader.close();
+
+                JSONObject res = new JSONObject(sb.toString());
+                if (res.optBoolean("success")) {
+                    JSONArray arr = res.getJSONObject("data").getJSONArray("results");
+                    List<JSONObject> list = new ArrayList<>();
+                    for (int i = 0; i < arr.length(); i++) {
+                        list.add(arr.getJSONObject(i));
+                    }
+                    runOnUiThread(() -> {
+                        pbLoading.setVisibility(View.GONE);
+                        tvItemCount.setText(list.size() + " judul");
+                        adapter.setData(list);
+                    });
+                }
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    pbLoading.setVisibility(View.GONE);
+                    Toast.makeText(this, "Gagal mencari: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
     }
 }

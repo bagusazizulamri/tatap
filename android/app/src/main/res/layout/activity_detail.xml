@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#08090C"
+    android:padding="16dp">
+
+    <!-- Header Detail -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="12dp">
+
+        <ImageButton
+            android:id="@+id/btn_back"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_revert"
+            android:tint="#00DBEB" />
+
+        <TextView
+            android:id="@+id/tv_detail_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="Detail Anime"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv_detail_slug"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="memuat episode..."
+        android:textColor="#6B778D"
+        android:textSize="12sp"
+        android:fontFamily="monospace"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Episode Grid -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_episodes"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+</LinearLayout>

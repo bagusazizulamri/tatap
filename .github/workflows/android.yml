@@ -31,16 +31,11 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Bundle backend and frontend into Android app
+      - name: Bundle backend into Android app
         run: |
-          mkdir -p android/app/src/main/assets
-          rm -rf android/app/src/main/assets/frontend
-          cp -r frontend android/app/src/main/assets/
-
           mkdir -p android/app/src/main/python
-          rm -rf android/app/src/main/python/backend android/app/src/main/python/frontend
+          rm -rf android/app/src/main/python/backend
           cp -r backend android/app/src/main/python/
-          cp -r frontend android/app/src/main/python/
           rm -f android/app/src/main/python/backend/*.db android/app/src/main/python/backend/*.env
           rm -rf android/app/src/main/python/backend/__pycache__ android/app/src/main/python/backend/*/__pycache__
 

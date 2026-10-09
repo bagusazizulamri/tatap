@@ -13,7 +13,7 @@
         android:label="Tatap"
         android:roundIcon="@drawable/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+        android:theme="@style/Theme.Tatap"
         android:usesCleartextTraffic="true"
         android:hardwareAccelerated="true">
         <activity
@@ -25,5 +25,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".DetailActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+
+        <activity
+            android:name=".PlayerActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
     </application>
 </manifest>
