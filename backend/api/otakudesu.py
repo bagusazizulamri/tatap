@@ -14,8 +14,23 @@ HEADERS = {
     "Referer": OTAKU_BASE + "/",
 }
 
-def _fetch(url: str, referer: str = None, timeout: int = 15) -> str:
-    """Fetch helper menggunakan curl_cffi dengan fallback httpx."""
+_otaku_client = None
+
+def _get_otaku_client():
+    global _otaku_client
+    if _otaku_client is None:
+        import httpx
+        limits = httpx.Limits(max_connections=20, max_keepalive_connections=10, keepalive_expiry=60.0)
+        _otaku_client = httpx.Client(
+            follow_redirects=True,
+            timeout=httpx.Timeout(12.0, connect=5.0),
+            limits=limits,
+            headers=HEADERS
+        )
+    return _otaku_client
+
+def _fetch(url: str, referer: str = None, timeout: int = 12) -> str:
+    """Fetch helper menggunakan curl_cffi dengan fallback httpx pool dan TLS desync."""
     h = dict(HEADERS)
     if referer:
         h["Referer"] = referer
@@ -27,12 +42,25 @@ def _fetch(url: str, referer: str = None, timeout: int = 15) -> str:
     except Exception:
         pass
 
-    import httpx
-    with httpx.Client(timeout=timeout, follow_redirects=True, headers=h) as c:
-        r = c.get(url)
+    try:
+        client = _get_otaku_client()
+        r = client.get(url, headers=h)
         if r.status_code == 200:
             return r.text
-        raise RuntimeError(f"HTTP {r.status_code} from {url}")
+    except Exception:
+        pass
+
+    # Fallback TLS Desync jika diblokir ISP
+    try:
+        from api.desync import tls_desync_request
+        raw = tls_desync_request(url, headers=h, timeout=timeout)
+        txt = raw.decode("utf-8", errors="replace")
+        if txt and ("<html" in txt.lower() or "{" in txt):
+            return txt
+    except Exception:
+        pass
+
+    raise RuntimeError(f"Gagal memuat URL dari Otakudesu: {url}")
 
 
 def search(query: str, limit: int = 10) -> list:

@@ -42,18 +42,31 @@ def prev_season(name, year):
         return year - 1, "fall"
     return year, order[idx - 1]
 
+_al_client = None
+
+def _get_al_client():
+    global _al_client
+    if _al_client is None:
+        limits = httpx.Limits(max_connections=20, max_keepalive_connections=10, keepalive_expiry=60.0)
+        _al_client = httpx.Client(
+            timeout=httpx.Timeout(12.0, connect=5.0),
+            limits=limits,
+            headers={"Content-Type": "application/json", "User-Agent": UA}
+        )
+    return _al_client
+
 def season_page(name, year, page=1, per_page=25):
     """Fetch satu halaman AniList untuk season/year tertentu. Return {pageInfo, media:[]}."""
     try:
-        with httpx.Client(timeout=20) as c:
-            r = c.post(ANILIST_URL, json={
-                "query": QUERY,
-                "variables": {"season": name.upper(), "year": year,
-                              "page": page, "perPage": per_page}
-            }, headers={"Content-Type": "application/json", "User-Agent": UA})
-            if r.status_code != 200:
-                return {"pageInfo": {"total": 0, "perPage": per_page, "currentPage": page,
-                                     "lastPage": 1, "hasNextPage": False}, "media": []}
+        c = _get_al_client()
+        r = c.post(ANILIST_URL, json={
+            "query": QUERY,
+            "variables": {"season": name.upper(), "year": year,
+                          "page": page, "perPage": per_page}
+        })
+        if r.status_code != 200:
+            return {"pageInfo": {"total": 0, "perPage": per_page, "currentPage": page,
+                                 "lastPage": 1, "hasNextPage": False}, "media": []}
             d = r.json().get("data", {}).get("Page", {})
             d.setdefault("pageInfo", {})
             d.setdefault("media", [])
