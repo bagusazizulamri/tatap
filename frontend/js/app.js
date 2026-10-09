@@ -346,8 +346,9 @@ function prefetchSubtitleTrack(url, ref, langCode){
     var trErr=r.headers.get("X-Translate-Error")||"";
     var trModel=r.headers.get("X-Translate-Model")||"";
     var trMixed=r.headers.get("X-Translate-Mixed")||"";
+    var trBg=r.headers.get("X-Translate-Background")||"";
     return r.text().then(function(t){
-      return {text:t, tier:tier, error:trErr, model:trModel, mixed:trMixed};
+      return {text:t, tier:tier, error:trErr, model:trModel, mixed:trMixed, bg:trBg};
     });
   });
 
@@ -366,6 +367,10 @@ function switchSubtitleTrack(url, langCode){
   for(var i=0;i<oldTracks.length;i++)oldTracks[i].parentNode.removeChild(oldTracks[i]);
   cur.cues=[];
   clearOverlay();
+  if(cur._subUpgradeTimer){
+    clearTimeout(cur._subUpgradeTimer);
+    cur._subUpgradeTimer = null;
+  }
   if(!url)return;
   var originalUrl = url;
   if(url.indexOf("ai:")===0){
@@ -373,7 +378,7 @@ function switchSubtitleTrack(url, langCode){
     if(!langCode) langCode="id";
   }
   if(langCode==="id"){
-    toast("Menerjemahkan subtitle AI ke bahasa Indonesia...", 4000);
+    toast("Menerjemahkan subtitle AI ke bahasa Indonesia...", 3000);
     var obox=$("pm-subs-overlay");
     if(obox){
       var osp=obox.querySelector("span");
@@ -397,17 +402,37 @@ function switchSubtitleTrack(url, langCode){
         toast(msg, 6000);
       }else{
         var tierLabel = "AI Fansub" + (res.model ? " · "+res.model : "");
-        if(res.tier === "tier2") tierLabel = "Google GTX — kaku";
+        if(res.tier === "tier2") tierLabel = "Google GTX (Instan)";
         else if(res.tier === "tier3") tierLabel = "MyMemory — kaku";
         else if(res.tier === "cached") tierLabel = "AI Fansub, tersimpan";
-        else if(res.tier === "cached-mt") tierLabel = "Google GTX tersimpan — kaku";
+        else if(res.tier === "cached-mt") tierLabel = "Google GTX tersimpan (Instan)";
         var extra = "";
         if(res.mixed) extra = " · "+res.mixed+" baris via GTX";
-        toast("Subtitle Indonesia siap ("+tierLabel+")! ("+cur.cues.length+" baris"+extra+")", 5000);
-        if(res.tier === "tier2" || res.tier === "tier3" || res.tier === "cached-mt"){
-          setTimeout(function(){
-            toast(res.error ? ("AI Fansub gagal: "+res.error) : "Untuk gaya fansub santai, pasang API key gratis: ketik :apikey <key> di command bar (Ollama Cloud / Gemini / Groq)", 8000);
-          }, 5200);
+        toast("Subtitle Indonesia siap ("+tierLabel+")! ("+cur.cues.length+" baris"+extra+")", 4000);
+
+        // Jika disajikan instan via MT dan AI fansub sedang diproses di background:
+        if(res.bg === "llm-translating" || res.tier === "tier2" || res.tier === "cached-mt"){
+          var checkUpgrade = function(attempt){
+            if(attempt > 20) return; // Maksimal ~5 menit
+            cur._subUpgradeTimer = setTimeout(function(){
+              var qs = "url=" + encodeURIComponent(url) + "&referer=" + encodeURIComponent(ref || "") + "&lang=id";
+              fetch("/api/player/sub?" + qs).then(function(ur){
+                var uTier = ur.headers.get("X-Translate-Tier") || "";
+                var uModel = ur.headers.get("X-Translate-Model") || "";
+                if(uTier === "cached" || uTier === "tier1"){
+                  ur.text().then(function(uText){
+                    cur.cues = parseVtt(uText);
+                    paintCue();
+                    var lbl = "AI Fansub" + (uModel ? " · " + uModel : "");
+                    toast("✨ Subtitle berhasil di-upgrade ke " + lbl + "!", 5000);
+                  });
+                }else{
+                  checkUpgrade(attempt + 1);
+                }
+              }).catch(function(){});
+            }, 15000);
+          };
+          checkUpgrade(1);
         }
       }
     }

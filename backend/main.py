@@ -723,7 +723,44 @@ async def proxy_sub(url: str = Query(""),
         resp.headers["X-Translate-Tier"] = hit_tier
         return resp
 
-    # Dedup in-flight: request ganda (ganti track / reload) menunggu job yang sama.
+    # Jika LLM aktif, jalankan background prefetch/job LLM tanpa memblokir player.
+    # Player segera disajikan versi Tier 2 (GTX instan 1-2 detik) agar penonton tidak menunggu 2-4 menit.
+    if llm_on:
+        job_key = base_hash + "|llm"
+        if job_key not in _SUB_INFLIGHT:
+            fut = asyncio.ensure_future(_translate_sub_job(url, referer, src, lang, key_llm, key_mt, _fetch_sub_text))
+            _SUB_INFLIGHT[job_key] = fut
+            fut.add_done_callback(lambda _f, k=job_key: _SUB_INFLIGHT.pop(k, None))
+
+        # Cek apakah sudah ada MT cache (misal hasil GTX sebelumnya)
+        mt_hit = await get_subtitle_cache(key_mt, ttl=7 * 24 * 3600)
+        if mt_hit:
+            resp = Response(content=mt_hit, media_type="text/vtt")
+            resp.headers["X-Translate-Tier"] = "cached-mt"
+            resp.headers["X-Translate-Background"] = "llm-translating"
+            return resp
+
+        # Jika belum ada MT cache, terjemahkan cepat via Tier 2 (Google GTX)
+        try:
+            text = await _fetch_sub_text(url, referer)
+            from api.translate import parse_vtt, build_vtt, call_gtx_translate
+            cues = parse_vtt(text)
+            if cues:
+                gtx_cues = await call_gtx_translate(cues, src, lang)
+                gtx_text = build_vtt(gtx_cues)
+                await set_subtitle_cache(key_mt, gtx_text)
+                resp = Response(content=gtx_text, media_type="text/vtt")
+                resp.headers["X-Translate-Tier"] = "tier2"
+                resp.headers["X-Translate-Background"] = "llm-translating"
+                return resp
+        except Exception as e:
+            try:
+                from api.translate import log_translate
+                log_translate(f"Fast GTX translation gagal: {e}, fallback ke job reguler")
+            except Exception:
+                pass
+
+    # Dedup in-flight fallback / saat LLM mati
     job_key = base_hash + ("|llm" if llm_on else "|mt")
     fut = _SUB_INFLIGHT.get(job_key)
     if fut is None:

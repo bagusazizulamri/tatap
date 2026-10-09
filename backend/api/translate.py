@@ -194,7 +194,7 @@ _DEFAULT_MODEL = {
 # batch = jumlah cue per request, conc = request paralel.
 _PROVIDER_CFG = {
     "google": {"batch": 80, "conc": 2},
-    "ollama": {"batch": 30, "conc": 3},
+    "ollama": {"batch": 40, "conc": 3},
     "ollama_local": {"batch": 20, "conc": 1},
     "groq": {"batch": 40, "conc": 2},
     "openrouter": {"batch": 40, "conc": 2},
