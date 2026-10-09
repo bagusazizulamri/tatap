@@ -115,12 +115,100 @@
             android:fontFamily="monospace" />
     </LinearLayout>
 
+    <!-- View Mode Switcher (Musim, Masih Tayang, Terpopuler) -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:paddingHorizontal="12dp"
+        android:paddingBottom="6dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_tab_musim"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="6dp"
+                android:text="Musim Ini"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#0E7490"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+
+            <Button
+                android:id="@+id/btn_tab_airing"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="6dp"
+                android:text="Masih Tayang"
+                android:textColor="#8892B0"
+                android:backgroundTint="#161A24"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+
+            <Button
+                android:id="@+id/btn_tab_katalog"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="Katalog Populer"
+                android:textColor="#8892B0"
+                android:backgroundTint="#161A24"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
     <!-- Native Grid of Anime Cards -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_anime_grid"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:padding="8dp"
         android:clipToPadding="false"
         android:scrollbars="vertical" />
+
+    <!-- Pagination Controls (Halaman Sebelumnya / Berikutnya) -->
+    <LinearLayout
+        android:id="@+id/layout_pagination"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center"
+        android:background="#0A0D12"
+        android:paddingHorizontal="16dp">
+
+        <Button
+            android:id="@+id/btn_prev_page"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="◀ SEBELUMNYA"
+            android:textColor="#00DBEB"
+            android:backgroundTint="#161A24"
+            android:textSize="11sp"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/tv_page_indicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:text="Hal 1"
+            android:textColor="#8892B0"
+            android:textSize="12sp"
+            android:fontFamily="monospace" />
+
+        <Button
+            android:id="@+id/btn_next_page"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="BERIKUTNYA ▶"
+            android:textColor="#00DBEB"
+            android:backgroundTint="#161A24"
+            android:textSize="11sp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
 </LinearLayout>

@@ -23,12 +23,14 @@ def start_server(data_dir=None):
         main.frontend_dir = frontend_dir
 
         import uvicorn
+        print("[TATAP-SERVER] Menyalakan Uvicorn pada 127.0.0.1:8767...", flush=True)
         # Jalankan server
-        uvicorn.run(main.app, host="127.0.0.1", port=8767, loop="asyncio", http="h11", log_level="warning")
+        uvicorn.run(main.app, host="127.0.0.1", port=8767, loop="asyncio", http="h11", log_level="info")
     except Exception as e:
-        print(f"[TATAP-SERVER-ERROR] {e}", flush=True)
+        import traceback
+        print(f"[TATAP-SERVER-ERROR] {e}\n{traceback.format_exc()}", flush=True)
 
 def run_in_background(data_dir=None):
-    t = threading.Thread(target=start_server, args=(data_dir,), daemon=True)
+    t = threading.Thread(target=start_server, args=(data_dir,), daemon=True, name="TatapBackendThread")
     t.start()
     return True
