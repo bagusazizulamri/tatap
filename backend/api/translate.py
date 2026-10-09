@@ -1142,12 +1142,18 @@ async def call_gtx_translate(cues, src="en", tgt="id", timeout=20.0):
         if idx > 0:
             await _asyncio.sleep(0.3)
         lines = [cue["text"].replace("\n", " ").strip() for cue in batch]
-        try:
-            parts = await loop.run_in_executor(None, lambda l=lines: _fetch_batch_sync(l))
-            all_translated.extend(parts)
-        except Exception as e:
-            log_translate(f"GTX Batch {idx+1}/{len(batches)} error: {e}")
-            raise e
+        parts = None
+        for attempt in range(3):
+            try:
+                parts = await loop.run_in_executor(None, lambda l=lines: _fetch_batch_sync(l))
+                break
+            except Exception as e:
+                if attempt < 2 and any(k in str(e).lower() for k in ("temporary failure", "name resolution", "timed out", "timeout")):
+                    await _asyncio.sleep(1.0 * (attempt + 1))
+                    continue
+                log_translate(f"GTX Batch {idx+1}/{len(batches)} error: {e}")
+                raise e
+        all_translated.extend(parts)
 
     dur = _time.time() - t_start
     log_translate(f"Sukses translate Google GTX (HTML): {len(cues)} cues dalam {dur:.2f}s")
