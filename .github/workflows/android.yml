@@ -41,6 +41,8 @@ jobs:
           rm -rf android/app/src/main/python/backend android/app/src/main/python/frontend
           cp -r backend android/app/src/main/python/
           cp -r frontend android/app/src/main/python/
+          rm -f android/app/src/main/python/backend/*.db android/app/src/main/python/backend/*.env
+          rm -rf android/app/src/main/python/backend/__pycache__ android/app/src/main/python/backend/*/__pycache__
 
       - name: Build Debug APK
         working-directory: ./android
