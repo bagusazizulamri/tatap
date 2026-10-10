@@ -92,7 +92,8 @@ public class DetailActivity extends Activity {
 
         btnBack.setOnClickListener(v -> finish());
 
-        rvEpisodes.setLayoutManager(new GridLayoutManager(this, 4));
+        int epSpan = getResources().getInteger(R.integer.episode_grid_columns);
+        rvEpisodes.setLayoutManager(new GridLayoutManager(this, epSpan));
         adapter = new EpisodeAdapter();
         rvEpisodes.setAdapter(adapter);
 

@@ -128,7 +128,8 @@ public class MainActivity extends Activity {
         btnClearFilter = findViewById(R.id.btn_clear_filter);
         btnClearHistoryAll = findViewById(R.id.btn_clear_history_all);
 
-        rvGrid.setLayoutManager(new GridLayoutManager(this, 2));
+        int spanCount = getResources().getInteger(R.integer.anime_grid_columns);
+        rvGrid.setLayoutManager(new GridLayoutManager(this, spanCount));
         adapter = new AnimeAdapter(this);
         rvGrid.setAdapter(adapter);
 
@@ -485,7 +486,8 @@ public class MainActivity extends Activity {
         Button btnDismiss = dialog.findViewById(R.id.btn_dismiss_genre);
         Button btnReset = dialog.findViewById(R.id.btn_reset_genre_filter);
 
-        rvGenres.setLayoutManager(new GridLayoutManager(this, 2));
+        int genreSpan = getResources().getInteger(R.integer.genre_dialog_columns);
+        rvGenres.setLayoutManager(new GridLayoutManager(this, genreSpan));
         GenreChipAdapter genreAdapter = new GenreChipAdapter((slug, title) -> {
             dialog.dismiss();
             setGenreFilter(slug);
