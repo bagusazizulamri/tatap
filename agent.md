@@ -70,19 +70,30 @@ python3 tools/build_linux_appimage.py
 ```bash
 python3 tools/build_windows_portable.py
 ```
-* **Output:** `dist/tatap-windows-x64-portable.zip` (~23 MB)
-* **Karakteristik:** Membungkus Python 3.11 Embeddable x64, wheel packages terisolasi, launcher native Go `Tatap.exe` tanpa dependensi runtime eksternal.
+* **Output:** `dist/tatap-windows-x64-portable.zip` (~26 MB)
+* **Karakteristik & Isolasi Dependensi:**
+  - Mengunduh Python 3.11 Embeddable x64 resmi dan mengompilasi launcher native Go `Tatap.exe`.
+  - **Pencegahan Konflik Dependensi (Pydantic / Pydantic-Core):** Selalu pasang wheel murni melalui `pip install --target ... --platform win_amd64 --python-version 311 --only-binary=:all:`. Jangan pernah mengekstrak wheel dari folder cache campuran via `glob.glob()`, karena versi pustaka lama dapat menimpa versi baru dan memicu crash `SystemError: The installed pydantic-core version is incompatible with current pydantic`.
 
 ### 3. Build & Sign Android Production APK
-```bash
-cd android && ./gradlew assembleRelease
-```
-* **Output:** `android/app/build/outputs/apk/release/app-release.apk` -> disalin ke `dist/android/tatap-release-v<VERSION>.apk`
-* **Verifikasi Tanda Tangan (Keystore):**
-```bash
-apksigner verify --verbose dist/android/tatap-release-v<VERSION>.apk
-```
-Pastikan `Verified using v1 scheme: true` dan `Verified using v2 scheme: true`.
+Setiap rilis publik Android **wajib berstatus Signed APK resmi** (bukan APK debug atau unsigned):
+1. **Build APK via Gradle atau CI:**
+   - CI (`.github/workflows/android.yml`) otomatis mengompilasi `app-release.apk` dan `app-debug.apk`.
+   - Atau build lokal: `cd android && ./gradlew assembleRelease`
+2. **Penandatanganan dengan Release Keystore Resmi (`release.jks`):**
+   ```bash
+   apksigner sign --ks android/keystore/release.jks \
+     --ks-pass pass:tatapsecret2026 \
+     --ks-key-alias tatap_release \
+     --key-pass pass:tatapsecret2026 \
+     --out dist/android/tatap-release-v<VERSION>.apk \
+     <PATH_TO_UNFINISHED_RELEASE_APK>
+   ```
+3. **Verifikasi Tanda Tangan:**
+   ```bash
+   apksigner verify --verbose --print-certs dist/android/tatap-release-v<VERSION>.apk
+   ```
+   Pastikan sertifikat menampilkan `CN=Tatap, OU=TatapApp, O=Tatap` dengan `APK Signature Scheme v2: true` dan `v3: true`.
 
 ---
 
@@ -93,24 +104,36 @@ Gunakan format **Conventional Commits**:
 - `feat(...)`: Fitur baru (misal: gesture, layout responsif, subtitle provider).
 - `fix(...)`: Perbaikan bug (sertakan referensi isu jika ada, misal: `fix(player): retain subtitles in fullscreen mode (closes #1)`).
 - `docs(...)`: Pembaruan dokumentasi (README, agent.md).
-- `build(...)`: Perubahan build system atau packaging (Android gradle, AppImage, dll.).
+- `build(...)` / `chore(...)`: Perubahan build system, CI workflow, atau packaging.
 
-### Pembuatan & Pembaruan Release
+### Standar Aset Release Publik (Protokol "Tarik APK Mentah")
+Halaman rilis publik GitHub **hanya boleh menyajikan 3 berkas resmi yang bersih dan terverifikasi**:
+1. 📱 **`tatap-release-v<VERSION>.apk`** (Official Signed APK)
+2. 🪟 **`tatap-windows-x64-portable.zip`** (Windows Portable)
+3. 🐧 **`Tatap-x86_64.AppImage`** (Linux AppImage)
+
+**Langkah Penyelarasan Rilis:**
 1. Update git tag:
    ```bash
-   git tag -fa v<VERSION> -m "Release v<VERSION>: <Summary>"
-   git push origin v<VERSION> --force
+   git tag -a v<VERSION> -m "Release v<VERSION>"
+   git push origin v<VERSION>
    ```
-2. Upload aset rilis (timpa aset jika memperbarui rilis yang sama):
+2. Upload signed APK dan paket binary portable:
    ```bash
    gh release upload v<VERSION> \
-     dist/Tatap-x86_64.AppImage \
-     dist/tatap-windows-x64-portable.zip \
      dist/android/tatap-release-v<VERSION>.apk \
+     dist/tatap-windows-x64-portable.zip \
+     dist/Tatap-x86_64.AppImage \
      --clobber
    ```
-3. Perbarui Release Notes:
-   Gunakan bahasa Indonesia yang jelas, ramah pengguna, dan terstruktur rapi memuat poin-poin fitur baru, perbaikan bug, dan panduan unduh.
+3. **Tarik & Hapus APK Mentah Bawaan CI:**
+   Karena CI mengunggah nama mentah secara otomatis, segera hapus dari rilis publik agar pengguna tidak bingung:
+   ```bash
+   gh release delete-asset v<VERSION> app-release.apk -y
+   gh release delete-asset v<VERSION> app-debug.apk -y
+   ```
+4. **Perbarui Release Notes:**
+   Tulis catatan rilis berbahasa Indonesia yang terstruktur rapi, mencantumkan perbaikan bug, penambahan fitur, dan panduan download untuk ketiga platform.
 
 ---
 
@@ -135,7 +158,28 @@ Saat menangani issue dari pengguna/komunitas di GitHub:
 
 ---
 
-## 7. Prinsip Rekayasa Agen AI (Agent Guardrails)
+## 7. Standar Pemutar Video Android & Katalog Metadata
+
+### 1. Akurasi Gesture Swipe & Audio
+- **Gesture Volume Tanpa Lag:** Pada `PlayerActivity.java`, gunakan **continuous float accumulator** (`currentVolumeFraction`) yang diinisialisasi dari rasio `currentVolume / maxVolume` pada saat `ACTION_DOWN`. Hindari *integer truncation* dari perhitungan jarak per-event (`(int)(distanceY * maxVol)`) yang menyebabkan swipe pelan/halus macet atau "nyangkut" di perangkat modern (Android 14, 15, dan 16).
+- **Brightness Float Accumulator:** Nilai brightness layar disimpan dalam float `0.01f - 1.0f` dan diperbarui ke `WindowManager.LayoutParams.screenBrightness`.
+
+### 2. Standar Tipografi & Penempatan Subtitle Mobile
+- **Posisi Default Ergonomis:** Margin bawah default subtitle Android disetel ke `22dp` (bukan 50dp+) agar tidak menutupi ekspresi wajah karakter atau adegan sentral dalam rasio lanskap layar HP/tablet.
+- **Kustomisasi Subtitle (`Style Dialog`):** Sediakan menu pengaturan subtitle dengan opsi kustomisasi:
+  - Posisi: *Bawah (22dp)*, *Sangat Bawah (10dp)*, *Sedang (40dp)*, *Tinggi (58dp)*.
+  - Background Opacity: *Transparan Sedang (30%)*, *Tipis (15%)*, *Gelap (70%)*, atau *Tanpa Kotak (Text Shadow murni)*.
+  - Ukuran Teks: *14sp*, *16sp*, *19sp*, dan *22sp*.
+  - Semua preferensi disimpan secara persisten di `SharedPreferences` (`tatap_player_prefs`).
+
+### 3. Validasi Pencocokan Katalog Anime (AniList ke HiAnime)
+- **Konsistensi Musim (Season Consistency):** Skrip pencocokan di `backend/main.py` (`_match_slug_one`) **wajib memverifikasi nomor musim** (`_extract_season_num`) dan token kemiripan judul (`_is_title_match`).
+- **Pencegahan Fallback Keliru:** Dilarang menggunakan fallback buta ke hasil pertama (`res[0]`) ketika nama tidak cocok. Fallback keliru akan mencemari database cache permanen (`slug_map`), membuat anime Season baru/on-going tertukar dengan Season 1 atau judul yang sama sekali berbeda.
+- **Tab On-going / Airing:** Tab anime yang sedang tayang harus selalu mengueri data status penayangan aktif langsung dari katalog stream (`/api/seasonal?which=airing`).
+
+---
+
+## 8. Prinsip Rekayasa Agen AI (Agent Guardrails)
 
 - **Dokumentasi & Integritas Kode:** Jangan pernah menghapus komentar atau docstring yang ada kecuali diminta secara eksplisit atau sudah tidak relevan karena perubahan kode.
 - **Verifikasi Sebelum Klaim Sukses:** Selalu jalankan uji sintaksis (`node --check`, linting, build test) sebelum mendeklarasikan tugas selesai.
