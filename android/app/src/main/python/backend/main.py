@@ -706,7 +706,11 @@ async def _prewarm_sub_translation(url: str, referer: str, src: str = "en", lang
 
 
 @app.get("/favicon.ico")
+@app.head("/favicon.ico")
 async def favicon():
+    fav = os.path.join(frontend_dir, "favicon.ico")
+    if os.path.exists(fav):
+        return FileResponse(fav, media_type="image/x-icon")
     return Response(status_code=204)
 
 @app.get("/api/player/sub")
@@ -1150,6 +1154,8 @@ if os.path.isdir(os.path.join(frontend_dir, "js")):
     app.mount("/js", StaticFiles(directory=os.path.join(frontend_dir, "js")), name="js")
 if os.path.isdir(os.path.join(frontend_dir, "css")):
     app.mount("/css", StaticFiles(directory=os.path.join(frontend_dir, "css")), name="css")
+if os.path.isdir(os.path.join(frontend_dir, "assets")):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dir, "assets")), name="assets")
 
 @app.get("/")
 async def root():
