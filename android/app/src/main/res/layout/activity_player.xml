@@ -86,21 +86,61 @@
         android:background="#22FFFFFF"
         android:visibility="gone" />
 
-    <!-- Subtitle Custom Overlay (Jika dipakai fallback) -->
+    <!-- Modern Cyber Buffering Animation HUD -->
+    <LinearLayout
+        android:id="@+id/layout_buffering"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:background="@drawable/bg_buffering_hud"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="18dp"
+        android:visibility="gone">
+
+        <ProgressBar
+            android:id="@+id/pb_buffering"
+            style="?android:attr/progressBarStyleLarge"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:indeterminate="true"
+            android:indeterminateTint="#00DBEB" />
+
+        <TextView
+            android:id="@+id/tv_buffering_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="MEMUAT STREAM..."
+            android:textColor="#00DBEB"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.08" />
+    </LinearLayout>
+
+    <!-- Subtitle Custom Overlay -->
     <TextView
         android:id="@+id/tv_subtitles"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="48dp"
-        android:background="#B3000000"
-        android:paddingHorizontal="12dp"
-        android:paddingVertical="4dp"
+        android:layout_marginBottom="56dp"
+        android:layout_marginHorizontal="28dp"
+        android:background="@drawable/bg_subtitle_pill"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="6dp"
+        android:gravity="center"
+        android:textAlignment="center"
         android:text=""
         android:textColor="#FFFFFF"
-        android:textSize="18sp"
+        android:textSize="17sp"
         android:textStyle="bold"
-        android:fontFamily="monospace"
+        android:shadowColor="#000000"
+        android:shadowDx="1.5"
+        android:shadowDy="1.5"
+        android:shadowRadius="4"
         android:visibility="gone" />
 
     <!-- Top Overlay Control Bar (Back, Title, Subtitle Selector [CC]) -->

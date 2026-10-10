@@ -30,12 +30,11 @@ import androidx.media3.common.C;
 import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MimeTypes;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
-import androidx.media3.exoplayer.source.MergingMediaSource;
-import androidx.media3.exoplayer.source.SingleSampleMediaSource;
-import androidx.media3.ui.CaptionStyleCompat;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.SubtitleView;
 
@@ -64,6 +63,9 @@ public class PlayerActivity extends Activity {
     private Button btnSubSelector;
     private ImageButton btnPlayerBack;
     private View layoutTopBar;
+    private View layoutBuffering;
+    private TextView tvBufferingText;
+    private TextView tvSubtitles;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     private String slug;
@@ -72,6 +74,21 @@ public class PlayerActivity extends Activity {
     private float currentBrightness = 0.5f;
 
     // Subtitle Engine State
+    public static class SubtitleCue {
+        public final long startMs;
+        public final long endMs;
+        public final String text;
+
+        public SubtitleCue(long startMs, long endMs, String text) {
+            this.startMs = startMs;
+            this.endMs = endMs;
+            this.text = text;
+        }
+    }
+
+    private volatile List<SubtitleCue> currentCues = new ArrayList<>();
+    private int currentSubLoadId = 0;
+
     private String rawStreamUrl = "";
     private String streamReferer = "";
     private List<JSONObject> subtitleTracks = new ArrayList<>();
@@ -83,6 +100,36 @@ public class PlayerActivity extends Activity {
     private boolean subEnabled = true;
     private boolean hasAiKey = false;
     private String configuredAiModel = "gemini-3.1-flash-lite";
+
+    private final Runnable subtitleSyncRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (player != null && subEnabled) {
+                long pos = player.getCurrentPosition();
+                SubtitleCue active = findActiveCue(pos);
+                if (active != null) {
+                    if (tvSubtitles.getVisibility() != View.VISIBLE || !active.text.equals(tvSubtitles.getText().toString())) {
+                        tvSubtitles.setText(active.text);
+                        tvSubtitles.setVisibility(View.VISIBLE);
+                    }
+                } else {
+                    if (tvSubtitles.getVisibility() == View.VISIBLE) {
+                        tvSubtitles.setText("");
+                        tvSubtitles.setVisibility(View.GONE);
+                    }
+                }
+            } else {
+                if (tvSubtitles != null && tvSubtitles.getVisibility() == View.VISIBLE) {
+                    tvSubtitles.setText("");
+                    tvSubtitles.setVisibility(View.GONE);
+                }
+            }
+
+            if (player != null && player.isPlaying()) {
+                handler.postDelayed(this, 75);
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -109,6 +156,10 @@ public class PlayerActivity extends Activity {
         tvSubStatus = findViewById(R.id.tv_sub_status);
         btnSubSelector = findViewById(R.id.btn_sub_selector);
         btnPlayerBack = findViewById(R.id.btn_player_back);
+
+        layoutBuffering = findViewById(R.id.layout_buffering);
+        tvBufferingText = findViewById(R.id.tv_buffering_text);
+        tvSubtitles = findViewById(R.id.tv_subtitles);
 
         if (title != null && !title.isEmpty()) {
             tvPlayerTitle.setText(title + " - Ep " + ep);
@@ -152,24 +203,52 @@ public class PlayerActivity extends Activity {
         player = new ExoPlayer.Builder(this).build();
         playerView.setPlayer(player);
 
-        // Styling native SubtitleView agar tajam dengan outline hitam kontras
+        // Hide default ExoPlayer subtitle view since we use seamless custom overlay
         SubtitleView subView = playerView.getSubtitleView();
         if (subView != null) {
-            subView.setApplyEmbeddedStyles(false);
-            subView.setApplyEmbeddedFontSizes(false);
-            subView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, 19f);
-            subView.setBottomPaddingFraction(0.08f);
-
-            CaptionStyleCompat style = new CaptionStyleCompat(
-                    Color.WHITE,
-                    Color.argb(160, 0, 0, 0),
-                    Color.TRANSPARENT,
-                    CaptionStyleCompat.EDGE_TYPE_OUTLINE,
-                    Color.BLACK,
-                    Typeface.DEFAULT_BOLD
-            );
-            subView.setStyle(style);
+            subView.setVisibility(View.GONE);
         }
+
+        player.addListener(new Player.Listener() {
+            @Override
+            public void onPlaybackStateChanged(int playbackState) {
+                if (playbackState == Player.STATE_BUFFERING) {
+                    if (layoutBuffering != null) {
+                        layoutBuffering.setVisibility(View.VISIBLE);
+                        if (tvBufferingText != null) tvBufferingText.setText("MEMUAT STREAM...");
+                    }
+                } else if (playbackState == Player.STATE_READY) {
+                    if (layoutBuffering != null) {
+                        layoutBuffering.setVisibility(View.GONE);
+                    }
+                } else if (playbackState == Player.STATE_ENDED) {
+                    if (layoutBuffering != null) {
+                        layoutBuffering.setVisibility(View.GONE);
+                    }
+                }
+            }
+
+            @Override
+            public void onIsPlayingChanged(boolean isPlaying) {
+                if (isPlaying) {
+                    handler.removeCallbacks(subtitleSyncRunnable);
+                    handler.post(subtitleSyncRunnable);
+                }
+            }
+
+            @Override
+            public void onPositionDiscontinuity(Player.PositionInfo oldPosition, Player.PositionInfo newPosition, int reason) {
+                handler.post(subtitleSyncRunnable);
+            }
+
+            @Override
+            public void onPlayerError(PlaybackException error) {
+                if (layoutBuffering != null) {
+                    layoutBuffering.setVisibility(View.GONE);
+                }
+                Toast.makeText(PlayerActivity.this, "Player error: " + error.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     private void setupGestureControls() {
@@ -240,6 +319,7 @@ public class PlayerActivity extends Activity {
         if (player != null) {
             long newPos = Math.max(0, Math.min(player.getDuration(), player.getCurrentPosition() + deltaMs));
             player.seekTo(newPos);
+            handler.post(subtitleSyncRunnable);
         }
     }
 
@@ -292,6 +372,13 @@ public class PlayerActivity extends Activity {
     }
 
     private void resolveAndPlayStream() {
+        runOnUiThread(() -> {
+            if (layoutBuffering != null) {
+                layoutBuffering.setVisibility(View.VISIBLE);
+                if (tvBufferingText != null) tvBufferingText.setText("MENYIAPKAN STREAM...");
+            }
+        });
+
         new Thread(() -> {
             try {
                 String u = "http://127.0.0.1:8767/api/stream/resolve?slug=" + URLEncoder.encode(slug, "UTF-8")
@@ -389,22 +476,30 @@ public class PlayerActivity extends Activity {
                     streamReferer = referer;
 
                     if (!rawStreamUrl.isEmpty()) {
-                        runOnUiThread(this::applyCurrentStreamAndSubtitles);
+                        runOnUiThread(this::applyCurrentStream);
                     }
                 } else {
-                    runOnUiThread(() -> Toast.makeText(this, "Gagal resolve: " + res.optString("error"), Toast.LENGTH_LONG).show());
+                    runOnUiThread(() -> {
+                        if (layoutBuffering != null) layoutBuffering.setVisibility(View.GONE);
+                        Toast.makeText(this, "Gagal resolve: " + res.optString("error"), Toast.LENGTH_LONG).show();
+                    });
                 }
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, "Error streaming: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> {
+                    if (layoutBuffering != null) layoutBuffering.setVisibility(View.GONE);
+                    Toast.makeText(this, "Error streaming: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
             }
         }).start();
     }
 
-    private void applyCurrentStreamAndSubtitles() {
+    private void applyCurrentStream() {
         if (rawStreamUrl.isEmpty()) return;
 
-        long currentPosition = player != null ? player.getCurrentPosition() : 0;
-        boolean wasPlaying = player != null && player.isPlaying();
+        if (layoutBuffering != null) {
+            layoutBuffering.setVisibility(View.VISIBLE);
+            if (tvBufferingText != null) tvBufferingText.setText("MEMUAT STREAM...");
+        }
 
         String proxiedVideo = "http://127.0.0.1:8767/api/player/video?url=" + Uri.encode(rawStreamUrl)
                 + "&referer=" + Uri.encode(streamReferer);
@@ -421,52 +516,186 @@ public class PlayerActivity extends Activity {
         HlsMediaSource videoSource = new HlsMediaSource.Factory(httpDataSourceFactory)
                 .createMediaSource(MediaItem.fromUri(Uri.parse(proxiedVideo)));
 
-        if (subEnabled && !activeSubUrl.isEmpty()) {
-            // Bangun URL subtitle yang diarahkan ke backend translation proxy
-            String subModeParam = activeEngine.equals("raw") ? "" : activeEngine;
-            String srcParam = activeEngine.equals("raw") ? activeSubLang : "en";
-            String proxiedSub = "http://127.0.0.1:8767/api/player/sub?url=" + Uri.encode(activeSubUrl)
-                    + "&referer=" + Uri.encode(streamReferer)
-                    + "&src=" + Uri.encode(srcParam)
-                    + "&lang=" + Uri.encode(activeSubLang)
-                    + (subModeParam.isEmpty() ? "" : "&mode=" + subModeParam);
+        // Pure video playback - completely decoupled from subtitles to avoid player reloads/black screen
+        player.setMediaSource(videoSource);
+        player.prepare();
+        player.play();
 
-            Format textFormat = new Format.Builder()
-                    .setSampleMimeType(MimeTypes.TEXT_VTT)
-                    .setLanguage(activeSubLang)
-                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                    .build();
+        applySubtitleSelection();
+    }
 
-            SingleSampleMediaSource subSource = new SingleSampleMediaSource.Factory(httpDataSourceFactory)
-                    .createMediaSource(new MediaItem.SubtitleConfiguration.Builder(Uri.parse(proxiedSub))
-                            .setMimeType(MimeTypes.TEXT_VTT)
-                            .setLanguage(activeSubLang)
-                            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                            .build(), C.TIME_UNSET);
+    private void applySubtitleSelection() {
+        updateSubStatusText(false);
 
-            MergingMediaSource merged = new MergingMediaSource(true, true, videoSource, subSource);
-            player.setMediaSource(merged);
+        if (!subEnabled || activeSubUrl == null || activeSubUrl.isEmpty()) {
+            currentCues = new ArrayList<>();
+            runOnUiThread(() -> {
+                if (tvSubtitles != null) {
+                    tvSubtitles.setText("");
+                    tvSubtitles.setVisibility(View.GONE);
+                }
+            });
+            return;
+        }
 
-            String engineLabel = "AIGTX (Cepat)";
-            if ("gtx".equals(activeEngine)) engineLabel = "Google GTX";
-            else if ("ai".equals(activeEngine)) engineLabel = "AI Fansub (" + configuredAiModel + ")";
-            else if ("raw".equals(activeEngine)) {
-                if ("en".equals(activeSubLang)) engineLabel = "Source English";
-                else if ("id".equals(activeSubLang)) engineLabel = "Asli / Resmi";
-                else engineLabel = "Source Asli";
+        String subModeParam = activeEngine.equals("raw") ? "" : activeEngine;
+        String srcParam = activeEngine.equals("raw") ? activeSubLang : "en";
+        String proxiedSub = "http://127.0.0.1:8767/api/player/sub?url=" + Uri.encode(activeSubUrl)
+                + "&referer=" + Uri.encode(streamReferer)
+                + "&src=" + Uri.encode(srcParam)
+                + "&lang=" + Uri.encode(activeSubLang)
+                + (subModeParam.isEmpty() ? "" : "&mode=" + subModeParam);
+
+        loadSubtitlesAsync(proxiedSub);
+    }
+
+    private void loadSubtitlesAsync(String subUrl) {
+        final int loadId = ++currentSubLoadId;
+        new Thread(() -> {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL(subUrl).openConnection();
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(20000);
+                BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line).append("\n");
+                }
+                reader.close();
+
+                if (loadId != currentSubLoadId) return; // Stale request, ignore
+
+                List<SubtitleCue> cues = parseVtt(sb.toString());
+                currentCues = cues;
+
+                runOnUiThread(() -> {
+                    if (loadId == currentSubLoadId) {
+                        updateSubStatusText(true);
+                        subtitleSyncRunnable.run();
+                    }
+                });
+            } catch (Exception e) {
+                if (loadId == currentSubLoadId) {
+                    runOnUiThread(() -> {
+                        updateSubStatusText(false);
+                        if (tvSubStatus != null) {
+                            tvSubStatus.setText("Sub: Gagal (" + e.getMessage() + ")");
+                        }
+                    });
+                }
+            }
+        }).start();
+    }
+
+    private void updateSubStatusText(boolean isLoaded) {
+        if (tvSubStatus == null) return;
+        if (!subEnabled) {
+            tvSubStatus.setText("Subtitle: Nonaktif");
+            return;
+        }
+        String engineLabel = "AIGTX (Cepat)";
+        if ("gtx".equals(activeEngine)) engineLabel = "Google GTX";
+        else if ("ai".equals(activeEngine)) engineLabel = "AI Fansub (" + configuredAiModel + ")";
+        else if ("raw".equals(activeEngine)) {
+            if ("en".equals(activeSubLang)) engineLabel = "Source English";
+            else if ("id".equals(activeSubLang)) engineLabel = "Asli / Resmi";
+            else engineLabel = "Source Asli";
+        }
+
+        String suffix = isLoaded ? "" : " [Memuat...]";
+        tvSubStatus.setText("Sub: " + activeSubLang.toUpperCase() + " • " + engineLabel + suffix);
+    }
+
+    private static long parseTimestamp(String token) {
+        if (token == null) return -1;
+        token = token.trim();
+        int spaceIdx = token.indexOf(' ');
+        if (spaceIdx != -1) {
+            token = token.substring(0, spaceIdx).trim();
+        }
+        token = token.replace(',', '.');
+        String[] parts = token.split(":");
+        try {
+            if (parts.length == 3) {
+                long h = Long.parseLong(parts[0].trim());
+                long m = Long.parseLong(parts[1].trim());
+                double s = Double.parseDouble(parts[2].trim());
+                return (long) ((h * 3600 + m * 60 + s) * 1000);
+            } else if (parts.length == 2) {
+                long m = Long.parseLong(parts[0].trim());
+                double s = Double.parseDouble(parts[1].trim());
+                return (long) ((m * 60 + s) * 1000);
+            }
+        } catch (Exception ignored) {}
+        return -1;
+    }
+
+    private List<SubtitleCue> parseVtt(String content) {
+        List<SubtitleCue> list = new ArrayList<>();
+        if (content == null || content.isEmpty()) return list;
+        String[] lines = content.replace("\r\n", "\n").replace("\r", "\n").split("\n");
+        long curStart = -1;
+        long curEnd = -1;
+        StringBuilder curText = new StringBuilder();
+
+        for (String rawLine : lines) {
+            String line = rawLine.trim();
+            if (line.isEmpty()) {
+                if (curStart != -1 && curEnd != -1 && curText.length() > 0) {
+                    String cleaned = curText.toString().replaceAll("<[^>]*>", "").trim();
+                    if (!cleaned.isEmpty()) {
+                        list.add(new SubtitleCue(curStart, curEnd, cleaned));
+                    }
+                }
+                curStart = -1;
+                curEnd = -1;
+                curText.setLength(0);
+                continue;
             }
 
-            tvSubStatus.setText("Sub: " + activeSubLang.toUpperCase() + " • " + engineLabel);
-        } else {
-            player.setMediaSource(videoSource);
-            tvSubStatus.setText("Subtitle: Nonaktif");
+            if (line.contains("-->")) {
+                String[] timeParts = line.split("-->");
+                if (timeParts.length >= 2) {
+                    curStart = parseTimestamp(timeParts[0]);
+                    curEnd = parseTimestamp(timeParts[1]);
+                }
+            } else if (curStart != -1 && curEnd != -1) {
+                if (curText.length() > 0) curText.append("\n");
+                curText.append(rawLine.trim());
+            }
         }
 
-        player.prepare();
-        if (currentPosition > 0) {
-            player.seekTo(currentPosition);
+        if (curStart != -1 && curEnd != -1 && curText.length() > 0) {
+            String cleaned = curText.toString().replaceAll("<[^>]*>", "").trim();
+            if (!cleaned.isEmpty()) {
+                list.add(new SubtitleCue(curStart, curEnd, cleaned));
+            }
         }
-        player.play();
+        return list;
+    }
+
+    private SubtitleCue findActiveCue(long posMs) {
+        List<SubtitleCue> cues = currentCues;
+        if (cues == null || cues.isEmpty()) return null;
+        int low = 0;
+        int high = cues.size() - 1;
+        int best = -1;
+        while (low <= high) {
+            int mid = (low + high) >>> 1;
+            SubtitleCue cue = cues.get(mid);
+            if (cue.startMs <= posMs) {
+                best = mid;
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        if (best != -1) {
+            SubtitleCue c = cues.get(best);
+            if (posMs <= c.endMs) return c;
+        }
+        return null;
     }
 
     private void showSubtitleSelectorDialog() {
@@ -565,7 +794,7 @@ public class PlayerActivity extends Activity {
         builder.setItems(options.toArray(new String[0]), (dialog, which) -> {
             if (which >= 0 && which < actions.size()) {
                 actions.get(which).run();
-                applyCurrentStreamAndSubtitles();
+                applySubtitleSelection();
                 Toast.makeText(this, "Subtitle diperbarui: " + (subEnabled ? activeSubLang.toUpperCase() + " [" + activeEngine + "]" : "OFF"), Toast.LENGTH_SHORT).show();
             }
         });
@@ -578,11 +807,22 @@ public class PlayerActivity extends Activity {
     protected void onPause() {
         super.onPause();
         if (player != null) player.pause();
+        handler.removeCallbacks(subtitleSyncRunnable);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (player != null && player.isPlaying()) {
+            handler.removeCallbacks(subtitleSyncRunnable);
+            handler.post(subtitleSyncRunnable);
+        }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        handler.removeCallbacks(subtitleSyncRunnable);
         if (player != null) {
             player.release();
             player = null;
