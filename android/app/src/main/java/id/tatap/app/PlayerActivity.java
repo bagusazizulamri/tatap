@@ -20,9 +20,12 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import android.app.AlertDialog;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageButton;
 
@@ -60,7 +63,7 @@ public class PlayerActivity extends Activity {
     private TextView tvOsdIcon, tvOsdVal, tvRippleLeft, tvRippleRight;
     private ProgressBar pbOsdBar;
     private TextView tvPlayerTitle, tvSubStatus;
-    private Button btnSubSelector;
+    private Button btnSubSelector, btnSubStyle;
     private ImageButton btnPlayerBack;
     private View layoutTopBar;
     private View layoutBuffering;
@@ -72,6 +75,7 @@ public class PlayerActivity extends Activity {
     private int ep;
     private String title;
     private float currentBrightness = 0.5f;
+    private float currentVolumeFraction = -1f;
 
     // Subtitle Engine State
     public static class SubtitleCue {
@@ -169,6 +173,12 @@ public class PlayerActivity extends Activity {
 
         btnPlayerBack.setOnClickListener(v -> finish());
         btnSubSelector.setOnClickListener(v -> showSubtitleSelectorDialog());
+        btnSubStyle = findViewById(R.id.btn_sub_style);
+        if (btnSubStyle != null) {
+            btnSubStyle.setOnClickListener(v -> showSubtitleStyleDialog());
+        }
+
+        applySubtitleStyle();
 
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
@@ -310,6 +320,15 @@ public class PlayerActivity extends Activity {
         });
 
         playerView.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                if (audioManager != null) {
+                    int maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                    int curVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+                    currentVolumeFraction = maxVol > 0 ? ((float) curVol / (float) maxVol) : 0f;
+                }
+            } else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                currentVolumeFraction = -1f;
+            }
             gestureDetector.onTouchEvent(event);
             return false;
         });
@@ -324,14 +343,25 @@ public class PlayerActivity extends Activity {
     }
 
     private void adjustVolume(float percent) {
+        if (audioManager == null) return;
         int maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-        int curVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
-        int step = (int) (percent * maxVol * 1.5f);
-        int newVol = Math.max(0, Math.min(maxVol, curVol + step));
-        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0);
+        if (maxVol <= 0) return;
 
-        int pct = (int) ((newVol / (float) maxVol) * 100);
-        showOsd(newVol == 0 ? "🔇" : "🔊", pct);
+        if (currentVolumeFraction < 0) {
+            int curVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+            currentVolumeFraction = (float) curVol / (float) maxVol;
+        }
+
+        // Akumulator float kontinu (sama seperti brightness) agar gerakan lambat tidak terpotong menjadi 0
+        currentVolumeFraction = Math.max(0.0f, Math.min(1.0f, currentVolumeFraction + (percent * 1.2f)));
+        int targetVol = Math.round(currentVolumeFraction * maxVol);
+        int curVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+        if (targetVol != curVol) {
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0);
+        }
+
+        int pct = Math.round(currentVolumeFraction * 100);
+        showOsd(targetVol == 0 ? "🔇" : "🔊", pct);
     }
 
     private void adjustBrightness(float percent) {
@@ -851,7 +881,11 @@ public class PlayerActivity extends Activity {
             });
         }
 
-        // 7. Matikan Subtitle
+        // 7. Pengaturan Tampilan & Gaya Subtitle
+        options.add("⚙️ Pengaturan Tampilan (Posisi, Latar Belakang & Ukuran)...");
+        actions.add(this::showSubtitleStyleDialog);
+
+        // 8. Matikan Subtitle
         options.add("❌ Matikan Subtitle" + (!subEnabled ? " ✓" : ""));
         actions.add(() -> {
             subEnabled = false;
@@ -867,6 +901,155 @@ public class PlayerActivity extends Activity {
 
         builder.setNegativeButton("Tutup", (dialog, which) -> dialog.dismiss());
         builder.show();
+    }
+
+    private void applySubtitleStyle() {
+        if (tvSubtitles == null) return;
+        SharedPreferences sp = getSharedPreferences("tatap_player_prefs", Context.MODE_PRIVATE);
+        String pos = sp.getString("sub_pos", "low");
+        String bg = sp.getString("sub_bg", "subtle");
+        String size = sp.getString("sub_size", "medium");
+
+        // 1. Margin Bawah (Posisi - mengatasi komplain posisi terlalu tinggi)
+        int marginDp = 22; // Default 22dp: Rendah & pas di batas bawah layar
+        if ("mid".equals(pos)) marginDp = 36;
+        else if ("high".equals(pos)) marginDp = 54;
+
+        int marginPx = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, marginDp, getResources().getDisplayMetrics());
+        ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) tvSubtitles.getLayoutParams();
+        if (lp != null) {
+            lp.bottomMargin = marginPx;
+            tvSubtitles.setLayoutParams(lp);
+        }
+
+        // 2. Ukuran Font
+        float sizeSp = 17f;
+        if ("small".equals(size)) sizeSp = 14f;
+        else if ("large".equals(size)) sizeSp = 21f;
+        tvSubtitles.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);
+
+        // 3. Latar Belakang & Shadow (mengatasi komplain background terlalu pekat)
+        GradientDrawable gd = new GradientDrawable();
+        int cornerPx = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 6, getResources().getDisplayMetrics());
+        gd.setCornerRadius(cornerPx);
+
+        if ("transparent".equals(bg)) {
+            // Tanpa box background sama sekali, teks tebal dengan shadow tajam (gaya fansub modern)
+            tvSubtitles.setBackground(null);
+            tvSubtitles.setShadowLayer(6f, 2f, 2f, 0xFF000000);
+        } else {
+            int bgColor = 0x4D000000; // 30% alpha (samar & lembut, tidak pekat)
+            if ("medium".equals(bg)) bgColor = 0x8C000000; // 55%
+            else if ("dark".equals(bg)) bgColor = 0xCC000000; // 80% pekat
+            gd.setColor(bgColor);
+            tvSubtitles.setBackground(gd);
+            tvSubtitles.setShadowLayer(4f, 1.5f, 1.5f, 0xFF000000);
+        }
+    }
+
+    private void showSubtitleStyleDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
+        builder.setTitle("Pengaturan Tampilan Subtitle");
+
+        SharedPreferences sp = getSharedPreferences("tatap_player_prefs", Context.MODE_PRIVATE);
+        String curPos = sp.getString("sub_pos", "low");
+        String curBg = sp.getString("sub_bg", "subtle");
+        String curSize = sp.getString("sub_size", "medium");
+
+        String posLabel = "low".equals(curPos) ? "Bawah (22dp) [Pas]" : ("mid".equals(curPos) ? "Sedang (36dp)" : "Tinggi (54dp)");
+        String bgLabel = "transparent".equals(curBg) ? "Transparan (Tanpa Box)" : ("subtle".equals(curBg) ? "Samar / Lembut (30%)" : ("medium".equals(curBg) ? "Sedang (55%)" : "Pekat (80%)"));
+        String sizeLabel = "small".equals(curSize) ? "Kecil (14sp)" : ("large".equals(curSize) ? "Besar (21sp)" : "Sedang (17sp)");
+
+        String[] menu = new String[]{
+                "📍 Posisi Subtitle: " + posLabel,
+                "🎨 Latar Belakang: " + bgLabel,
+                "🔤 Ukuran Huruf: " + sizeLabel,
+                "🔄 Reset ke Default"
+        };
+
+        builder.setItems(menu, (dialog, which) -> {
+            if (which == 0) {
+                showPositionPicker(sp);
+            } else if (which == 1) {
+                showBackgroundPicker(sp);
+            } else if (which == 2) {
+                showSizePicker(sp);
+            } else if (which == 3) {
+                sp.edit().putString("sub_pos", "low").putString("sub_bg", "subtle").putString("sub_size", "medium").apply();
+                applySubtitleStyle();
+                Toast.makeText(this, "Tampilan subtitle direset ke default", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        builder.setNegativeButton("Tutup", (dialog, which) -> dialog.dismiss());
+        builder.show();
+    }
+
+    private void showPositionPicker(SharedPreferences sp) {
+        String[] options = new String[]{
+                "Bawah / Rendah (22dp) [Direkomendasikan]",
+                "Sedang (36dp)",
+                "Tinggi (54dp)"
+        };
+        String cur = sp.getString("sub_pos", "low");
+        int checked = "high".equals(cur) ? 2 : ("mid".equals(cur) ? 1 : 0);
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Pilih Posisi Subtitle")
+                .setSingleChoiceItems(options, checked, (dialog, which) -> {
+                    String val = which == 2 ? "high" : (which == 1 ? "mid" : "low");
+                    sp.edit().putString("sub_pos", val).apply();
+                    applySubtitleStyle();
+                    dialog.dismiss();
+                    Toast.makeText(this, "Posisi subtitle disimpan", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Batal", null)
+                .show();
+    }
+
+    private void showBackgroundPicker(SharedPreferences sp) {
+        String[] options = new String[]{
+                "Transparan (Tanpa Box / Shadow Teks Bersih)",
+                "Samar / Lembut (30% Alpha) [Direkomendasikan]",
+                "Sedang (55% Alpha)",
+                "Pekat (80% Alpha)"
+        };
+        String cur = sp.getString("sub_bg", "subtle");
+        int checked = "transparent".equals(cur) ? 0 : ("medium".equals(cur) ? 2 : ("dark".equals(cur) ? 3 : 1));
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Pilih Latar Belakang Subtitle")
+                .setSingleChoiceItems(options, checked, (dialog, which) -> {
+                    String val = which == 0 ? "transparent" : (which == 2 ? "medium" : (which == 3 ? "dark" : "subtle"));
+                    sp.edit().putString("sub_bg", val).apply();
+                    applySubtitleStyle();
+                    dialog.dismiss();
+                    Toast.makeText(this, "Gaya latar subtitle disimpan", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Batal", null)
+                .show();
+    }
+
+    private void showSizePicker(SharedPreferences sp) {
+        String[] options = new String[]{
+                "Kecil (14sp)",
+                "Sedang (17sp) [Direkomendasikan]",
+                "Besar (21sp)"
+        };
+        String cur = sp.getString("sub_size", "medium");
+        int checked = "small".equals(cur) ? 0 : ("large".equals(cur) ? 2 : 1);
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Pilih Ukuran Huruf Subtitle")
+                .setSingleChoiceItems(options, checked, (dialog, which) -> {
+                    String val = which == 0 ? "small" : (which == 2 ? "large" : "medium");
+                    sp.edit().putString("sub_size", val).apply();
+                    applySubtitleStyle();
+                    dialog.dismiss();
+                    Toast.makeText(this, "Ukuran subtitle disimpan", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Batal", null)
+                .show();
     }
 
     @Override

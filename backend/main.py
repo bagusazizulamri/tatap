@@ -100,14 +100,30 @@ async def genres():
         return fail(str(e))
 
 @app.get("/api/seasonal")
-async def seasonal(which: str = Query("", pattern="^(now|prev)$|^$"),
+async def seasonal(which: str = Query("", pattern="^(now|prev|airing)$|^$"),
                    season: str = Query("", pattern="^(winter|spring|summer|fall)$|^$"),
                    year: int = Query(0, ge=0, le=2100),
                    page: int = Query(1, ge=1, le=100)):
-    """Daftar anime per musim (AniList dengan fallback HiAnime).
-    which=now|prev = musim saat ini / sebelumnya.
+    """Daftar anime per musim / ongoing (AniList dengan fallback HiAnime).
+    which=now|prev|airing = musim saat ini / sebelumnya / sedang tayang.
     season+year = musim spesifik (contoh: season=fall year=2024)."""
     try:
+        loop = asyncio.get_running_loop()
+
+        # Kasus khusus: Masih Tayang / Airing Ongoing
+        if which == "airing":
+            key = f"airing|page={page}"
+            hit = await get_browse_cache(key, ttl=3600)
+            if hit:
+                hit["cached"] = True
+                return ok(hit)
+            hi_data = await loop.run_in_executor(None, lambda: hi.browse({"status": "currently_airing"}, page))
+            if hi_data and hi_data.get("items"):
+                hi_data["which"] = "airing"
+                await set_browse_cache(key, hi_data)
+                hi_data["cached"] = False
+                return ok(hi_data)
+
         if season and year >= 1900:
             season_name = season
             season_year = year
@@ -119,8 +135,8 @@ async def seasonal(which: str = Query("", pattern="^(now|prev)$|^$"),
             elif which == "prev":
                 season_year, season_name = al.prev_season(name_cur, year_cur)
             else:
-                return fail("butuh which=now|prev atau season=<nama>&year=<tahun>")
-            cache_id = which
+                season_name, season_year = name_cur, year_cur
+            cache_id = which or "now"
 
         key = f"seasonal|{cache_id}|page={page}"
         hit = await get_browse_cache(key)
@@ -130,21 +146,23 @@ async def seasonal(which: str = Query("", pattern="^(now|prev)$|^$"),
             hit["year"] = season_year
             return ok(hit)
 
-        loop = asyncio.get_running_loop()
         page_data = await loop.run_in_executor(
             None, lambda: al.season_page(season_name, season_year, page, 25))
 
-        # Kumpulkan judul dulu, lalu batch-match slug paralel.
+        # Kumpulkan judul dulu, lalu batch-match slug paralel dengan validasi judul & season.
         media_list = (page_data or {}).get("media") or []
-        titles = []
+        title_pairs = []
         media_by_title = {}
         for m in media_list:
-            title = (m.get("title") or {}).get("english") or (m.get("title") or {}).get("romaji") or ""
-            if not title:
+            t_en = (m.get("title") or {}).get("english") or ""
+            t_ro = (m.get("title") or {}).get("romaji") or ""
+            primary_title = t_en or t_ro or ""
+            if not primary_title:
                 continue
-            titles.append(title)
-            media_by_title[title] = m
-        slug_pairs = await _match_slugs_batch(titles) if titles else []
+            alt_title = t_ro if primary_title != t_ro else ""
+            title_pairs.append((primary_title, alt_title))
+            media_by_title[primary_title] = m
+        slug_pairs = await _match_slug_batch(title_pairs) if title_pairs else []
         slug_by_title = {t: s for t, s in slug_pairs}
 
         items_out = []
@@ -205,22 +223,77 @@ def _slug_norm_match(title):
     return _slug_norm(title)
 
 
-async def _match_slug_one(loop, title):
-    """Resolve 1 judul -> slug hianime via cache get/set. Return None jika gagal."""
+def _extract_season_num(t: str) -> int:
+    import re
+    t = (t or "").lower()
+    m = re.search(r"\b(?:season\s*(\d+)|(\d+)(?:nd|rd|th|st)\s*season|part\s*(\d+)|s(\d+))\b", t)
+    if m:
+        for g in m.groups():
+            if g:
+                try:
+                    return int(g)
+                except ValueError:
+                    pass
+    return 1
+
+
+def _clean_title_tokens(t: str) -> set:
+    import re
+    t = re.sub(r"\b(?:season\s*\d+|\d+(?:nd|rd|th|st)\s*season|part\s*\d+|s\d+)\b", "", t or "", flags=re.I)
+    t = re.sub(r"[^a-zA-Z0-9\s]", " ", t)
+    return set(t.lower().split())
+
+
+def _is_title_match(target_title: str, candidate_title: str) -> bool:
+    import re
+    if not target_title or not candidate_title:
+        return False
+    # 1. Exact normalized match (tanpa spasi & simbol)
+    norm_a = re.sub(r"[^a-zA-Z0-9]", "", target_title.lower())
+    norm_b = re.sub(r"[^a-zA-Z0-9]", "", candidate_title.lower())
+    if norm_a == norm_b:
+        return True
+
+    # 2. Validasi nomor season / part (mencegah Season 2 match ke Season 1)
+    season_a = _extract_season_num(target_title)
+    season_b = _extract_season_num(candidate_title)
+    if (season_a > 1 or season_b > 1) and season_a != season_b:
+        return False
+
+    # 3. Validasi token overlap
+    tokens_a = _clean_title_tokens(target_title)
+    tokens_b = _clean_title_tokens(candidate_title)
+    if not tokens_a or not tokens_b:
+        return False
+
+    stopwords = {"the", "a", "an", "of", "in", "to", "and", "no", "wa", "ga", "ni", "de"}
+    sig_common = tokens_a.intersection(tokens_b) - stopwords
+    sig_a = tokens_a - stopwords
+    sig_b = tokens_b - stopwords
+
+    if not sig_a or not sig_b:
+        return (len(tokens_a.intersection(tokens_b)) / max(len(tokens_a), len(tokens_b))) >= 0.75
+
+    overlap = len(sig_common) / max(len(sig_a), len(sig_b))
+    return overlap >= 0.60
+
+
+async def _match_slug_one(loop, title, alt_title=""):
+    """Resolve 1 judul -> slug hianime via cache get/set. Return None jika gagal atau tidak cocok."""
     slug = await get_slug_map(title)
     if slug:
         return slug
     try:
         res = await loop.run_in_executor(None, lambda t=title: hi.hianime_search(t, 5))
         if res:
-            rn = _slug_norm_match(title)
             picked = None
             for c in res:
-                if c.get("title", "").lower() == rn.lower():
+                c_title = c.get("title", "")
+                if _is_title_match(title, c_title) or (alt_title and _is_title_match(alt_title, c_title)):
                     picked = c
                     break
-            if not picked:
-                picked = res[0]
+            # Validasi ketat: HANYA gunakan jika benar-benar cocok.
+            # JANGAN PERNAH fallback ke res[0] secara buta agar judul & thumbnail tidak tertukar!
             if picked:
                 await set_slug_map(title, picked["id"])
                 return picked["id"]
@@ -233,18 +306,22 @@ async def _match_slug_one(loop, title):
 _SLUG_MATCH_CONCURRENCY = 8
 
 
-async def _match_slugs_batch(titles):
+async def _match_slug_batch(items):
     """Match banyak judul ke slug hianime secara paralel.
-    Output: list of (title, slug_or_None) dengan urutan input dipertahankan."""
-    titles = list(titles)
-    if not titles:
+    Input: list of (primary_title, alt_title) atau list of titles."""
+    items = list(items)
+    if not items:
         return []
     loop = asyncio.get_running_loop()
     sem = asyncio.Semaphore(_SLUG_MATCH_CONCURRENCY)
-    async def one(t):
+    async def one(item):
+        if isinstance(item, tuple):
+            t, alt = item
+        else:
+            t, alt = item, ""
         async with sem:
-            return t, await _match_slug_one(loop, t)
-    pairs = await asyncio.gather(*(one(t) for t in titles))
+            return t, await _match_slug_one(loop, t, alt)
+    pairs = await asyncio.gather(*(one(it) for it in items))
     return pairs
 
 

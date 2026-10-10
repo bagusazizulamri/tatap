@@ -15,6 +15,9 @@ dist/
 tools/
 plan.md
 .gradle/
+build/
+**/build/
+.cxx/
 *.jks
 *.keystore
 signing.properties

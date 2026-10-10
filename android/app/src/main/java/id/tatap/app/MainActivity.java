@@ -1161,7 +1161,7 @@ public class MainActivity extends Activity {
             endpoint = "/api/seasonal?which=now&page=" + currentPage;
         } else if ("airing".equals(currentView)) {
             title = "Masih Tayang (Hal " + currentPage + ")";
-            endpoint = "/api/seasonal?which=prev&page=" + currentPage;
+            endpoint = "/api/seasonal?which=airing&page=" + currentPage;
         } else if ("katalog".equals(currentView)) {
             title = "Katalog Populer (Hal " + currentPage + ")";
             endpoint = "/api/catalog?page=" + currentPage;

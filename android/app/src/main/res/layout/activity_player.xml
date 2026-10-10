@@ -116,7 +116,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="54dp"
+        android:layout_marginBottom="22dp"
         android:layout_marginHorizontal="24dp"
         android:background="@drawable/bg_subtitle_pill"
         android:paddingHorizontal="14dp"
@@ -133,7 +133,7 @@
         android:shadowRadius="4"
         android:visibility="gone" />
 
-    <!-- Top Overlay Control Bar (Back, Title, Subtitle Selector [CC]) -->
+    <!-- Top Overlay Control Bar (Back, Title, Subtitle Selector [CC], Style Button) -->
     <LinearLayout
         android:id="@+id/layout_top_bar"
         android:layout_width="match_parent"
@@ -180,6 +180,18 @@
                 android:textColor="#94A3B8"
                 android:textSize="11.5sp" />
         </LinearLayout>
+
+        <!-- Tombol Pengaturan Tampilan & Gaya Subtitle -->
+        <Button
+            android:id="@+id/btn_sub_style"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:layout_marginEnd="8dp"
+            android:paddingHorizontal="10dp"
+            android:text="⚙️ Style"
+            android:textSize="11.5sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#1E2433" />
 
         <!-- Tombol Pilihan Subtitle Engine / Bahasa -->
         <Button
