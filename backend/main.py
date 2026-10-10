@@ -112,7 +112,7 @@ async def seasonal(which: str = Query("", pattern="^(now|prev|airing)$|^$"),
 
         # Kasus khusus: Masih Tayang / Airing Ongoing
         if which == "airing":
-            key = f"airing|page={page}"
+            key = f"airing_v2|page={page}"
             hit = await get_browse_cache(key, ttl=3600)
             if hit:
                 hit["cached"] = True
