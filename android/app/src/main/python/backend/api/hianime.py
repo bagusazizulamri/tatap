@@ -309,11 +309,15 @@ def hianime_search(query: str, limit: int = 15):
     if "<title>Just a moment" in page:
         raise RuntimeError("Blocked by cloudflare.")
     page = page.split('id="main-sidebar"')[0]
+    out = _parse_browse_cards(page)
+    if out:
+        return out[:limit]
+    # Fallback jika layout flw-item tidak cocok
     out = []
     for m in re.finditer(r'<h3 class="film-name">\s*<a href="[^"]*/([^"/]*)"\s*title="([^"]*)"', page):
         slug, title = m.group(1), _clean(m.group(2))
         if slug and title and len(out) < limit:
-            out.append({"id": slug, "title": title})
+            out.append({"id": slug, "title": title, "poster": ""})
     return out
 
 def hianime_episodes(slug: str):

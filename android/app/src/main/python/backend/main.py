@@ -51,7 +51,7 @@ async def search(q: str = Query(""), limit: int = 15):
         return fail("missing q")
     try:
         hit = await get_search_cache(q.lower())
-        if hit:
+        if hit and any(bool(x.get("poster")) for x in hit):
             return ok({"results": hit, "cached": True})
         loop = asyncio.get_running_loop()
         res = await loop.run_in_executor(None, lambda: hi.hianime_search(q, limit))
