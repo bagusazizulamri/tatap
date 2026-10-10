@@ -170,15 +170,23 @@ function pickSubtitleUrl(subtitles, preferLang){
       }
     }
   }
-  // Fallback: default:true
-  for(var m=0;m<subtitles.length;m++){
-    if(subtitles[m].default)return subtitles[m].url;
-  }
-  // Prioritaskan English jika track default tidak ada / bukan English
+  // Prioritaskan English jika ada
   for(var n=0;n<subtitles.length;n++){
     var nlab=(subtitles[n].label||"").toLowerCase();
     var nlang=(subtitles[n].lang||"").toLowerCase();
-    if(nlang==="en"||nlab.indexOf("english")===0)return subtitles[n].url;
+    if(nlang==="en"||nlab.indexOf("english")===0||nlab.indexOf("eng")===0)return subtitles[n].url;
+  }
+  // Fallback: default:true (selama bukan Arabic)
+  for(var m=0;m<subtitles.length;m++){
+    var mlab=(subtitles[m].label||"").toLowerCase();
+    var mlang=(subtitles[m].lang||"").toLowerCase();
+    if(subtitles[m].default && mlang!=="ar" && mlab.indexOf("arab")===-1)return subtitles[m].url;
+  }
+  // Fallback: track pertama yang bukan Arabic
+  for(var p=0;p<subtitles.length;p++){
+    var plab=(subtitles[p].label||"").toLowerCase();
+    var plang=(subtitles[p].lang||"").toLowerCase();
+    if(plang!=="ar"&&plab.indexOf("arab")===-1)return subtitles[p].url;
   }
   return subtitles[0].url;
 }

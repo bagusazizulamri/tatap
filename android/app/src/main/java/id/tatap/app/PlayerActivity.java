@@ -75,6 +75,8 @@ public class PlayerActivity extends Activity {
     private String rawStreamUrl = "";
     private String streamReferer = "";
     private List<JSONObject> subtitleTracks = new ArrayList<>();
+    private String enSourceSubUrl = "";
+    private String idNativeSubUrl = "";
     private String activeSubUrl = "";
     private String activeSubLang = "id"; // Default Indonesian
     private String activeEngine = "aigtx"; // "aigtx" | "gtx" | "ai" | "raw"
@@ -320,22 +322,69 @@ public class PlayerActivity extends Activity {
                     // Simpan subtitle tracks yang tersedia
                     JSONArray subArr = data.optJSONArray("subtitles");
                     subtitleTracks.clear();
-                    String enSub = "";
+                    String foundEnSub = "";
+                    String foundIdSub = "";
+                    String foundDefSub = "";
+                    String foundNonArSub = "";
+
                     if (subArr != null) {
                         for (int i = 0; i < subArr.length(); i++) {
                             JSONObject s = subArr.getJSONObject(i);
                             subtitleTracks.add(s);
                             String lang = s.optString("lang", "").toLowerCase();
                             String lbl = s.optString("label", "").toLowerCase();
-                            if (enSub.isEmpty() && (lang.equals("en") || lbl.contains("english"))) {
-                                enSub = s.optString("url", "");
+                            String url = s.optString("url", "");
+                            boolean isDef = s.optBoolean("default", false);
+
+                            boolean isArabic = lang.equals("ar") || lang.equals("ara") || lbl.contains("arabic") || lbl.contains("arab");
+                            boolean isEnglish = lang.equals("en") || lang.equals("eng") || lbl.contains("english") || lbl.startsWith("eng");
+                            boolean isIndo = lang.equals("id") || lang.equals("ind") || lbl.contains("indonesia") || lbl.contains("bahasa");
+
+                            if (foundEnSub.isEmpty() && isEnglish && !url.isEmpty()) {
+                                foundEnSub = url;
+                            }
+                            if (foundIdSub.isEmpty() && isIndo && !url.isEmpty()) {
+                                foundIdSub = url;
+                            }
+                            if (foundDefSub.isEmpty() && isDef && !isArabic && !url.isEmpty()) {
+                                foundDefSub = url;
+                            }
+                            if (foundNonArSub.isEmpty() && !isArabic && !url.isEmpty()) {
+                                foundNonArSub = url;
                             }
                         }
                     }
-                    if (enSub.isEmpty() && !subtitleTracks.isEmpty()) {
-                        enSub = subtitleTracks.get(0).optString("url", "");
+
+                    // Backend juga menyediakan resolved default sub di data.optString("sub")
+                    String backendSub = data.optString("sub", "");
+                    String backendSubLang = data.optString("sub_lang", "").toLowerCase();
+                    boolean backendIsArabic = backendSubLang.contains("arab") || backendSubLang.equals("ar");
+
+                    if (foundEnSub.isEmpty()) {
+                        if (!backendSub.isEmpty() && !backendIsArabic) {
+                            foundEnSub = backendSub;
+                        } else if (!foundDefSub.isEmpty()) {
+                            foundEnSub = foundDefSub;
+                        } else if (!foundNonArSub.isEmpty()) {
+                            foundEnSub = foundNonArSub;
+                        } else if (!subtitleTracks.isEmpty()) {
+                            foundEnSub = subtitleTracks.get(0).optString("url", "");
+                        }
                     }
-                    activeSubUrl = enSub;
+
+                    enSourceSubUrl = foundEnSub;
+                    idNativeSubUrl = foundIdSub;
+
+                    // Tentukan activeSubUrl berdasarkan preferensi engine saat ini
+                    if ("id".equals(activeSubLang) && "raw".equals(activeEngine) && !idNativeSubUrl.isEmpty()) {
+                        activeSubUrl = idNativeSubUrl;
+                    } else if ("en".equals(activeSubLang) && "raw".equals(activeEngine)) {
+                        activeSubUrl = enSourceSubUrl;
+                    } else {
+                        // Terjemahan (AIGTX, AI, GTX) menggunakan enSourceSubUrl sebagai sumber terjemahan
+                        activeSubUrl = !enSourceSubUrl.isEmpty() ? enSourceSubUrl : (foundNonArSub.isEmpty() ? foundEnSub : foundNonArSub);
+                    }
+
                     rawStreamUrl = streamUrl;
                     streamReferer = referer;
 
@@ -375,9 +424,11 @@ public class PlayerActivity extends Activity {
         if (subEnabled && !activeSubUrl.isEmpty()) {
             // Bangun URL subtitle yang diarahkan ke backend translation proxy
             String subModeParam = activeEngine.equals("raw") ? "" : activeEngine;
+            String srcParam = activeEngine.equals("raw") ? activeSubLang : "en";
             String proxiedSub = "http://127.0.0.1:8767/api/player/sub?url=" + Uri.encode(activeSubUrl)
                     + "&referer=" + Uri.encode(streamReferer)
-                    + "&src=en&lang=" + Uri.encode(activeSubLang)
+                    + "&src=" + Uri.encode(srcParam)
+                    + "&lang=" + Uri.encode(activeSubLang)
                     + (subModeParam.isEmpty() ? "" : "&mode=" + subModeParam);
 
             Format textFormat = new Format.Builder()
@@ -399,7 +450,11 @@ public class PlayerActivity extends Activity {
             String engineLabel = "AIGTX (Cepat)";
             if ("gtx".equals(activeEngine)) engineLabel = "Google GTX";
             else if ("ai".equals(activeEngine)) engineLabel = "AI Fansub (" + configuredAiModel + ")";
-            else if ("raw".equals(activeEngine)) engineLabel = "Source English";
+            else if ("raw".equals(activeEngine)) {
+                if ("en".equals(activeSubLang)) engineLabel = "Source English";
+                else if ("id".equals(activeSubLang)) engineLabel = "Asli / Resmi";
+                else engineLabel = "Source Asli";
+            }
 
             tvSubStatus.setText("Sub: " + activeSubLang.toUpperCase() + " • " + engineLabel);
         } else {
@@ -418,49 +473,101 @@ public class PlayerActivity extends Activity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
         builder.setTitle("Pengaturan Subtitle & Mesin Terjemahan");
 
+        List<String> options = new ArrayList<>();
+        List<Runnable> actions = new ArrayList<>();
+
+        // 1. AIGTX (Default & Direkomendasikan)
+        boolean isAigtxSelected = subEnabled && "id".equals(activeSubLang) && "aigtx".equals(activeEngine);
+        options.add("🇮🇩 Bahasa Indonesia (AIGTX - Instan & Cerdas)" + (isAigtxSelected ? " ✓" : ""));
+        actions.add(() -> {
+            subEnabled = true;
+            activeSubLang = "id";
+            activeEngine = "aigtx";
+            activeSubUrl = enSourceSubUrl;
+        });
+
+        // 2. AI Fansub
+        boolean isAiSelected = subEnabled && "id".equals(activeSubLang) && "ai".equals(activeEngine);
         String aiOptionText = "🇮🇩 Bahasa Indonesia (AI Fansub / " + configuredAiModel + ")"
                 + (hasAiKey ? " [SIAP]" : " [Butuh Key]")
-                + (subEnabled && "id".equals(activeSubLang) && "ai".equals(activeEngine) ? " ✓" : "");
-
-        String[] options = new String[]{
-                "🇮🇩 Bahasa Indonesia (AIGTX - Instan & Cerdas)" + (subEnabled && "id".equals(activeSubLang) && "aigtx".equals(activeEngine) ? " ✓" : ""),
-                aiOptionText,
-                "🇮🇩 Bahasa Indonesia (Google GTX Murni)" + (subEnabled && "id".equals(activeSubLang) && "gtx".equals(activeEngine) ? " ✓" : ""),
-                "🇬🇧 English (Original / Asli)" + (subEnabled && "en".equals(activeSubLang) ? " ✓" : ""),
-                "❌ Matikan Subtitle" + (!subEnabled ? " ✓" : "")
-        };
-
-        builder.setItems(options, (dialog, which) -> {
-            switch (which) {
-                case 0:
-                    subEnabled = true;
-                    activeSubLang = "id";
-                    activeEngine = "aigtx";
-                    break;
-                case 1:
-                    subEnabled = true;
-                    activeSubLang = "id";
-                    activeEngine = "ai";
-                    if (!hasAiKey) {
-                        Toast.makeText(this, "Perhatian: API Key AI belum disetel (:apikey <key> di home). Menggunakan AIGTX sebagai fallback otomatis.", Toast.LENGTH_LONG).show();
-                    }
-                    break;
-                case 2:
-                    subEnabled = true;
-                    activeSubLang = "id";
-                    activeEngine = "gtx";
-                    break;
-                case 3:
-                    subEnabled = true;
-                    activeSubLang = "en";
-                    activeEngine = "raw";
-                    break;
-                case 4:
-                    subEnabled = false;
-                    break;
+                + (isAiSelected ? " ✓" : "");
+        options.add(aiOptionText);
+        actions.add(() -> {
+            subEnabled = true;
+            activeSubLang = "id";
+            activeEngine = "ai";
+            activeSubUrl = enSourceSubUrl;
+            if (!hasAiKey) {
+                Toast.makeText(this, "Perhatian: API Key AI belum disetel (:apikey <key> di home). Menggunakan AIGTX sebagai fallback otomatis.", Toast.LENGTH_LONG).show();
             }
-            applyCurrentStreamAndSubtitles();
-            Toast.makeText(this, "Subtitle diperbarui: " + (subEnabled ? activeSubLang.toUpperCase() + " [" + activeEngine + "]" : "OFF"), Toast.LENGTH_SHORT).show();
+        });
+
+        // 3. Google GTX Murni
+        boolean isGtxSelected = subEnabled && "id".equals(activeSubLang) && "gtx".equals(activeEngine);
+        options.add("🇮🇩 Bahasa Indonesia (Google GTX Murni)" + (isGtxSelected ? " ✓" : ""));
+        actions.add(() -> {
+            subEnabled = true;
+            activeSubLang = "id";
+            activeEngine = "gtx";
+            activeSubUrl = enSourceSubUrl;
+        });
+
+        // 4. Native Indonesian (jika tersedia di track asli)
+        if (!idNativeSubUrl.isEmpty()) {
+            boolean isIdNativeSelected = subEnabled && "id".equals(activeSubLang) && "raw".equals(activeEngine) && idNativeSubUrl.equals(activeSubUrl);
+            options.add("🇮🇩 Bahasa Indonesia (Asli / Bawaan)" + (isIdNativeSelected ? " ✓" : ""));
+            actions.add(() -> {
+                subEnabled = true;
+                activeSubLang = "id";
+                activeEngine = "raw";
+                activeSubUrl = idNativeSubUrl;
+            });
+        }
+
+        // 5. English (Original)
+        if (!enSourceSubUrl.isEmpty()) {
+            boolean isEnSelected = subEnabled && "en".equals(activeSubLang) && "raw".equals(activeEngine);
+            options.add("🇬🇧 English (Original / Asli)" + (isEnSelected ? " ✓" : ""));
+            actions.add(() -> {
+                subEnabled = true;
+                activeSubLang = "en";
+                activeEngine = "raw";
+                activeSubUrl = enSourceSubUrl;
+            });
+        }
+
+        // 6. Daftar track bahasa lain yang tersedia (misal Spanish, French, Japanese, dsb.)
+        for (int i = 0; i < subtitleTracks.size(); i++) {
+            JSONObject s = subtitleTracks.get(i);
+            String url = s.optString("url", "");
+            String lbl = s.optString("label", "Track " + (i + 1));
+            String lang = s.optString("lang", "").toLowerCase();
+            // Lewati track English & ID native karena sudah disediakan di menu utama di atas
+            if (url.equals(enSourceSubUrl) || url.equals(idNativeSubUrl)) {
+                continue;
+            }
+            boolean isThisSelected = subEnabled && "raw".equals(activeEngine) && url.equals(activeSubUrl);
+            options.add("🌐 " + lbl + (isThisSelected ? " ✓" : ""));
+            actions.add(() -> {
+                subEnabled = true;
+                activeSubLang = lang.isEmpty() ? "en" : lang;
+                activeEngine = "raw";
+                activeSubUrl = url;
+            });
+        }
+
+        // 7. Matikan Subtitle
+        options.add("❌ Matikan Subtitle" + (!subEnabled ? " ✓" : ""));
+        actions.add(() -> {
+            subEnabled = false;
+        });
+
+        builder.setItems(options.toArray(new String[0]), (dialog, which) -> {
+            if (which >= 0 && which < actions.size()) {
+                actions.get(which).run();
+                applyCurrentStreamAndSubtitles();
+                Toast.makeText(this, "Subtitle diperbarui: " + (subEnabled ? activeSubLang.toUpperCase() + " [" + activeEngine + "]" : "OFF"), Toast.LENGTH_SHORT).show();
+            }
         });
 
         builder.setNegativeButton("Tutup", (dialog, which) -> dialog.dismiss());

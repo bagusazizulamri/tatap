@@ -402,12 +402,10 @@ def _normalize_subtitles(raw_tracks, referer: str = ""):
     menjadi list[{label, lang, url, default}] yang siap kirim ke client.
 
     - Filter track yang bukan subtitle (kind=thumbnails, kind=video, dsb.).
-    - Kalau ada track kind=subtitle tanpa URL (referensi internal), pakai default.
-    - Field 'label' diprioritaskan, fallback ke 'lang', fallback ke "Subtitle N".
-    - Hanya track yang punya URL http(s) masuk output.
-    - Validasi ringan: kalau ada URL, biarkan apa adanya (soft-validate oleh caller).
-    Soft validate subtitle tidak dilakukan di sini supaya tidak menambah latency
-    saat scrape multi-track; validasi per-track dilakukan saat user memilihnya.
+    - Bersihkan URL track relatif jadi absolut.
+    - Ekstrak bahasa dengan akurat (_label_to_lang).
+    - JANGAN PERNAH izinkan track Arabic menjadi 'default' otomatis dari CDN.
+    - Utamakan English (atau Indonesian jika ada) sebagai default track.
     """
     out = []
     if not raw_tracks or not isinstance(raw_tracks, list):
@@ -436,28 +434,60 @@ def _normalize_subtitles(raw_tracks, referer: str = ""):
         url = _abs(t.get("src") or t.get("file") or t.get("url") or "")
         if not url or not url.startswith("http"):
             continue
-        label = (t.get("label") or t.get("lang") or t.get("language")
-                 or f"Subtitle {i + 1}").strip()
-        # Kalau label = kode bahasa (id, en), ganti jadi nama readable.
+        raw_label = (t.get("label") or t.get("lang") or t.get("language")
+                     or f"Subtitle {i + 1}").strip()
+        inferred = (_label_to_lang(raw_label)
+                    or _label_to_lang(t.get("lang") or "")
+                    or _label_to_lang(t.get("language") or "")
+                    or _label_to_lang(t.get("srclang") or ""))
+        lang = inferred or (t.get("lang") or t.get("language") or t.get("srclang") or "").strip().lower()
+
+        # Format label readable
+        label = raw_label
         if len(label) <= 3 and label.lower() in _LANG_NAME:
             label = _LANG_NAME[label.lower()]
-        inferred = _label_to_lang(label)
-        lang = inferred or (t.get("lang") or t.get("language") or t.get("srclang") or "").strip().lower()
-        is_def = bool(t.get("default")) or bool(t.get("is_default")) or False
+        elif lang in _LANG_NAME and (not label or label.lower().startswith("sub")):
+            label = _LANG_NAME[lang]
+
         out.append({
             "label": label,
             "lang": lang,
             "url": url,
-            "default": is_def,
+            "default": False,
         })
-    # Pastikan tepat satu track 'default'. Kalau tidak ada, prioritaskan English, fallback ke track pertama.
-    has_def = any(o["default"] for o in out)
-    if out and not has_def:
-        en_track = next((o for o in out if (o.get("lang") or "").lower() == "en" or (o.get("label") or "").lower().startswith("english")), None)
-        if en_track:
-            en_track["default"] = True
-        else:
-            out[0]["default"] = True
+
+    if not out:
+        return out
+
+    # Tetapkan tepat 1 track default:
+    # Prioritas 1: Indonesian (jika ada native)
+    # Prioritas 2: English (hindari Arabic yang sering di posisi 0 secara alfabetis)
+    # Prioritas 3: Track non-Arabic pertama
+    # Prioritas 4: Track 0 jika semua track adalah Arabic
+    def is_en(o):
+        l = (o.get("lang") or "").lower()
+        lbl = (o.get("label") or "").lower()
+        return l == "en" or "english" in lbl or lbl.startswith("eng")
+
+    def is_id(o):
+        l = (o.get("lang") or "").lower()
+        lbl = (o.get("label") or "").lower()
+        return l == "id" or "indonesia" in lbl or "bahasa" in lbl
+
+    def is_ar(o):
+        l = (o.get("lang") or "").lower()
+        lbl = (o.get("label") or "").lower()
+        return l == "ar" or "arabic" in lbl or "arab" in lbl
+
+    def_track = next((o for o in out if is_id(o)), None)
+    if not def_track:
+        def_track = next((o for o in out if is_en(o)), None)
+    if not def_track:
+        def_track = next((o for o in out if not is_ar(o)), None)
+    if not def_track:
+        def_track = out[0]
+
+    def_track["default"] = True
     return out
 
 
@@ -483,21 +513,44 @@ _LANG_NAME = {
 
 
 def _label_to_lang(label):
-    """Infer kode bahasa dari label (case-insensitive exact match).
-    Dipakai sebagai fallback kalau track tidak punya field lang/srclang."""
+    """Infer kode bahasa 2 huruf dari label atau kode bahasa."""
     if not label:
         return ""
-    lab = label.strip()
-    # Cek exact match nama readable.
-    for code, name in _LANG_NAME.items():
-        if len(code) == 2 and name.lower() == lab.lower():
-            return code
-    # Cek 3-letter prefix (misal "English (US)" → "eng"/"en").
-    low = lab.lower()
-    for code in ("en", "id", "ja", "es", "pt", "fr", "de", "it", "ko", "zh",
-                 "ar", "ru", "th", "vi", "tr", "hi"):
-        if low.startswith(code + " ") or low.startswith(code + "(") or low == code:
-            return code
+    lab = (label or "").strip().lower()
+    if not lab:
+        return ""
+    if "english" in lab or lab.startswith("eng") or lab == "en":
+        return "en"
+    if "indonesia" in lab or "bahasa" in lab or lab.startswith("ind") or lab == "id":
+        return "id"
+    if "japanese" in lab or lab.startswith("jpn") or lab == "ja":
+        return "ja"
+    if "arabic" in lab or lab.startswith("ara") or lab == "ar":
+        return "ar"
+    if "spanish" in lab or lab.startswith("spa") or lab == "es":
+        return "es"
+    if "portuguese" in lab or lab.startswith("por") or lab == "pt":
+        return "pt"
+    if "french" in lab or lab.startswith("fra") or lab.startswith("fre") or lab == "fr":
+        return "fr"
+    if "german" in lab or lab.startswith("ger") or lab.startswith("deu") or lab == "de":
+        return "de"
+    if "italian" in lab or lab.startswith("ita") or lab == "it":
+        return "it"
+    if "korean" in lab or lab.startswith("kor") or lab == "ko":
+        return "ko"
+    if "chinese" in lab or lab.startswith("chi") or lab.startswith("zho") or lab == "zh":
+        return "zh"
+    if "russian" in lab or lab.startswith("rus") or lab == "ru":
+        return "ru"
+    if "thai" in lab or lab.startswith("tha") or lab == "th":
+        return "th"
+    if "vietnamese" in lab or lab.startswith("vie") or lab == "vi":
+        return "vi"
+    if "turkish" in lab or lab.startswith("tur") or lab == "tr":
+        return "tr"
+    if "hindi" in lab or lab.startswith("hin") or lab == "hi":
+        return "hi"
     return ""
 
 
@@ -531,10 +584,15 @@ def _try_megaplay(embed: str):
     # master may be relative
     if master.startswith("/"):
         master = origin + master
+    # Multi-subtitle: normalisasi seluruh tracks Megaplay untuk dropdown & pemilihan default
     subs = cfg.get("tracks") or []
-    default = next((s for s in subs if s.get("default") or s.get("is_default")), None)
-    if not default and subs:
-        default = next((s for s in subs if (s.get("lang") or "").lower() == "en" or (s.get("label") or "").lower().startswith("english")), subs[0])
+    subtitles = _normalize_subtitles(subs, referer=origin + "/")
+    default_track = next((s for s in subtitles if s.get("default")), subtitles[0] if subtitles else None)
+    sub_url = default_track["url"] if default_track else None
+    if sub_url:
+        sub_url = _validate_sub_url(sub_url, referer=origin + "/")
+    sub_lang = default_track["label"] if default_track else None
+
     variants = []
     try:
         text = _fetch(master, referer=origin + "/")
@@ -565,15 +623,10 @@ def _try_megaplay(embed: str):
         variants = _validate_master_playlist(master, referer=origin + "/", variants=variants)
     except Exception as e:
         raise RuntimeError(f"megaplay playlist: {e}")
-    # Soft-validasi subtitle (tidak memblokir kalau invalid).
-    sub_url = (default.get("src") or default.get("file")) if default else None
-    if sub_url:
-        sub_url = _validate_sub_url(sub_url, referer=origin + "/")
-    # Multi-subtitle: normalisasi seluruh tracks Megaplay untuk dropdown.
-    subtitles = _normalize_subtitles(subs, referer=origin + "/")
+
     return {"master": master, "variants": variants,
             "sub": sub_url,
-            "sub_lang": (default.get("label") or default.get("lang")) if default else None,
+            "sub_lang": sub_lang,
             "referer": origin + "/", "mal_id": "",
             "tracks": subs,
             "subtitles": subtitles}
@@ -710,11 +763,15 @@ def _try_embed_legacy(embed: str):
         _probe_master(master, referer=referer)
     except Exception as e:
         raise RuntimeError(f"zokoanime probe: {e}")
-    # Validasi playlist: minimal ada 1 segment/variant URL agar HLS.js tidak hang.
+    # Multi-subtitle: normalisasi seluruh tracks ZokoAnime untuk dropdown & pemilihan default
     subs = cfg.get("subtitles") or []
-    default = next((s for s in subs if s.get("default") or s.get("is_default")), None)
-    if not default and subs:
-        default = next((s for s in subs if (s.get("lang") or "").lower() == "en" or (s.get("label") or "").lower().startswith("english")), subs[0])
+    subtitles = _normalize_subtitles(subs, referer=referer)
+    default_track = next((s for s in subtitles if s.get("default")), subtitles[0] if subtitles else None)
+    sub_url = default_track["url"] if default_track else None
+    if sub_url:
+        sub_url = _validate_sub_url(sub_url, referer=referer)
+    sub_lang = default_track["label"] if default_track else None
+
     try:
         variants = _validate_master_playlist(master, referer=referer, variants=[])
     except Exception as e:
@@ -723,15 +780,10 @@ def _try_embed_legacy(embed: str):
     mm = re.search(r"/mal/([0-9]+)/", embed)
     if mm:
         mal_id = mm.group(1)
-    # Soft-validasi subtitle (tidak memblokir kalau invalid).
-    sub_url = (default.get("src") or default.get("file")) if default else None
-    if sub_url:
-        sub_url = _validate_sub_url(sub_url, referer=referer)
-    # Multi-subtitle: normalisasi seluruh tracks ZokoAnime untuk dropdown.
-    subtitles = _normalize_subtitles(subs, referer=referer)
+
     return {"master": master, "variants": variants,
             "sub": sub_url,
-            "sub_lang": (default.get("label") or default.get("lang")) if default else None,
+            "sub_lang": sub_lang,
             "referer": referer, "mal_id": mal_id,
             "subtitles": subtitles}
 

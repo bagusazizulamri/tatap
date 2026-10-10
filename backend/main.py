@@ -392,15 +392,31 @@ async def resolve(slug: str = Query(""), ep: int = Query(1), mode: str = Query("
                     for s in subs:
                         l = (s.get("lang") or "").lower()
                         lbl = (s.get("label") or "").lower()
-                        if l == "en" or lbl.startswith("english") or lbl == "en":
+                        if l == "en" or "english" in lbl or lbl.startswith("eng"):
                             en_url = s.get("url") or ""
                             break
+                    if not en_url and ep_data.get("sub"):
+                        sub_l = (ep_data.get("sub_lang") or "").lower()
+                        if "arab" not in sub_l and sub_l != "ar":
+                            en_url = ep_data.get("sub") or ""
                     if en_url:
                         asyncio.create_task(_prewarm_sub_translation(en_url, ep_data.get("referer") or "", "en", "id"))
             except Exception:
                 pass
 
         if hit:
+            # Pastikan subtitle yang tersimpan di cache lama dinormalisasi ulang
+            # sehingga tidak pernah mengembalikan Arabic sebagai default track.
+            if hit.get("subtitles"):
+                hit["subtitles"] = hi._normalize_subtitles(hit["subtitles"], referer=hit.get("referer") or "")
+                def_track = next((s for s in hit["subtitles"] if s.get("default")), None)
+                if def_track:
+                    hit["sub"] = def_track["url"]
+                    hit["sub_lang"] = def_track["label"]
+            elif hit.get("sub_lang", "").lower().startswith("ar") or "arab" in hit.get("sub_lang", "").lower():
+                hit["sub"] = None
+                hit["sub_lang"] = None
+
             picked = hi.select_quality(hit["variants"], q)
             hit["picked"] = picked
             hit["cached"] = True
