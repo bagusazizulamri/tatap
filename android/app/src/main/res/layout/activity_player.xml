@@ -23,7 +23,7 @@
         android:layout_gravity="center"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:background="#CC0A0D14"
+        android:background="@drawable/bg_dialog_card"
         android:paddingHorizontal="20dp"
         android:paddingVertical="10dp"
         android:visibility="gone">
@@ -33,17 +33,17 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="🔊"
-            android:textSize="20sp" />
+            android:textSize="18sp" />
 
         <ProgressBar
             android:id="@+id/pb_osd_bar"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="120dp"
-            android:layout_height="8dp"
+            android:layout_height="6dp"
             android:layout_marginStart="12dp"
             android:max="100"
             android:progress="50"
-            android:progressTint="#00DBEB" />
+            android:progressTint="#38BDF8" />
 
         <TextView
             android:id="@+id/tv_osd_val"
@@ -52,9 +52,8 @@
             android:layout_marginStart="12dp"
             android:text="50%"
             android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:fontFamily="monospace" />
+            android:textSize="13sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <!-- Double Tap Ripple Indicators -->
@@ -66,10 +65,9 @@
         android:gravity="center"
         android:text="⏪\n-10s"
         android:textColor="#FFFFFF"
-        android:textSize="18sp"
+        android:textSize="17sp"
         android:textStyle="bold"
-        android:fontFamily="monospace"
-        android:background="#22FFFFFF"
+        android:background="#1AFFFFFF"
         android:visibility="gone" />
 
     <TextView
@@ -80,44 +78,36 @@
         android:gravity="center"
         android:text="⏩\n+10s"
         android:textColor="#FFFFFF"
-        android:textSize="18sp"
+        android:textSize="17sp"
         android:textStyle="bold"
-        android:fontFamily="monospace"
-        android:background="#22FFFFFF"
+        android:background="#1AFFFFFF"
         android:visibility="gone" />
 
-    <!-- Modern Cyber Buffering Animation HUD -->
+    <!-- Minimalist Buffering Spinner HUD -->
     <LinearLayout
         android:id="@+id/layout_buffering"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
         android:layout_gravity="center"
         android:gravity="center"
         android:orientation="vertical"
         android:background="@drawable/bg_buffering_hud"
-        android:paddingHorizontal="24dp"
-        android:paddingVertical="18dp"
         android:visibility="gone">
 
         <ProgressBar
             android:id="@+id/pb_buffering"
             style="?android:attr/progressBarStyleLarge"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:indeterminate="true"
-            android:indeterminateTint="#00DBEB" />
+            android:indeterminateTint="#38BDF8" />
 
         <TextView
             android:id="@+id/tv_buffering_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="MEMUAT STREAM..."
-            android:textColor="#00DBEB"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:fontFamily="monospace"
-            android:letterSpacing="0.08" />
+            android:text=""
+            android:visibility="gone" />
     </LinearLayout>
 
     <!-- Subtitle Custom Overlay -->
@@ -126,16 +116,16 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="56dp"
-        android:layout_marginHorizontal="28dp"
+        android:layout_marginBottom="54dp"
+        android:layout_marginHorizontal="24dp"
         android:background="@drawable/bg_subtitle_pill"
-        android:paddingHorizontal="16dp"
+        android:paddingHorizontal="14dp"
         android:paddingVertical="6dp"
         android:gravity="center"
         android:textAlignment="center"
         android:text=""
         android:textColor="#FFFFFF"
-        android:textSize="17sp"
+        android:textSize="16.5sp"
         android:textStyle="bold"
         android:shadowColor="#000000"
         android:shadowDx="1.5"
@@ -176,7 +166,7 @@
                 android:layout_height="wrap_content"
                 android:text="Memuat Video..."
                 android:textColor="#FFFFFF"
-                android:textSize="16sp"
+                android:textSize="15sp"
                 android:textStyle="bold"
                 android:singleLine="true"
                 android:ellipsize="end" />
@@ -185,22 +175,22 @@
                 android:id="@+id/tv_sub_status"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
                 android:text="Subtitle: Auto (Indonesia)"
-                android:textColor="#38BDF8"
-                android:textSize="12sp"
-                android:fontFamily="monospace" />
+                android:textColor="#94A3B8"
+                android:textSize="11.5sp" />
         </LinearLayout>
 
         <!-- Tombol Pilihan Subtitle Engine / Bahasa -->
         <Button
             android:id="@+id/btn_sub_selector"
             android:layout_width="wrap_content"
-            android:layout_height="36dp"
+            android:layout_height="34dp"
             android:paddingHorizontal="12dp"
-            android:text="💬 SUB [CC]"
-            android:textSize="12sp"
+            android:text="Sub [CC]"
+            android:textSize="11.5sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF"
-            android:background="#2563EB" />
+            android:backgroundTint="#1E2433" />
     </LinearLayout>
 </FrameLayout>

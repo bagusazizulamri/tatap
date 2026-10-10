@@ -130,11 +130,11 @@ public class DetailActivity extends Activity {
     private void updateQuickPlayButton() {
         int lastEp = prefs.getInt("last_ep_" + slug, -1);
         if (lastEp > 0) {
-            btnQuickPlay.setText("▶ LANJUTKAN EP " + lastEp);
-            btnQuickPlay.setBackgroundColor(0xFF0E7490);
+            btnQuickPlay.setText("▶ Lanjutkan Ep " + lastEp);
+            btnQuickPlay.setBackgroundColor(0xFF1E2433);
         } else {
-            btnQuickPlay.setText("▶ MULAI EP 1");
-            btnQuickPlay.setBackgroundColor(0xFF16202E);
+            btnQuickPlay.setText("▶ Putar Ep 1");
+            btnQuickPlay.setBackgroundColor(0xFF161922);
         }
     }
 
@@ -257,22 +257,22 @@ public class DetailActivity extends Activity {
 
             if (ep == lastPlayedEp) {
                 // Last played episode
-                holder.card.setCardBackgroundColor(0xFF0E3A4B);
-                holder.tvTitle.setTextColor(0xFF00DBEB);
+                holder.card.setCardBackgroundColor(0xFF1C2230);
+                holder.tvTitle.setTextColor(0xFF38BDF8);
                 holder.tvBadge.setVisibility(View.VISIBLE);
                 holder.tvBadge.setText("▶ TERAKHIR");
-                holder.tvBadge.setTextColor(0xFF00DBEB);
+                holder.tvBadge.setTextColor(0xFF38BDF8);
             } else if (isWatched) {
                 // Watched episode
-                holder.card.setCardBackgroundColor(0xFF0C131D);
-                holder.tvTitle.setTextColor(0xFF7A8B9E);
+                holder.card.setCardBackgroundColor(0xFF0E1017);
+                holder.tvTitle.setTextColor(0xFF64748B);
                 holder.tvBadge.setVisibility(View.VISIBLE);
                 holder.tvBadge.setText("✓ DITONTON");
                 holder.tvBadge.setTextColor(0xFF10B981);
             } else {
                 // Unwatched episode
-                holder.card.setCardBackgroundColor(0xFF121622);
-                holder.tvTitle.setTextColor(0xFFE2E8F0);
+                holder.card.setCardBackgroundColor(0xFF11141C);
+                holder.tvTitle.setTextColor(0xFFF1F5F9);
                 holder.tvBadge.setVisibility(View.GONE);
             }
 

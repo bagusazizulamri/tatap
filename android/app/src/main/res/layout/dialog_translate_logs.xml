@@ -17,20 +17,19 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="📜 RIWAYAT LOG TRANSLASI AI"
-            android:textColor="#00DBEB"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:fontFamily="monospace" />
+            android:text="Log Translasi AI"
+            android:textColor="#F1F5F9"
+            android:textSize="15sp"
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/btn_close_logs_dialog"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:text="✕"
             android:textColor="#8892B0"
-            android:textSize="16sp" />
+            android:textSize="14sp" />
     </LinearLayout>
 
     <ScrollView
@@ -46,7 +45,7 @@
             android:layout_height="wrap_content"
             android:text="Memuat log translasi..."
             android:textColor="#8892B0"
-            android:textSize="11sp"
+            android:textSize="11.5sp"
             android:fontFamily="monospace" />
     </ScrollView>
 
@@ -59,22 +58,20 @@
         <Button
             android:id="@+id/btn_refresh_logs"
             android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="🔄 Refresh"
-            android:textColor="#00DBEB"
+            android:layout_height="34dp"
+            android:text="Segarkan"
+            android:textColor="#38BDF8"
             android:backgroundTint="#161A24"
-            android:textSize="11sp"
-            android:fontFamily="monospace"
+            android:textSize="11.5sp"
             android:layout_marginEnd="8dp" />
 
         <Button
             android:id="@+id/btn_dismiss_logs"
             android:layout_width="wrap_content"
-            android:layout_height="36dp"
+            android:layout_height="34dp"
             android:text="Tutup"
             android:textColor="#8892B0"
             android:backgroundTint="#161A24"
-            android:textSize="11sp"
-            android:fontFamily="monospace" />
+            android:textSize="11.5sp" />
     </LinearLayout>
 </LinearLayout>

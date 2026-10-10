@@ -261,7 +261,7 @@ public class MainActivity extends Activity {
     private void showCommandOutput(String message, boolean isError) {
         if (layoutCommandBanner == null || tvCommandOutput == null) return;
         tvCommandOutput.setText(message);
-        tvCommandOutput.setTextColor(isError ? 0xFFEF4444 : 0xFF00DBEB);
+        tvCommandOutput.setTextColor(isError ? 0xFFEF4444 : 0xFF38BDF8);
         layoutCommandBanner.setVisibility(View.VISIBLE);
 
         bannerHandler.removeCallbacks(hideBannerRunnable);
@@ -1061,7 +1061,7 @@ public class MainActivity extends Activity {
         btnTabKatalog.setTextColor(isKatalog ? 0xFFFFFFFF : 0xFF8892B0);
 
         if (btnHeaderHistory != null) {
-            btnHeaderHistory.setTextColor(isRiwayat ? 0xFF00DBEB : 0xFF94A3B8);
+            btnHeaderHistory.setTextColor(isRiwayat ? 0xFF38BDF8 : 0xFF94A3B8);
         }
     }
 

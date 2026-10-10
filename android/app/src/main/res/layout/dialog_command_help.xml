@@ -17,8 +17,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="⚡ TERMINAL PERINTAH (:COMMAND)"
-            android:textColor="#00DBEB"
+      android:text="Daftar Perintah (:command)"
+            android:textColor="#38BDF8"
             android:textSize="14sp"
             android:textStyle="bold"
             android:fontFamily="monospace" />
@@ -29,7 +29,7 @@
             android:layout_height="36dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:text="✕"
-            android:textColor="#8892B0"
+      android:textColor="#8892B0"
             android:textSize="16sp" />
     </LinearLayout>
 
@@ -37,7 +37,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Ketuk salah satu perintah di bawah ini untuk menjalankannya langsung:"
-        android:textColor="#5A6578"
+    android:textColor="#5A6578"
         android:textSize="11sp"
         android:fontFamily="monospace"
         android:layout_marginBottom="10dp" />
@@ -66,7 +66,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":musim"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -75,7 +75,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Tampilkan anime yang tayang musim ini"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -94,7 +94,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":season [winter|spring|summer|fall] [tahun]"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -103,7 +103,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Filter anime spesifik per musim &amp; tahun (misal: :season fall 2024)"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -122,7 +122,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":genre [nama]"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -131,7 +131,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Buka pemilih genre anime interaktif atau ketik :genre action"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -150,7 +150,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":airing"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -159,7 +159,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Tampilkan anime yang masih sedang tayang"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -178,7 +178,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":katalog"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -187,7 +187,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Buka katalog anime lengkap berdasarkan popularitas"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -206,7 +206,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":source [hi|otaku]"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -215,7 +215,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Ganti sumber streaming: HiAnime (Multi-sub) / Otakudesu (Sub Indo)"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -234,7 +234,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":ping"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -243,7 +243,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Periksa latensi &amp; kesehatan backend internal Python"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -262,7 +262,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":ai"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -271,7 +271,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Buka panel dialog konfigurasi AI Translate &amp; Preset API Key"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -290,7 +290,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":apikey [key]"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -299,7 +299,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Periksa status API key atau simpan key AI (Gemini, Groq, Ollama, OpenAI)"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -318,7 +318,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":gemini &lt;key&gt;"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -327,7 +327,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Preset Google AI Studio (Model gemini-3.1-flash-lite)"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -346,7 +346,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":groq &lt;key&gt;"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -355,7 +355,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Preset Groq Cloud gratis (Model llama-3.3-70b-versatile)"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -374,7 +374,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":ollama &lt;key&gt;"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -383,7 +383,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Preset Ollama Cloud (Model gpt-oss:20b)"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -402,7 +402,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":model [nama]"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -411,7 +411,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Lihat atau ganti model LLM yang digunakan untuk translate"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -430,7 +430,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":logs"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -439,7 +439,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Buka riwayat log aktivitas penerjemahan subtitle VTT"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -458,7 +458,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":riwayat"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -467,7 +467,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Buka daftar riwayat anime yang pernah Anda tonton (:riwayat clear untuk hapus)"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>
@@ -486,7 +486,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text=":clear"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:fontFamily="monospace" />
@@ -495,7 +495,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Bersihkan pencarian &amp; reset filter kembali ke musim ini"
-                    android:textColor="#8892B0"
+          android:textColor="#8892B0"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
             </LinearLayout>

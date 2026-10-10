@@ -3,14 +3,14 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="6dp"
+    android:layout_margin="5dp"
     android:clickable="true"
     android:focusable="true"
     android:foreground="?attr/selectableItemBackground"
     app:cardCornerRadius="12dp"
-    app:cardElevation="4dp"
-    app:cardBackgroundColor="#10141F"
-    app:strokeColor="#1E273A"
+    app:cardElevation="0dp"
+    app:cardBackgroundColor="#11141C"
+    app:strokeColor="#1C202C"
     app:strokeWidth="1dp">
 
     <LinearLayout
@@ -18,11 +18,11 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Poster with Overlay Badges and Bottom Gradient Scrim -->
+        <!-- Poster Container with Soft Badges -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="210dp"
-            android:background="#151A26">
+            android:background="#151822">
 
             <ImageView
                 android:id="@+id/iv_poster"
@@ -30,10 +30,10 @@
                 android:layout_height="match_parent"
                 android:scaleType="centerCrop" />
 
-            <!-- Bottom Gradient Scrim for Smooth Transition -->
+            <!-- Bottom Gradient Scrim -->
             <View
                 android:layout_width="match_parent"
-                android:layout_height="70dp"
+                android:layout_height="64dp"
                 android:layout_gravity="bottom"
                 android:background="@drawable/bg_poster_scrim" />
 
@@ -43,15 +43,14 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="top|start"
-                android:layout_margin="7dp"
+                android:layout_margin="8dp"
                 android:background="@drawable/bg_badge_type"
                 android:paddingHorizontal="6dp"
-                android:paddingVertical="2dp"
+                android:paddingVertical="3dp"
                 android:text="TV"
                 android:textColor="#E2E8F0"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:fontFamily="monospace" />
+                android:textSize="9.5sp"
+                android:textStyle="bold" />
 
             <!-- Top Right: Score Badge (★ 8.5) -->
             <TextView
@@ -59,75 +58,64 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="top|end"
-                android:layout_margin="7dp"
+                android:layout_margin="8dp"
                 android:background="@drawable/bg_badge_score"
                 android:paddingHorizontal="6dp"
-                android:paddingVertical="2dp"
+                android:paddingVertical="3dp"
                 android:text="★ 8.5"
                 android:textColor="#FBBF24"
-                android:textSize="10sp"
+                android:textSize="9.5sp"
                 android:textStyle="bold"
-                android:fontFamily="monospace"
                 android:visibility="gone" />
 
-            <!-- Bottom Left: Subtitle Status / Episode Badge -->
+            <!-- Bottom Left: Subtitle / Episode Status Badge -->
             <TextView
                 android:id="@+id/tv_badge_ep"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom|start"
-                android:layout_margin="7dp"
+                android:layout_margin="8dp"
                 android:background="@drawable/bg_badge_sub"
-                android:paddingHorizontal="7dp"
+                android:paddingHorizontal="6dp"
                 android:paddingVertical="3dp"
                 android:text="SUB ID"
-                android:textColor="#00DBEB"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:fontFamily="monospace" />
+                android:textColor="#F1F5F9"
+                android:textSize="9.5sp"
+                android:textStyle="bold" />
         </FrameLayout>
 
-        <!-- Card Title & Metadata Info -->
+        <!-- Card Title & Metadata -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingHorizontal="10dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="10dp"
-            android:background="#10141F">
+            android:paddingTop="9dp"
+            android:paddingBottom="11dp"
+            android:background="#11141C">
 
             <TextView
                 android:id="@+id/tv_title"
                 android:layout_width="match_parent"
-                android:layout_height="36dp"
+                android:layout_height="38dp"
                 android:maxLines="2"
                 android:ellipsize="end"
                 android:text="Judul Anime"
                 android:textColor="#F8FAFC"
-                android:textSize="12sp"
+                android:textSize="12.5sp"
                 android:textStyle="bold"
                 android:lineSpacingExtra="2dp" />
 
-            <LinearLayout
+            <TextView
+                android:id="@+id/tv_meta"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="4dp">
-
-                <TextView
-                    android:id="@+id/tv_meta"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:singleLine="true"
-                    android:ellipsize="end"
-                    android:text="12 Episode"
-                    android:textColor="#828FA3"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace" />
-            </LinearLayout>
+                android:layout_marginTop="3dp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:text="12 Episode"
+                android:textColor="#8B95A5"
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

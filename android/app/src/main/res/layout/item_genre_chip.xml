@@ -3,21 +3,20 @@
     android:id="@+id/layout_genre_chip"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="4dp"
+    android:layout_margin="3dp"
     android:background="@drawable/bg_genre_chip"
     android:gravity="center"
     android:paddingHorizontal="10dp"
-    android:paddingVertical="10dp">
+    android:paddingVertical="9dp">
 
     <TextView
         android:id="@+id/tv_genre_name"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Action"
-        android:textColor="#00DBEB"
-        android:textSize="13sp"
+        android:textColor="#E2E8F0"
+        android:textSize="12.5sp"
         android:textStyle="bold"
-        android:fontFamily="monospace"
         android:singleLine="true"
         android:ellipsize="end" />
 </LinearLayout>

@@ -17,20 +17,19 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="🤖 PENGATURAN AI TRANSLATE"
-            android:textColor="#00DBEB"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:fontFamily="monospace" />
+            android:text="Pengaturan AI Translate"
+            android:textColor="#F1F5F9"
+            android:textSize="15sp"
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/btn_close_ai_dialog"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:text="✕"
             android:textColor="#8892B0"
-            android:textSize="16sp" />
+            android:textSize="14sp" />
     </LinearLayout>
 
     <ScrollView
@@ -58,9 +57,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="API Key : (Belum disetel)"
-                    android:textColor="#00DBEB"
+                    android:textColor="#38BDF8"
                     android:textSize="12sp"
-                    android:fontFamily="monospace" />
+                    android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/tv_ai_status_model"
@@ -69,8 +68,7 @@
                     android:layout_marginTop="3dp"
                     android:text="Model   : gemini-3.1-flash-lite"
                     android:textColor="#E1E7EF"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace" />
+                    android:textSize="11.5sp" />
 
                 <TextView
                     android:id="@+id/tv_ai_status_url"
@@ -79,8 +77,7 @@
                     android:layout_marginTop="3dp"
                     android:text="API URL : https://generativelanguage.googleapis.com..."
                     android:textColor="#8892B0"
-                    android:textSize="10sp"
-                    android:fontFamily="monospace"
+                    android:textSize="10.5sp"
                     android:singleLine="true"
                     android:ellipsize="middle" />
             </LinearLayout>
@@ -88,10 +85,9 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Pilih Preset Provider AI Cepat:"
+                android:text="Preset Provider AI Cepat:"
                 android:textColor="#8892B0"
-                android:textSize="11sp"
-                android:fontFamily="monospace"
+                android:textSize="11.5sp"
                 android:layout_marginBottom="6dp" />
 
             <!-- Preset Buttons -->
@@ -105,26 +101,24 @@
                 <Button
                     android:id="@+id/btn_preset_gemini"
                     android:layout_width="0dp"
-                    android:layout_height="36dp"
+                    android:layout_height="34dp"
                     android:layout_weight="1"
                     android:layout_marginEnd="3dp"
-                    android:text="💎 Google Gemini"
+                    android:text="Google Gemini"
                     android:textColor="#FFFFFF"
-                    android:backgroundTint="#16202E"
-                    android:textSize="10sp"
-                    android:fontFamily="monospace" />
+                    android:backgroundTint="#161922"
+                    android:textSize="10.5sp" />
 
                 <Button
                     android:id="@+id/btn_preset_groq"
                     android:layout_width="0dp"
-                    android:layout_height="36dp"
+                    android:layout_height="34dp"
                     android:layout_weight="1"
                     android:layout_marginStart="3dp"
-                    android:text="⚡ Groq (Llama-3.3)"
+                    android:text="Groq (Llama 3)"
                     android:textColor="#FFFFFF"
-                    android:backgroundTint="#16202E"
-                    android:textSize="10sp"
-                    android:fontFamily="monospace" />
+                    android:backgroundTint="#161922"
+                    android:textSize="10.5sp" />
             </LinearLayout>
 
             <LinearLayout
@@ -137,26 +131,24 @@
                 <Button
                     android:id="@+id/btn_preset_ollama"
                     android:layout_width="0dp"
-                    android:layout_height="36dp"
+                    android:layout_height="34dp"
                     android:layout_weight="1"
                     android:layout_marginEnd="3dp"
-                    android:text="🦙 Ollama Cloud"
+                    android:text="Ollama Cloud"
                     android:textColor="#FFFFFF"
-                    android:backgroundTint="#16202E"
-                    android:textSize="10sp"
-                    android:fontFamily="monospace" />
+                    android:backgroundTint="#161922"
+                    android:textSize="10.5sp" />
 
                 <Button
                     android:id="@+id/btn_preset_openai"
                     android:layout_width="0dp"
-                    android:layout_height="36dp"
+                    android:layout_height="34dp"
                     android:layout_weight="1"
                     android:layout_marginStart="3dp"
-                    android:text="🧠 OpenAI"
+                    android:text="OpenAI"
                     android:textColor="#FFFFFF"
-                    android:backgroundTint="#16202E"
-                    android:textSize="10sp"
-                    android:fontFamily="monospace" />
+                    android:backgroundTint="#161922"
+                    android:textSize="10.5sp" />
             </LinearLayout>
 
             <!-- API Key Input Field -->
@@ -165,20 +157,18 @@
                 android:layout_height="wrap_content"
                 android:text="API Key:"
                 android:textColor="#8892B0"
-                android:textSize="11sp"
-                android:fontFamily="monospace"
+                android:textSize="11.5sp"
                 android:layout_marginBottom="3dp" />
 
             <EditText
                 android:id="@+id/et_ai_apikey"
                 android:layout_width="match_parent"
-                android:layout_height="42dp"
+                android:layout_height="40dp"
                 android:background="@drawable/bg_input_field"
-                android:hint="Tempel API key (misal AQ... atau gsk_...)"
+                android:hint="Tempel API key di sini"
                 android:textColorHint="#5A6578"
-                android:textColor="#E1E7EF"
+                android:textColor="#F1F5F9"
                 android:textSize="12sp"
-                android:fontFamily="monospace"
                 android:paddingHorizontal="10dp"
                 android:inputType="textPassword"
                 android:layout_marginBottom="10dp" />
@@ -189,20 +179,18 @@
                 android:layout_height="wrap_content"
                 android:text="Model LLM (Opsional):"
                 android:textColor="#8892B0"
-                android:textSize="11sp"
-                android:fontFamily="monospace"
+                android:textSize="11.5sp"
                 android:layout_marginBottom="3dp" />
 
             <EditText
                 android:id="@+id/et_ai_model"
                 android:layout_width="match_parent"
-                android:layout_height="42dp"
+                android:layout_height="40dp"
                 android:background="@drawable/bg_input_field"
                 android:hint="gemini-3.1-flash-lite"
                 android:textColorHint="#5A6578"
-                android:textColor="#E1E7EF"
+                android:textColor="#F1F5F9"
                 android:textSize="12sp"
-                android:fontFamily="monospace"
                 android:paddingHorizontal="10dp"
                 android:singleLine="true"
                 android:layout_marginBottom="10dp" />
@@ -213,20 +201,18 @@
                 android:layout_height="wrap_content"
                 android:text="Endpoint API URL (Opsional):"
                 android:textColor="#8892B0"
-                android:textSize="11sp"
-                android:fontFamily="monospace"
+                android:textSize="11.5sp"
                 android:layout_marginBottom="3dp" />
 
             <EditText
                 android:id="@+id/et_ai_apiurl"
                 android:layout_width="match_parent"
-                android:layout_height="42dp"
+                android:layout_height="40dp"
                 android:background="@drawable/bg_input_field"
                 android:hint="https://generativelanguage.googleapis.com/v1beta/openai"
                 android:textColorHint="#5A6578"
-                android:textColor="#E1E7EF"
+                android:textColor="#F1F5F9"
                 android:textSize="12sp"
-                android:fontFamily="monospace"
                 android:paddingHorizontal="10dp"
                 android:singleLine="true"
                 android:layout_marginBottom="14dp" />
@@ -241,34 +227,32 @@
                 <Button
                     android:id="@+id/btn_ai_view_logs"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:text="📜 Log"
+                    android:layout_height="34dp"
+                    android:text="Log"
                     android:textColor="#8892B0"
-                    android:backgroundTint="#161A24"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace"
+                    android:backgroundTint="#161922"
+                    android:textSize="11.5sp"
                     android:layout_marginEnd="6dp" />
 
                 <Button
                     android:id="@+id/btn_ai_reset_key"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
+                    android:layout_height="34dp"
                     android:text="Hapus Key"
                     android:textColor="#EF4444"
-                    android:backgroundTint="#161A24"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace"
+                    android:backgroundTint="#161922"
+                    android:textSize="11.5sp"
                     android:layout_marginEnd="6dp" />
 
                 <Button
                     android:id="@+id/btn_ai_save"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
+                    android:layout_height="34dp"
                     android:text="Simpan"
                     android:textColor="#FFFFFF"
-                    android:backgroundTint="#0E7490"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace" />
+                    android:backgroundTint="#1E2433"
+                    android:textSize="11.5sp"
+                    android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>
     </ScrollView>

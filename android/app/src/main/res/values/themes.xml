@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Tatap" parent="Theme.MaterialComponents.NoActionBar">
-        <item name="colorPrimary">#0e7490</item>
-        <item name="colorPrimaryVariant">#08090c</item>
-        <item name="colorOnPrimary">#ffffff</item>
-        <item name="colorSecondary">#00dbeb</item>
-        <item name="android:statusBarColor">#08090c</item>
-        <item name="android:navigationBarColor">#08090c</item>
-        <item name="android:windowBackground">#08090c</item>
+        <item name="colorPrimary">#38BDF8</item>
+        <item name="colorPrimaryVariant">#090A0F</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#38BDF8</item>
+        <item name="android:statusBarColor">#090A0F</item>
+        <item name="android:navigationBarColor">#090A0F</item>
+        <item name="android:windowBackground">#090A0F</item>
     </style>
 </resources>

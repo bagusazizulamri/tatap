@@ -1,18 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/card_episode"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="4dp"
+    android:layout_margin="3dp"
     app:cardCornerRadius="8dp"
-    app:cardElevation="2dp"
-    app:cardBackgroundColor="#121622">
+    app:cardElevation="0dp"
+    app:cardBackgroundColor="#11141C"
+    app:strokeColor="#1C202C"
+    app:strokeWidth="1dp">
 
     <LinearLayout
         android:id="@+id/layout_ep_body"
         android:layout_width="match_parent"
-        android:layout_height="52dp"
+        android:layout_height="48dp"
         android:orientation="vertical"
         android:gravity="center"
         android:paddingHorizontal="4dp"
@@ -22,11 +24,10 @@
             android:id="@+id/tv_ep_status_badge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="✓ SELESAI"
+            android:text="● SELESAI"
             android:textColor="#10B981"
-            android:textSize="9sp"
+            android:textSize="8.5sp"
             android:textStyle="bold"
-            android:fontFamily="monospace"
             android:visibility="gone"
             android:layout_marginBottom="1dp" />
 
@@ -35,9 +36,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="EP 01"
-            android:textColor="#00DBEB"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:fontFamily="monospace" />
+            android:textColor="#F1F5F9"
+            android:textSize="12.5sp"
+            android:textStyle="bold" />
     </LinearLayout>
-</androidx.cardview.widget.CardView>
+</com.google.android.material.card.MaterialCardView>
