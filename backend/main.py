@@ -117,7 +117,7 @@ async def seasonal(which: str = Query("", pattern="^(now|prev|airing)$|^$"),
             if hit:
                 hit["cached"] = True
                 return ok(hit)
-            hi_data = await loop.run_in_executor(None, lambda: hi.browse({"status": "currently_airing"}, page))
+            hi_data = await loop.run_in_executor(None, lambda: hi.browse({"status": "releasing"}, page))
             if hi_data and hi_data.get("items"):
                 hi_data["which"] = "airing"
                 await set_browse_cache(key, hi_data)
@@ -186,7 +186,7 @@ async def seasonal(which: str = Query("", pattern="^(now|prev|airing)$|^$"),
 
         # Fallback jika AniList diblokir ISP / offline / kosong
         if not items_out:
-            fallback_filter = {"sort": "trending"} if which == "now" else {"status": "currently_airing"}
+            fallback_filter = {"sort": "trending"} if which == "now" else {"status": "releasing"}
             if season and year:
                 fallback_filter["season"] = season_name
             hi_data = await loop.run_in_executor(None, lambda: hi.browse(fallback_filter, page))

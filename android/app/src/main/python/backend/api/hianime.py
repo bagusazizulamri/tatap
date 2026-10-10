@@ -115,7 +115,7 @@ def _probe_master(master_url, referer):
 
 FILTERS = {
     "type": ["tv", "movie", "ova", "ona", "special", "music"],
-    "status": ["releasing", "completed", "not_yet_aired"],
+    "status": ["releasing", "completed", "not_yet_aired", "currently_airing", "airing", "ongoing"],
     "rating": ["g", "pg", "pg_13", "r_17", "r_plus", "rx"],
     "score": ["10", "9", "8", "7", "6", "5", "4", "3", "2", "1"],
     "season": ["spring", "summer", "fall", "winter"],
@@ -156,6 +156,8 @@ def browse(params: dict = None, page: int = 1):
         v = str(v or "").strip().lower()
         if not v:
             continue
+        if k == "status" and v in ("currently_airing", "airing", "ongoing"):
+            v = "releasing"
         if k in FILTERS and v in FILTERS[k]:
             clean[k] = v
         elif k in ("keyword", "sy", "sm", "ey", "em", "genre"):
