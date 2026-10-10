@@ -660,18 +660,58 @@ async def _pipe_video(url: str, referer: str):
         raise HTTPException(status_code=502, detail=f"upstream error: {type(e).__name__}")
 
 async def _fetch_sub_text(target_url, ref):
-    """Helper fetcher yang mendukung desync bila host terblokir DPI."""
+    """Helper fetcher yang mendukung desync bila host terblokir DPI atau butuh referer khusus."""
     from api.hianime import _host_from, _BLOCKED_DPI_HOSTS
     h = _host_from(target_url)
-    if h in _BLOCKED_DPI_HOSTS:
-        from api.desync import tls_desync_request
-        loop = asyncio.get_running_loop()
-        raw = await loop.run_in_executor(None, lambda: tls_desync_request(target_url, headers={"Referer": ref} if ref else {}))
-        return raw.decode("utf-8", errors="replace")
-    async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as c:
-        r = await c.get(target_url, headers={"User-Agent": HI_UA,
-                                             **({"Referer": ref} if ref else {})})
-        return r.text
+
+    candidates = []
+    if ref:
+        candidates.append(ref)
+    for f_ref in ("https://zokoanime.video/", "https://megacloud.blog/", "https://hianime.to/", ""):
+        if f_ref not in candidates:
+            candidates.append(f_ref)
+
+    last_err = None
+    for r_head in candidates:
+        headers = {"User-Agent": HI_UA}
+        if r_head:
+            headers["Referer"] = r_head
+
+        # 1. Coba via TLS desync jika host masuk daftar DPI atau host CDN streaming
+        if h in _BLOCKED_DPI_HOSTS or "dramahot" in h or "zokoanime" in h:
+            try:
+                from api.desync import tls_desync_request
+                loop = asyncio.get_running_loop()
+                raw = await loop.run_in_executor(None, lambda: tls_desync_request(target_url, headers=headers))
+                txt = raw.decode("utf-8", errors="replace")
+                if "WEBVTT" in txt or len(txt) > 200:
+                    return txt
+            except Exception as e:
+                last_err = e
+
+        # 2. Coba direct request via httpx
+        try:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=12.0) as c:
+                r = await c.get(target_url, headers=headers)
+                if r.status_code == 200 and ("WEBVTT" in r.text or len(r.text) > 200):
+                    return r.text
+        except Exception as e:
+            last_err = e
+            # Jika direct gagal (koneksi terputus/RST), coba desync
+            try:
+                from api.desync import tls_desync_request
+                _BLOCKED_DPI_HOSTS.add(h)
+                loop = asyncio.get_running_loop()
+                raw = await loop.run_in_executor(None, lambda: tls_desync_request(target_url, headers=headers))
+                txt = raw.decode("utf-8", errors="replace")
+                if "WEBVTT" in txt or len(txt) > 200:
+                    return txt
+            except Exception as e2:
+                last_err = e2
+
+    if last_err:
+        raise last_err
+    raise RuntimeError("Gagal mengambil subtitle: upstream mengembalikan respons kosong atau tidak valid")
 
 
 _SUB_INFLIGHT = {}
@@ -712,6 +752,7 @@ async def favicon():
     if os.path.exists(fav):
         return FileResponse(fav, media_type="image/x-icon")
     return Response(status_code=204)
+
 
 @app.get("/api/player/sub")
 async def proxy_sub(url: str = Query(""),
@@ -758,8 +799,17 @@ async def proxy_sub(url: str = Query(""),
                 resp = Response(content=gtx_text, media_type="text/vtt")
                 resp.headers["X-Translate-Tier"] = "pure_gtx"
                 return resp
+            return Response(content=text, media_type="text/vtt")
         except Exception as e:
-            raise HTTPException(status_code=502, detail=f"gagal translate GTX: {e}")
+            # Fallback ke source jika gagal translate
+            try:
+                text = await _fetch_sub_text(url, referer)
+                resp = Response(content=text, media_type="text/vtt")
+                resp.headers["X-Translate-Tier"] = "source-fallback"
+                resp.headers["X-Translate-Error"] = str(e)
+                return resp
+            except Exception:
+                raise HTTPException(status_code=502, detail=f"gagal translate GTX: {e}")
 
     # Mode AIGTX eksplisit: Google GTX + Scene Detector & Anime Lexicon
     if mode == "aigtx":
@@ -781,8 +831,17 @@ async def proxy_sub(url: str = Query(""),
                 resp = Response(content=aigtx_text, media_type="text/vtt")
                 resp.headers["X-Translate-Tier"] = "aigtx"
                 return resp
+            return Response(content=text, media_type="text/vtt")
         except Exception as e:
-            raise HTTPException(status_code=502, detail=f"gagal translate AIGTX: {e}")
+            # Fallback ke source jika gagal translate AIGTX
+            try:
+                text = await _fetch_sub_text(url, referer)
+                resp = Response(content=text, media_type="text/vtt")
+                resp.headers["X-Translate-Tier"] = "source-fallback"
+                resp.headers["X-Translate-Error"] = str(e)
+                return resp
+            except Exception:
+                raise HTTPException(status_code=502, detail=f"gagal translate AIGTX: {e}")
 
     # Cache sadar-kualitas: hasil AI Fansub ("llm") disimpan terpisah dari hasil AIGTX.
     llm_on = await _llm_enabled()

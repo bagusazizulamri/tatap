@@ -538,24 +538,56 @@ public class PlayerActivity extends Activity {
             return;
         }
 
-        String subModeParam = activeEngine.equals("raw") ? "" : activeEngine;
-        String srcParam = activeEngine.equals("raw") ? activeSubLang : "en";
-        String proxiedSub = "http://127.0.0.1:8767/api/player/sub?url=" + Uri.encode(activeSubUrl)
-                + "&referer=" + Uri.encode(streamReferer)
-                + "&src=" + Uri.encode(srcParam)
-                + "&lang=" + Uri.encode(activeSubLang)
-                + (subModeParam.isEmpty() ? "" : "&mode=" + subModeParam);
+        try {
+            String subModeParam = activeEngine.equals("raw") ? "" : activeEngine;
+            String srcParam = activeEngine.equals("raw") ? activeSubLang : "en";
 
-        loadSubtitlesAsync(proxiedSub);
+            String encodedSubUrl = URLEncoder.encode(activeSubUrl, "UTF-8");
+            String encodedRef = URLEncoder.encode(streamReferer != null ? streamReferer : "", "UTF-8");
+
+            // Jika memilih terjemahan (AIGTX / AI / GTX) dan cues belum dimuat:
+            // Unduh dulu subtitle sumber (English/Native) secara instan (0.5s) agar penonton tidak mengalami black screen / tanpa sub.
+            if (!subModeParam.isEmpty() && currentCues.isEmpty() && enSourceSubUrl != null && !enSourceSubUrl.isEmpty()) {
+                String rawSubUrl = "http://127.0.0.1:8767/api/player/sub?url=" + URLEncoder.encode(enSourceSubUrl, "UTF-8")
+                        + "&referer=" + encodedRef
+                        + "&src=" + URLEncoder.encode(srcParam, "UTF-8")
+                        + "&lang=" + URLEncoder.encode(srcParam, "UTF-8");
+                loadSubtitlesAsync(rawSubUrl, true);
+            }
+
+            // Bangun URL utama untuk terjemahan atau subtitle yang dipilih
+            String proxiedSub = "http://127.0.0.1:8767/api/player/sub?url=" + encodedSubUrl
+                    + "&referer=" + encodedRef
+                    + "&src=" + URLEncoder.encode(srcParam, "UTF-8")
+                    + "&lang=" + URLEncoder.encode(activeSubLang, "UTF-8")
+                    + (subModeParam.isEmpty() ? "" : "&mode=" + URLEncoder.encode(subModeParam, "UTF-8"));
+
+            loadSubtitlesAsync(proxiedSub, false);
+        } catch (Exception e) {
+            updateSubStatusText(false);
+            if (tvSubStatus != null) {
+                tvSubStatus.setText("Sub: Gagal (" + e.getMessage() + ")");
+            }
+        }
     }
 
-    private void loadSubtitlesAsync(String subUrl) {
+    private void loadSubtitlesAsync(String subUrl, boolean isImmediateFallback) {
         final int loadId = ++currentSubLoadId;
         new Thread(() -> {
+            HttpURLConnection conn = null;
             try {
-                HttpURLConnection conn = (HttpURLConnection) new URL(subUrl).openConnection();
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(20000);
+                conn = (HttpURLConnection) new URL(subUrl).openConnection();
+                conn.setConnectTimeout(15000);
+                // Beri waktu cukup (80 detik) bila translasi baru pertama kali dijalankan
+                conn.setReadTimeout(isImmediateFallback ? 12000 : 80000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0");
+                conn.setInstanceFollowRedirects(true);
+
+                int respCode = conn.getResponseCode();
+                if (respCode >= 400) {
+                    throw new Exception("HTTP " + respCode);
+                }
+
                 BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                 StringBuilder sb = new StringBuilder();
                 String line;
@@ -564,25 +596,35 @@ public class PlayerActivity extends Activity {
                 }
                 reader.close();
 
-                if (loadId != currentSubLoadId) return; // Stale request, ignore
+                if (loadId != currentSubLoadId && !isImmediateFallback) return; // Stale request
 
                 List<SubtitleCue> cues = parseVtt(sb.toString());
-                currentCues = cues;
-
-                runOnUiThread(() -> {
-                    if (loadId == currentSubLoadId) {
-                        updateSubStatusText(true);
-                        subtitleSyncRunnable.run();
-                    }
-                });
-            } catch (Exception e) {
-                if (loadId == currentSubLoadId) {
+                if (!cues.isEmpty()) {
+                    currentCues = cues;
                     runOnUiThread(() -> {
-                        updateSubStatusText(false);
-                        if (tvSubStatus != null) {
-                            tvSubStatus.setText("Sub: Gagal (" + e.getMessage() + ")");
+                        if (!isImmediateFallback) {
+                            updateSubStatusText(true);
+                        }
+                        subtitleSyncRunnable.run();
+                    });
+                }
+            } catch (Exception e) {
+                if (!isImmediateFallback && loadId == currentSubLoadId) {
+                    runOnUiThread(() -> {
+                        // Jika sudah ada cues (misal dari immediate source), jangan kosongkan layar!
+                        if (!currentCues.isEmpty()) {
+                            tvSubStatus.setText("Sub: " + activeSubLang.toUpperCase() + " [Menggunakan teks asli]");
+                        } else {
+                            updateSubStatusText(false);
+                            if (tvSubStatus != null) {
+                                tvSubStatus.setText("Sub: Gagal (" + e.getMessage() + ")");
+                            }
                         }
                     });
+                }
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
                 }
             }
         }).start();
@@ -610,7 +652,15 @@ public class PlayerActivity extends Activity {
     private static long parseTimestamp(String token) {
         if (token == null) return -1;
         token = token.trim();
-        int spaceIdx = token.indexOf(' ');
+        // Hapus WebVTT settings di baris waktu (misal align:start position:0%)
+        int spaceIdx = -1;
+        for (int i = 0; i < token.length(); i++) {
+            char c = token.charAt(i);
+            if (c == ' ' || c == '\t') {
+                spaceIdx = i;
+                break;
+            }
+        }
         if (spaceIdx != -1) {
             token = token.substring(0, spaceIdx).trim();
         }
@@ -634,6 +684,12 @@ public class PlayerActivity extends Activity {
     private List<SubtitleCue> parseVtt(String content) {
         List<SubtitleCue> list = new ArrayList<>();
         if (content == null || content.isEmpty()) return list;
+
+        // Buang BOM jika ada
+        if (content.startsWith("\uFEFF")) {
+            content = content.substring(1);
+        }
+
         String[] lines = content.replace("\r\n", "\n").replace("\r", "\n").split("\n");
         long curStart = -1;
         long curEnd = -1;
@@ -641,7 +697,23 @@ public class PlayerActivity extends Activity {
 
         for (String rawLine : lines) {
             String line = rawLine.trim();
-            if (line.isEmpty()) {
+
+            if (line.contains("-->")) {
+                // Simpan cue sebelumnya jika belum sempat ter-flush
+                if (curStart != -1 && curEnd != -1 && curText.length() > 0) {
+                    String cleaned = curText.toString().replaceAll("<[^>]*>", "").trim();
+                    if (!cleaned.isEmpty()) {
+                        list.add(new SubtitleCue(curStart, curEnd, cleaned));
+                    }
+                    curText.setLength(0);
+                }
+
+                String[] timeParts = line.split("-->");
+                if (timeParts.length >= 2) {
+                    curStart = parseTimestamp(timeParts[0]);
+                    curEnd = parseTimestamp(timeParts[1]);
+                }
+            } else if (line.isEmpty()) {
                 if (curStart != -1 && curEnd != -1 && curText.length() > 0) {
                     String cleaned = curText.toString().replaceAll("<[^>]*>", "").trim();
                     if (!cleaned.isEmpty()) {
@@ -651,18 +723,12 @@ public class PlayerActivity extends Activity {
                 curStart = -1;
                 curEnd = -1;
                 curText.setLength(0);
-                continue;
-            }
-
-            if (line.contains("-->")) {
-                String[] timeParts = line.split("-->");
-                if (timeParts.length >= 2) {
-                    curStart = parseTimestamp(timeParts[0]);
-                    curEnd = parseTimestamp(timeParts[1]);
-                }
             } else if (curStart != -1 && curEnd != -1) {
-                if (curText.length() > 0) curText.append("\n");
-                curText.append(rawLine.trim());
+                // Abaikan header atau komentar WebVTT
+                if (!line.startsWith("NOTE") && !line.startsWith("STYLE") && !line.startsWith("REGION")) {
+                    if (curText.length() > 0) curText.append("\n");
+                    curText.append(line);
+                }
             }
         }
 
