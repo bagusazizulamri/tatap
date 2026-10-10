@@ -177,6 +177,10 @@ Saat menangani issue dari pengguna/komunitas di GitHub:
 - **Pencegahan Fallback Keliru:** Dilarang menggunakan fallback buta ke hasil pertama (`res[0]`) ketika nama tidak cocok. Fallback keliru akan mencemari database cache permanen (`slug_map`), membuat anime Season baru/on-going tertukar dengan Season 1 atau judul yang sama sekali berbeda.
 - **Tab On-going / Airing:** Tab anime yang sedang tayang harus selalu mengueri data status penayangan aktif langsung dari katalog stream (`/api/seasonal?which=airing`).
 
+### 4. Kompatibilitas Packaging & Instalasi Android (16KB Page Alignment & Android 15/16)
+- **Ekstraksi Pustaka Native:** Wajib menyetel `packaging.jniLibs.useLegacyPackaging = true` di `build.gradle` dan `android:extractNativeLibs="true"` di `AndroidManifest.xml`.
+- **Akar Masalah Kegagalan Instal:** Pada Android 15, Android 16, dan perangkat 64-bit modern (seperti seri Infinix Note 40 / MediaTek / Transsion XOS), pustaka native uncompressed yang tidak ter-align pada batas 16KB akan langsung ditolak oleh PackageInstaller OS (`INSTALL_FAILED_INVALID_APK`). Dengan `useLegacyPackaging = true`, file `.so` dikompresi di APK dan diekstrak secara otomatis ke penyimpanan privat saat dipasang, menjamin 100% kompatibilitas dan menghemat ukuran unduhan APK dari ~54MB menjadi ~35MB.
+
 ---
 
 ## 8. Prinsip Rekayasa Agen AI (Agent Guardrails)
