@@ -4,15 +4,15 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#08090C">
+    android:background="#07090E">
 
-    <!-- Top App Bar / Brand Header -->
+    <!-- Top App Bar / Cyber Header -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="56dp"
         android:gravity="center_vertical"
-        android:paddingHorizontal="16dp"
-        android:background="#0D0F14">
+        android:paddingHorizontal="14dp"
+        android:background="#0B0E16">
 
         <TextView
             android:layout_width="wrap_content"
@@ -21,15 +21,16 @@
             android:textColor="#00DBEB"
             android:textSize="20sp"
             android:textStyle="bold"
-            android:fontFamily="monospace" />
+            android:fontFamily="monospace"
+            android:letterSpacing="0.05" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="v2.2.0"
-            android:textColor="#5A6578"
-            android:textSize="12sp"
+            android:layout_marginStart="6dp"
+            android:text="v2.2"
+            android:textColor="#4A5568"
+            android:textSize="11sp"
             android:fontFamily="monospace" />
 
         <View
@@ -37,54 +38,138 @@
             android:layout_height="1dp"
             android:layout_weight="1" />
 
+        <!-- Header Quick Action: AI Settings Button -->
+        <TextView
+            android:id="@+id/btn_header_ai"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_header_button"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:paddingHorizontal="10dp"
+            android:text="⚡ AI"
+            android:textColor="#00DBEB"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <!-- Header Quick Action: Genre Selector Button -->
+        <TextView
+            android:id="@+id/btn_header_genre"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_header_button"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:paddingHorizontal="10dp"
+            android:text="🏷 Genre"
+            android:textColor="#94A3B8"
+            android:textSize="11sp"
+            android:fontFamily="monospace" />
+
+        <!-- Header Quick Action: Terminal Help Button -->
+        <TextView
+            android:id="@+id/btn_header_help"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_header_button"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:paddingHorizontal="10dp"
+            android:text="&gt;_"
+            android:textColor="#00DBEB"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <!-- Status Badge -->
         <TextView
             android:id="@+id/tv_status_badge"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="ONLINE"
+            android:layout_height="28dp"
+            android:background="@drawable/bg_status_pill"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:paddingHorizontal="10dp"
+            android:text="● ONLINE"
             android:textColor="#10B981"
             android:textSize="11sp"
+            android:textStyle="bold"
             android:fontFamily="monospace" />
     </LinearLayout>
 
-    <!-- Search Input Bar -->
+    <!-- Search / Terminal Prompt Input Bar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="10dp"
-        android:gravity="center_vertical"
-        android:background="#0A0D12">
+        android:paddingHorizontal="14dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="6dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="tatap$ "
-            android:textColor="#00DBEB"
-            android:textSize="14sp"
-            android:fontFamily="monospace" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_search_box"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="12dp">
 
-        <EditText
-            android:id="@+id/et_search"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="1"
-            android:background="@null"
-            android:hint="cari judul atau :command (ketik :help)..."
-            android:textColorHint="#404B5C"
-            android:textColor="#E1E7EF"
-            android:textSize="14sp"
-            android:fontFamily="monospace"
-            android:imeOptions="actionSearch"
-            android:inputType="text"
-            android:singleLine="true" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="❯_ "
+                android:textColor="#00DBEB"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:fontFamily="monospace" />
 
-        <ProgressBar
-            android:id="@+id/pb_loading"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:visibility="gone"
-            android:indeterminateTint="#00DBEB" />
+            <EditText
+                android:id="@+id/et_search"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@null"
+                android:hint="Cari anime atau ketik :command (:help)..."
+                android:textColorHint="#475569"
+                android:textColor="#F1F5F9"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:singleLine="true" />
+
+            <!-- Clear Search Button -->
+            <TextView
+                android:id="@+id/btn_clear_search"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:gravity="center"
+                android:text="✕"
+                android:textColor="#64748B"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:visibility="gone"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
+            <ProgressBar
+                android:id="@+id/pb_loading"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:visibility="gone"
+                android:indeterminateTint="#00DBEB" />
+        </LinearLayout>
     </LinearLayout>
 
     <!-- Command Execution Feedback HUD Banner -->
@@ -92,12 +177,12 @@
         android:id="@+id/layout_command_banner"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="4dp"
+        android:layout_marginHorizontal="14dp"
+        android:layout_marginTop="2dp"
         android:layout_marginBottom="4dp"
         android:background="@drawable/bg_command_banner"
-        android:paddingHorizontal="10dp"
-        android:paddingVertical="6dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="7dp"
         android:gravity="center_vertical"
         android:visibility="gone">
 
@@ -113,11 +198,11 @@
 
         <Button
             android:id="@+id/btn_close_command_banner"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:text="✕"
-            android:textColor="#5A6578"
+            android:textColor="#64748B"
             android:textSize="12sp"
             android:fontFamily="monospace" />
     </LinearLayout>
@@ -127,8 +212,8 @@
         android:id="@+id/layout_active_filter"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="4dp"
+        android:layout_marginHorizontal="14dp"
+        android:layout_marginTop="2dp"
         android:layout_marginBottom="4dp"
         android:gravity="center_vertical"
         android:visibility="gone">
@@ -166,13 +251,86 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Section Title & Counter -->
+    <!-- Modern Segmented Tab Switcher (Musim Ini, Masih Tayang, Terpopuler) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="14dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="6dp"
+        android:background="@drawable/bg_tabs_container"
+        android:orientation="horizontal"
+        android:padding="3dp"
+        android:weightSum="3">
+
+        <TextView
+            android:id="@+id/btn_tab_musim"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_tab_active"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingHorizontal="4dp"
+            android:text="🔥 Musim Ini"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/btn_tab_airing"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_tab_inactive"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingHorizontal="4dp"
+            android:text="⚡ Masih Tayang"
+            android:textColor="#8892B0"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/btn_tab_katalog"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_tab_inactive"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingHorizontal="4dp"
+            android:text="📚 Katalog"
+            android:textColor="#8892B0"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:singleLine="true"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- Section Title & Counter Bar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingHorizontal="16dp"
-        android:paddingVertical="6dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="6dp"
         android:gravity="center_vertical">
+
+        <!-- Neon Left Accent Bar -->
+        <View
+            android:layout_width="3dp"
+            android:layout_height="14dp"
+            android:layout_marginEnd="8dp"
+            android:background="#00DBEB" />
 
         <TextView
             android:id="@+id/tv_section_title"
@@ -180,8 +338,9 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Tayang Musim Ini"
-            android:textColor="#8892B0"
+            android:textColor="#E2E8F0"
             android:textSize="13sp"
+            android:textStyle="bold"
             android:fontFamily="monospace" />
 
         <TextView
@@ -189,114 +348,147 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text=""
-            android:textColor="#5A6578"
-            android:textSize="12sp"
+            android:textColor="#64748B"
+            android:textSize="11sp"
             android:fontFamily="monospace" />
     </LinearLayout>
 
-    <!-- View Mode Switcher (Musim, Masih Tayang, Terpopuler) - Auto-Fit Lebar Layar -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:weightSum="3"
-        android:paddingHorizontal="16dp"
-        android:paddingBottom="8dp">
-
-        <Button
-            android:id="@+id/btn_tab_musim"
-            android:layout_width="0dp"
-            android:layout_height="38dp"
-            android:layout_weight="1"
-            android:layout_marginEnd="4dp"
-            android:paddingHorizontal="4dp"
-            android:text="Musim Ini"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#0E7490"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:fontFamily="monospace"
-            android:singleLine="true"
-            android:ellipsize="end" />
-
-        <Button
-            android:id="@+id/btn_tab_airing"
-            android:layout_width="0dp"
-            android:layout_height="38dp"
-            android:layout_weight="1"
-            android:layout_marginHorizontal="2dp"
-            android:paddingHorizontal="4dp"
-            android:text="Masih Tayang"
-            android:textColor="#8892B0"
-            android:backgroundTint="#161A24"
-            android:textSize="12sp"
-            android:fontFamily="monospace"
-            android:singleLine="true"
-            android:ellipsize="end" />
-
-        <Button
-            android:id="@+id/btn_tab_katalog"
-            android:layout_width="0dp"
-            android:layout_height="38dp"
-            android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:paddingHorizontal="4dp"
-            android:text="Katalog"
-            android:textColor="#8892B0"
-            android:backgroundTint="#161A24"
-            android:textSize="12sp"
-            android:fontFamily="monospace"
-            android:singleLine="true"
-            android:ellipsize="end" />
-    </LinearLayout>
-
-    <!-- Native Grid of Anime Cards -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rv_anime_grid"
+    <!-- Swipe Refresh Layout with Anime Grid & Empty/Error State -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipe_refresh_layout"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:padding="8dp"
-        android:clipToPadding="false"
-        android:scrollbars="vertical" />
+        android:layout_weight="1">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <!-- Native Grid of Anime Cards -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_anime_grid"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:paddingHorizontal="8dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="8dp"
+                android:clipToPadding="false"
+                android:scrollbars="vertical" />
+
+            <!-- Empty / Error Placeholder View -->
+            <LinearLayout
+                android:id="@+id/layout_empty_state"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="24dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="[ • _ • ]"
+                    android:textColor="#00DBEB"
+                    android:textSize="32sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/tv_empty_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="Tidak Ada Anime Ditemukan"
+                    android:textColor="#F1F5F9"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/tv_empty_desc"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:gravity="center"
+                    android:text="Coba gunakan kata kunci lain atau periksa koneksi backend."
+                    android:textColor="#64748B"
+                    android:textSize="12sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/btn_empty_retry"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginTop="16dp"
+                    android:background="@drawable/bg_page_button"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:paddingHorizontal="20dp"
+                    android:text="↺ Muat Ulang"
+                    android:textColor="#00DBEB"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace" />
+            </LinearLayout>
+        </FrameLayout>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <!-- Pagination Controls (Halaman Sebelumnya / Berikutnya) -->
     <LinearLayout
         android:id="@+id/layout_pagination"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
+        android:layout_height="52dp"
         android:gravity="center"
-        android:background="#0A0D12"
+        android:background="#090C12"
         android:paddingHorizontal="16dp">
 
-        <Button
+        <TextView
             android:id="@+id/btn_prev_page"
             android:layout_width="wrap_content"
-            android:layout_height="36dp"
+            android:layout_height="34dp"
+            android:background="@drawable/bg_page_button"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:paddingHorizontal="14dp"
             android:text="◀ SEBELUMNYA"
             android:textColor="#00DBEB"
-            android:backgroundTint="#161A24"
             android:textSize="11sp"
+            android:textStyle="bold"
             android:fontFamily="monospace" />
 
         <TextView
             android:id="@+id/tv_page_indicator"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="28dp"
             android:layout_marginHorizontal="16dp"
+            android:background="@drawable/bg_header_button"
+            android:gravity="center"
+            android:paddingHorizontal="12dp"
             android:text="Hal 1"
-            android:textColor="#8892B0"
-            android:textSize="12sp"
+            android:textColor="#94A3B8"
+            android:textSize="11sp"
+            android:textStyle="bold"
             android:fontFamily="monospace" />
 
-        <Button
+        <TextView
             android:id="@+id/btn_next_page"
             android:layout_width="wrap_content"
-            android:layout_height="36dp"
+            android:layout_height="34dp"
+            android:background="@drawable/bg_page_button"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:paddingHorizontal="14dp"
             android:text="BERIKUTNYA ▶"
             android:textColor="#00DBEB"
-            android:backgroundTint="#161A24"
             android:textSize="11sp"
+            android:textStyle="bold"
             android:fontFamily="monospace" />
     </LinearLayout>
 </LinearLayout>

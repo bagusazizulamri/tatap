@@ -15,6 +15,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class AnimeAdapter extends RecyclerView.Adapter<AnimeAdapter.AnimeViewHolder> {
     private final Context context;
@@ -48,10 +49,49 @@ public class AnimeAdapter extends RecyclerView.Adapter<AnimeAdapter.AnimeViewHol
         String type = item.optString("type", "");
         String eps = item.optString("eps", "");
         String slug = item.optString("id", item.optString("slug", ""));
+        double score = item.optDouble("score", 0.0);
+        String duration = item.optString("duration", "");
 
         holder.tvTitle.setText(title);
-        holder.tvMeta.setText((type.isEmpty() ? "" : type + " · ") + (eps.isEmpty() ? "" : eps + " Ep"));
-        holder.tvBadgeEp.setText(sub.isEmpty() ? "ANIME" : "SUB " + sub);
+
+        // Format Format/Type Badge (TV, Movie, ONA)
+        if (!type.isEmpty()) {
+            holder.tvBadgeType.setVisibility(View.VISIBLE);
+            holder.tvBadgeType.setText(type.toUpperCase());
+        } else {
+            holder.tvBadgeType.setVisibility(View.GONE);
+        }
+
+        // Format Score Badge (★ 8.5)
+        if (score > 0) {
+            holder.tvBadgeScore.setVisibility(View.VISIBLE);
+            holder.tvBadgeScore.setText(String.format(Locale.US, "★ %.1f", score));
+        } else {
+            holder.tvBadgeScore.setVisibility(View.GONE);
+        }
+
+        // Format Subtitle / Status Badge
+        if (!sub.isEmpty()) {
+            holder.tvBadgeEp.setText("SUB " + sub.toUpperCase());
+        } else if (!eps.isEmpty() && !eps.equals("0")) {
+            holder.tvBadgeEp.setText("EP " + eps);
+        } else {
+            holder.tvBadgeEp.setText("ANIME");
+        }
+
+        // Format Meta Info
+        StringBuilder metaStr = new StringBuilder();
+        if (!eps.isEmpty() && !eps.equals("0")) {
+            metaStr.append(eps).append(" Ep");
+        }
+        if (!duration.isEmpty()) {
+            if (metaStr.length() > 0) metaStr.append(" · ");
+            metaStr.append(duration);
+        }
+        if (metaStr.length() == 0 && !type.isEmpty()) {
+            metaStr.append(type);
+        }
+        holder.tvMeta.setText(metaStr.length() > 0 ? metaStr.toString() : "Tatap Anime");
 
         ImageLoader.load(poster, holder.ivPoster);
 
@@ -74,7 +114,7 @@ public class AnimeAdapter extends RecyclerView.Adapter<AnimeAdapter.AnimeViewHol
 
     public static class AnimeViewHolder extends RecyclerView.ViewHolder {
         ImageView ivPoster;
-        TextView tvTitle, tvMeta, tvBadgeEp;
+        TextView tvTitle, tvMeta, tvBadgeEp, tvBadgeScore, tvBadgeType;
 
         public AnimeViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -82,6 +122,8 @@ public class AnimeAdapter extends RecyclerView.Adapter<AnimeAdapter.AnimeViewHol
             tvTitle = itemView.findViewById(R.id.tv_title);
             tvMeta = itemView.findViewById(R.id.tv_meta);
             tvBadgeEp = itemView.findViewById(R.id.tv_badge_ep);
+            tvBadgeScore = itemView.findViewById(R.id.tv_badge_score);
+            tvBadgeType = itemView.findViewById(R.id.tv_badge_type);
         }
     }
 }

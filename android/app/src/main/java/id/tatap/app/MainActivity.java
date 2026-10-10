@@ -27,6 +27,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -43,14 +44,24 @@ public class MainActivity extends Activity {
     private static final String TAG = "TatapMain";
 
     private EditText etSearch;
+    private TextView btnClearSearch;
     private ProgressBar pbLoading;
     private TextView tvSectionTitle, tvItemCount, tvStatusBadge, tvPageIndicator;
     private RecyclerView rvGrid;
     private AnimeAdapter adapter;
+    private SwipeRefreshLayout swipeRefreshLayout;
 
-    private Button btnTabMusim, btnTabAiring, btnTabKatalog;
-    private Button btnPrevPage, btnNextPage;
+    // Header Quick Actions
+    private TextView btnHeaderAi, btnHeaderGenre, btnHeaderHelp;
+
+    // Segmented Tabs & Pagination
+    private TextView btnTabMusim, btnTabAiring, btnTabKatalog;
+    private TextView btnPrevPage, btnNextPage;
     private View layoutPagination;
+
+    // Empty / Error State Layout
+    private View layoutEmptyState;
+    private TextView tvEmptyTitle, tvEmptyDesc, btnEmptyRetry;
 
     // Command Banner & Active Filter Bar Widgets
     private View layoutCommandBanner;
@@ -80,12 +91,18 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         etSearch = findViewById(R.id.et_search);
+        btnClearSearch = findViewById(R.id.btn_clear_search);
         pbLoading = findViewById(R.id.pb_loading);
         tvSectionTitle = findViewById(R.id.tv_section_title);
         tvItemCount = findViewById(R.id.tv_item_count);
         tvStatusBadge = findViewById(R.id.tv_status_badge);
         tvPageIndicator = findViewById(R.id.tv_page_indicator);
         rvGrid = findViewById(R.id.rv_anime_grid);
+        swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout);
+
+        btnHeaderAi = findViewById(R.id.btn_header_ai);
+        btnHeaderGenre = findViewById(R.id.btn_header_genre);
+        btnHeaderHelp = findViewById(R.id.btn_header_help);
 
         btnTabMusim = findViewById(R.id.btn_tab_musim);
         btnTabAiring = findViewById(R.id.btn_tab_airing);
@@ -93,6 +110,11 @@ public class MainActivity extends Activity {
         btnPrevPage = findViewById(R.id.btn_prev_page);
         btnNextPage = findViewById(R.id.btn_next_page);
         layoutPagination = findViewById(R.id.layout_pagination);
+
+        layoutEmptyState = findViewById(R.id.layout_empty_state);
+        tvEmptyTitle = findViewById(R.id.tv_empty_title);
+        tvEmptyDesc = findViewById(R.id.tv_empty_desc);
+        btnEmptyRetry = findViewById(R.id.btn_empty_retry);
 
         // Command HUD & Filter Bar
         layoutCommandBanner = findViewById(R.id.layout_command_banner);
@@ -171,6 +193,56 @@ public class MainActivity extends Activity {
 
         if (btnClearFilter != null) {
             btnClearFilter.setOnClickListener(v -> resetFiltersToTab("musim"));
+        }
+
+        if (btnHeaderAi != null) {
+            btnHeaderAi.setOnClickListener(v -> showAiSettingsDialog());
+        }
+
+        if (btnHeaderGenre != null) {
+            btnHeaderGenre.setOnClickListener(v -> showGenreSelectorDialog());
+        }
+
+        if (btnHeaderHelp != null) {
+            btnHeaderHelp.setOnClickListener(v -> showCommandHelpDialog());
+        }
+
+        if (btnClearSearch != null) {
+            btnClearSearch.setOnClickListener(v -> {
+                etSearch.setText("");
+                if ("cari".equals(currentView)) {
+                    resetFiltersToTab("musim");
+                }
+            });
+        }
+
+        etSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (btnClearSearch != null) {
+                    btnClearSearch.setVisibility(s != null && s.length() > 0 ? View.VISIBLE : View.GONE);
+                }
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setColorSchemeColors(0xFF00DBEB, 0xFF0E7490);
+            swipeRefreshLayout.setProgressBackgroundColorSchemeColor(0xFF0E121C);
+            swipeRefreshLayout.setOnRefreshListener(this::fetchData);
+        }
+
+        if (btnEmptyRetry != null) {
+            btnEmptyRetry.setOnClickListener(v -> fetchData());
+        }
+
+        if (tvStatusBadge != null) {
+            tvStatusBadge.setOnClickListener(v -> checkBackendStatus());
         }
     }
 
@@ -899,13 +971,24 @@ public class MainActivity extends Activity {
                 conn.disconnect();
                 runOnUiThread(() -> {
                     if (code == 200) {
+                        tvStatusBadge.setText("● ONLINE");
+                        tvStatusBadge.setTextColor(0xFF10B981);
+                        tvStatusBadge.setBackgroundResource(R.drawable.bg_status_pill);
                         showCommandOutput("> tatap$ [PONG] Backend ONLINE (127.0.0.1:8767 OK, " + elapsed + "ms)", false);
                     } else {
+                        tvStatusBadge.setText("● OFFLINE");
+                        tvStatusBadge.setTextColor(0xFFEF4444);
+                        tvStatusBadge.setBackgroundResource(R.drawable.bg_status_pill_err);
                         showCommandOutput("> tatap$ [WARN] Backend responded HTTP " + code, true);
                     }
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> showCommandOutput("> tatap$ [OFFLINE] Backend tidak terhubung: " + e.getMessage(), true));
+                runOnUiThread(() -> {
+                    tvStatusBadge.setText("● OFFLINE");
+                    tvStatusBadge.setTextColor(0xFFEF4444);
+                    tvStatusBadge.setBackgroundResource(R.drawable.bg_status_pill_err);
+                    showCommandOutput("> tatap$ [OFFLINE] Backend tidak terhubung: " + e.getMessage(), true);
+                });
             }
         }).start();
     }
@@ -919,14 +1002,18 @@ public class MainActivity extends Activity {
     }
 
     private void updateTabButtons() {
-        btnTabMusim.setBackgroundColor("musim".equals(currentView) ? 0xFF0E7490 : 0xFF161A24);
-        btnTabMusim.setTextColor("musim".equals(currentView) ? 0xFFFFFFFF : 0xFF8892B0);
+        boolean isMusim = "musim".equals(currentView);
+        boolean isAiring = "airing".equals(currentView);
+        boolean isKatalog = "katalog".equals(currentView);
 
-        btnTabAiring.setBackgroundColor("airing".equals(currentView) ? 0xFF0E7490 : 0xFF161A24);
-        btnTabAiring.setTextColor("airing".equals(currentView) ? 0xFFFFFFFF : 0xFF8892B0);
+        btnTabMusim.setBackgroundResource(isMusim ? R.drawable.bg_tab_active : R.drawable.bg_tab_inactive);
+        btnTabMusim.setTextColor(isMusim ? 0xFFFFFFFF : 0xFF8892B0);
 
-        btnTabKatalog.setBackgroundColor("katalog".equals(currentView) ? 0xFF0E7490 : 0xFF161A24);
-        btnTabKatalog.setTextColor("katalog".equals(currentView) ? 0xFFFFFFFF : 0xFF8892B0);
+        btnTabAiring.setBackgroundResource(isAiring ? R.drawable.bg_tab_active : R.drawable.bg_tab_inactive);
+        btnTabAiring.setTextColor(isAiring ? 0xFFFFFFFF : 0xFF8892B0);
+
+        btnTabKatalog.setBackgroundResource(isKatalog ? R.drawable.bg_tab_active : R.drawable.bg_tab_inactive);
+        btnTabKatalog.setTextColor(isKatalog ? 0xFFFFFFFF : 0xFF8892B0);
     }
 
     private void hideKeyboard() {
@@ -975,27 +1062,31 @@ public class MainActivity extends Activity {
             final boolean isReady = ready;
             if (isReady) {
                 runOnUiThread(() -> {
-                    tvStatusBadge.setText("LOCAL OK");
+                    tvStatusBadge.setText("● ONLINE");
                     tvStatusBadge.setTextColor(0xFF10B981);
+                    tvStatusBadge.setBackgroundResource(R.drawable.bg_status_pill);
                     fetchData();
                 });
             } else if (attempt < 45) { // Coba sampai ~22 detik
                 runOnUiThread(() -> {
                     if (attempt % 5 == 0 && attempt > 0) {
-                        tvStatusBadge.setText("INIT " + (attempt * 2) + "%");
+                        tvStatusBadge.setText("● INIT " + (attempt * 2) + "%");
                         tvStatusBadge.setTextColor(0xFFF59E0B);
+                        tvStatusBadge.setBackgroundResource(R.drawable.bg_status_pill_warn);
                     }
                 });
                 try { Thread.sleep(500); } catch (Exception ignored) {}
                 waitForServerAndLoadCatalog(attempt + 1);
             } else {
                 runOnUiThread(() -> {
-                    tvStatusBadge.setText("OFFLINE (TAP)");
+                    tvStatusBadge.setText("● OFFLINE");
                     tvStatusBadge.setTextColor(0xFFEF4444);
+                    tvStatusBadge.setBackgroundResource(R.drawable.bg_status_pill_err);
                     showCommandOutput("> tatap$ Server butuh inisialisasi lebih lama. Ketuk badge status untuk mencoba ulang.", true);
                     tvStatusBadge.setOnClickListener(v -> {
-                        tvStatusBadge.setText("RETRYING...");
+                        tvStatusBadge.setText("● RETRYING...");
                         tvStatusBadge.setTextColor(0xFFF59E0B);
+                        tvStatusBadge.setBackgroundResource(R.drawable.bg_status_pill_warn);
                         startEmbeddedBackend();
                         waitForServerAndLoadCatalog(0);
                     });
@@ -1006,9 +1097,10 @@ public class MainActivity extends Activity {
     }
 
     private void fetchData() {
-        pbLoading.setVisibility(View.VISIBLE);
+        if (pbLoading != null) pbLoading.setVisibility(View.VISIBLE);
         tvPageIndicator.setText("Hal " + currentPage);
         btnPrevPage.setEnabled(currentPage > 1);
+        btnPrevPage.setAlpha(currentPage > 1 ? 1.0f : 0.4f);
 
         String title;
         String endpoint;
@@ -1061,23 +1153,53 @@ public class MainActivity extends Activity {
 
                     final int count = list.size();
                     runOnUiThread(() -> {
-                        pbLoading.setVisibility(View.GONE);
+                        if (pbLoading != null) pbLoading.setVisibility(View.GONE);
+                        if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                         tvItemCount.setText(count + " judul");
                         adapter.setData(list);
                         btnNextPage.setEnabled(count >= 10);
-                        if (rvGrid != null) rvGrid.scrollToPosition(0);
+                        btnNextPage.setAlpha(count >= 10 ? 1.0f : 0.4f);
+
+                        if (count == 0) {
+                            if (layoutEmptyState != null) {
+                                layoutEmptyState.setVisibility(View.VISIBLE);
+                                tvEmptyTitle.setText("Tidak Ada Anime Ditemukan");
+                                tvEmptyDesc.setText("Tidak ada judul anime yang cocok dengan filter atau pencarian ini.");
+                            }
+                            if (rvGrid != null) rvGrid.setVisibility(View.GONE);
+                        } else {
+                            if (layoutEmptyState != null) layoutEmptyState.setVisibility(View.GONE);
+                            if (rvGrid != null) {
+                                rvGrid.setVisibility(View.VISIBLE);
+                                rvGrid.scrollToPosition(0);
+                            }
+                        }
                     });
                 } else {
                     final String err = res.optString("error", "gagal memuat data");
                     runOnUiThread(() -> {
-                        pbLoading.setVisibility(View.GONE);
+                        if (pbLoading != null) pbLoading.setVisibility(View.GONE);
+                        if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                         showCommandOutput("> tatap$ [ERROR] " + err, true);
+                        if (adapter.getItemCount() == 0 && layoutEmptyState != null) {
+                            layoutEmptyState.setVisibility(View.VISIBLE);
+                            if (rvGrid != null) rvGrid.setVisibility(View.GONE);
+                            tvEmptyTitle.setText("Gagal Memuat Data");
+                            tvEmptyDesc.setText(err);
+                        }
                     });
                 }
             } catch (Exception e) {
                 runOnUiThread(() -> {
-                    pbLoading.setVisibility(View.GONE);
+                    if (pbLoading != null) pbLoading.setVisibility(View.GONE);
+                    if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                     showCommandOutput("> tatap$ [ERROR] Gagal terhubung: " + e.getMessage(), true);
+                    if (adapter.getItemCount() == 0 && layoutEmptyState != null) {
+                        layoutEmptyState.setVisibility(View.VISIBLE);
+                        if (rvGrid != null) rvGrid.setVisibility(View.GONE);
+                        tvEmptyTitle.setText("Koneksi Terputus");
+                        tvEmptyDesc.setText(e.getMessage());
+                    }
                 });
             }
         }).start();
