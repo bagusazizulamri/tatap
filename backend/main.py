@@ -124,10 +124,18 @@ async def seasonal(which: str = Query("", pattern="^(now|prev|airing)$|^$"),
                 hi_data["cached"] = False
                 return ok(hi_data)
 
+        is_future = False
         if season and year >= 1900:
             season_name = season
             season_year = year
             cache_id = f"{season}_{year}"
+            cur_year, cur_season = al.current_season()
+            order = ["winter", "spring", "summer", "fall"]
+            try:
+                if year > cur_year or (year == cur_year and order.index(season.lower()) > order.index(cur_season.lower())):
+                    is_future = True
+            except ValueError:
+                pass
         else:
             year_cur, name_cur = al.current_season()
             if which == "now":
@@ -138,7 +146,7 @@ async def seasonal(which: str = Query("", pattern="^(now|prev|airing)$|^$"),
                 season_name, season_year = name_cur, year_cur
             cache_id = which or "now"
 
-        key = f"seasonal|{cache_id}|page={page}"
+        key = f"seasonal_v2|{cache_id}|page={page}"
         hit = await get_browse_cache(key)
         if hit:
             hit["cached"] = True
@@ -146,14 +154,17 @@ async def seasonal(which: str = Query("", pattern="^(now|prev|airing)$|^$"),
             hit["year"] = season_year
             return ok(hit)
 
+        status_in = None if is_future else ["RELEASING", "FINISHED"]
         page_data = await loop.run_in_executor(
-            None, lambda: al.season_page(season_name, season_year, page, 25))
+            None, lambda: al.season_page(season_name, season_year, page, 25, status_in=status_in))
 
         # Kumpulkan judul dulu, lalu batch-match slug paralel dengan validasi judul & season.
         media_list = (page_data or {}).get("media") or []
         title_pairs = []
         media_by_title = {}
         for m in media_list:
+            if not is_future and m.get("status") == "NOT_YET_RELEASED":
+                continue
             t_en = (m.get("title") or {}).get("english") or ""
             t_ro = (m.get("title") or {}).get("romaji") or ""
             primary_title = t_en or t_ro or ""
@@ -179,6 +190,7 @@ async def seasonal(which: str = Query("", pattern="^(now|prev|airing)$|^$"),
                 "eps": m.get("episodes") or 0,
                 "duration": (str(m.get("duration") or "") + "m") if m.get("duration") else "",
                 "score": (m.get("averageScore") or 0) / 10.0 if m.get("averageScore") else 0,
+                "status": (m.get("status") or "").lower(),
                 "anilist_id": m.get("id"),
                 "site": m.get("siteUrl") or "",
                 "matched": True,
@@ -186,9 +198,11 @@ async def seasonal(which: str = Query("", pattern="^(now|prev|airing)$|^$"),
 
         # Fallback jika AniList diblokir ISP / offline / kosong
         if not items_out:
-            fallback_filter = {"sort": "trending"} if which == "now" else {"status": "releasing"}
+            fallback_filter = {"status": "releasing", "sort": "trending"} if which == "now" else {"status": "releasing"}
             if season and year:
                 fallback_filter["season"] = season_name
+                if not is_future:
+                    fallback_filter["status"] = "releasing"
             hi_data = await loop.run_in_executor(None, lambda: hi.browse(fallback_filter, page))
             if hi_data and hi_data.get("items"):
                 items_out = hi_data.get("items")

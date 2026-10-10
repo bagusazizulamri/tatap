@@ -8,11 +8,12 @@ ANILIST_URL = "https://graphql.anilist.co"
 UA = HI_UA
 
 QUERY = """
-query ($season: MediaSeason, $year: Int, $page: Int, $perPage: Int) {
+query ($season: MediaSeason, $year: Int, $page: Int, $perPage: Int, $statusIn: [MediaStatus]) {
   Page(page: $page, perPage: $perPage) {
     pageInfo { total perPage currentPage lastPage hasNextPage }
-    media(season: $season, seasonYear: $year, type: ANIME, sort: POPULARITY_DESC) {
+    media(season: $season, seasonYear: $year, status_in: $statusIn, type: ANIME, sort: POPULARITY_DESC) {
       id
+      status
       title { romaji english }
       format
       episodes
@@ -55,14 +56,21 @@ def _get_al_client():
         )
     return _al_client
 
-def season_page(name, year, page=1, per_page=25):
+def season_page(name, year, page=1, per_page=25, status_in=None):
     """Fetch satu halaman AniList untuk season/year tertentu. Return {pageInfo, media:[]}."""
     try:
         c = _get_al_client()
+        variables = {
+            "season": name.upper(),
+            "year": year,
+            "page": page,
+            "perPage": per_page
+        }
+        if status_in:
+            variables["statusIn"] = status_in
         r = c.post(ANILIST_URL, json={
             "query": QUERY,
-            "variables": {"season": name.upper(), "year": year,
-                          "page": page, "perPage": per_page}
+            "variables": variables
         })
         if r.status_code != 200:
             return {"pageInfo": {"total": 0, "perPage": per_page, "currentPage": page,
