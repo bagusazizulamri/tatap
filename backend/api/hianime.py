@@ -131,9 +131,12 @@ def scrape_genres():
     for m in re.finditer(
         r'<a href="https?://hianime\.at/genres/([a-z0-9-]+)"\s+title="([^"]+)"',
         html):
-        slug = m.group(1)
+        slug = m.group(1).lower()
         title = htmlmod.unescape(m.group(2)).strip()
         if slug in seen or not slug or not title:
+            continue
+        # Sembunyikan genre hentai dari list
+        if slug == "hentai" or "hentai" in title.lower():
             continue
         seen.add(slug)
         out.append({"slug": slug, "title": title})

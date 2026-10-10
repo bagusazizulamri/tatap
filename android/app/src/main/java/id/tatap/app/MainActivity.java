@@ -529,7 +529,12 @@ public class MainActivity extends Activity {
                     JSONArray arr = res.getJSONObject("data").getJSONArray("list");
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject g = arr.getJSONObject(i);
-                        list.add(new GenreItem(g.optString("title", ""), g.optString("slug", "")));
+                        String slug = g.optString("slug", "");
+                        String title = g.optString("title", "");
+                        if ("hentai".equalsIgnoreCase(slug) || title.toLowerCase().contains("hentai")) {
+                            continue;
+                        }
+                        list.add(new GenreItem(title, slug));
                     }
                 }
             } catch (Exception ignored) {}

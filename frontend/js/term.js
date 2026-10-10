@@ -240,7 +240,10 @@ var Tui = (function () {
   async function loadGenres(){
     if(_genreList)return _genreList;
     var r=await window.Tatap.genres();
-    _genreList=(r&&r.success&&r.data&&r.data.list)||[];
+    var raw=(r&&r.success&&r.data&&r.data.list)||[];
+    _genreList=raw.filter(function(g){
+      return (g.slug||"").toLowerCase()!=="hentai" && (g.title||"").toLowerCase().indexOf("hentai")<0;
+    });
     return _genreList;
   }
   async function openGenreModal(){

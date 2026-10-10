@@ -88,12 +88,14 @@ async def genres():
     try:
         key = "genres|list"
         hit = await get_browse_cache(key, ttl=24*3600)
-        if hit:
-            return ok({"list": hit["list"], "cached": True})
+        if hit and hit.get("list"):
+            filtered = [g for g in hit["list"] if (g.get("slug") or "").lower() != "hentai" and "hentai" not in (g.get("title") or "").lower()]
+            return ok({"list": filtered, "cached": True})
         loop = asyncio.get_running_loop()
         out = await loop.run_in_executor(None, hi.scrape_genres)
-        await set_browse_cache(key, {"list": out})
-        return ok({"list": out, "cached": False})
+        filtered = [g for g in out if (g.get("slug") or "").lower() != "hentai" and "hentai" not in (g.get("title") or "").lower()]
+        await set_browse_cache(key, {"list": filtered})
+        return ok({"list": filtered, "cached": False})
     except Exception as e:
         return fail(str(e))
 
