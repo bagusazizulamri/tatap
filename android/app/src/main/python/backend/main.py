@@ -1064,7 +1064,15 @@ async def history():
 @app.post("/api/history")
 async def save_hist(body: dict = None):
     body = body or {}
-    await add_history(body.get("slug",""), body.get("title",""), int(body.get("episode",1)), body.get("mode","sub"))
+    await add_history(
+        body.get("slug", ""),
+        body.get("title", ""),
+        int(body.get("episode", 1)),
+        body.get("mode", "sub"),
+        int(body.get("progress", 0)),
+        body.get("poster", ""),
+        body.get("type", "")
+    )
     return ok(True)
 
 @app.delete("/api/history")

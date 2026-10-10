@@ -144,10 +144,36 @@ public class DetailActivity extends Activity {
                 .putBoolean("watched_" + slug + "_" + ep, true)
                 .apply();
 
+        // Rekam riwayat tontonan ke backend lokal
+        new Thread(() -> {
+            try {
+                JSONObject b = new JSONObject();
+                b.put("slug", slug);
+                b.put("title", title != null ? title : slug);
+                b.put("episode", ep);
+                b.put("poster", poster != null ? poster : "");
+                b.put("type", type != null ? type : "");
+                b.put("mode", "sub");
+
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/history").openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setDoOutput(true);
+                conn.setConnectTimeout(3000);
+                java.io.OutputStream os = conn.getOutputStream();
+                os.write(b.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                os.close();
+                conn.getResponseCode();
+                conn.disconnect();
+            } catch (Exception ignored) {}
+        }).start();
+
         Intent intent = new Intent(DetailActivity.this, PlayerActivity.class);
         intent.putExtra("slug", slug);
         intent.putExtra("ep", ep);
         intent.putExtra("title", title);
+        intent.putExtra("poster", poster);
+        intent.putExtra("type", type);
         startActivity(intent);
     }
 

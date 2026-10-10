@@ -70,8 +70,13 @@ public class AnimeAdapter extends RecyclerView.Adapter<AnimeAdapter.AnimeViewHol
             holder.tvBadgeScore.setVisibility(View.GONE);
         }
 
-        // Format Subtitle / Status Badge
-        if (!sub.isEmpty()) {
+        int episode = item.optInt("episode", 0);
+        String playedAt = item.optString("played_at", "");
+
+        // Format Subtitle / Status / History Badge
+        if (episode > 0) {
+            holder.tvBadgeEp.setText("▶ EP " + episode);
+        } else if (!sub.isEmpty()) {
             holder.tvBadgeEp.setText("SUB " + sub.toUpperCase());
         } else if (!eps.isEmpty() && !eps.equals("0")) {
             holder.tvBadgeEp.setText("EP " + eps);
@@ -81,15 +86,19 @@ public class AnimeAdapter extends RecyclerView.Adapter<AnimeAdapter.AnimeViewHol
 
         // Format Meta Info
         StringBuilder metaStr = new StringBuilder();
-        if (!eps.isEmpty() && !eps.equals("0")) {
-            metaStr.append(eps).append(" Ep");
-        }
-        if (!duration.isEmpty()) {
-            if (metaStr.length() > 0) metaStr.append(" · ");
-            metaStr.append(duration);
-        }
-        if (metaStr.length() == 0 && !type.isEmpty()) {
-            metaStr.append(type);
+        if (!playedAt.isEmpty()) {
+            metaStr.append("Diputar: ").append(playedAt.length() >= 16 ? playedAt.substring(5, 16) : playedAt);
+        } else {
+            if (!eps.isEmpty() && !eps.equals("0")) {
+                metaStr.append(eps).append(" Ep");
+            }
+            if (!duration.isEmpty()) {
+                if (metaStr.length() > 0) metaStr.append(" · ");
+                metaStr.append(duration);
+            }
+            if (metaStr.length() == 0 && !type.isEmpty()) {
+                metaStr.append(type);
+            }
         }
         holder.tvMeta.setText(metaStr.length() > 0 ? metaStr.toString() : "Tatap Anime");
 

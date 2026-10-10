@@ -29,6 +29,14 @@ async def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT, title TEXT,
             episode INTEGER, mode TEXT DEFAULT 'sub', progress INTEGER DEFAULT 0,
             played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+        try:
+            await db.execute("ALTER TABLE watch_history ADD COLUMN poster TEXT DEFAULT ''")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE watch_history ADD COLUMN type TEXT DEFAULT ''")
+        except Exception:
+            pass
         await db.execute("""CREATE TABLE IF NOT EXISTS settings(
             key TEXT PRIMARY KEY, value TEXT)""")
         await db.execute("""CREATE TABLE IF NOT EXISTS browse_cache(
@@ -112,17 +120,23 @@ async def set_episode_cache(slug, ep, mode, master, variants, sub, sub_lang, ref
              referer or "", server or "", subs_json, _now()))
         await db.commit()
 
-async def add_history(slug, title, episode, mode="sub", progress=0):
+async def add_history(slug, title, episode, mode="sub", progress=0, poster="", type=""):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("INSERT INTO watch_history(slug,title,episode,mode,progress) VALUES(?,?,?,?,?)",
-                         (slug, title, episode, mode, progress))
+        if slug:
+            await db.execute("DELETE FROM watch_history WHERE slug=?", (slug,))
+        await db.execute("INSERT INTO watch_history(slug,title,episode,mode,progress,poster,type,played_at) VALUES(?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
+                         (slug, title, episode, mode, progress, poster or "", type or ""))
         await db.commit()
 
 async def get_history(limit=50):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM watch_history ORDER BY played_at DESC LIMIT ?", (limit,)) as cur:
-            return [dict(r) for r in await cur.fetchall()]
+            rows = [dict(r) for r in await cur.fetchall()]
+            for r in rows:
+                if "slug" in r and r["slug"]:
+                    r["id"] = r["slug"]
+            return rows
 
 async def clear_history():
     async with aiosqlite.connect(DB_PATH) as db:

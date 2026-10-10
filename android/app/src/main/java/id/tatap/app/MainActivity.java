@@ -1,6 +1,7 @@
 package id.tatap.app;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Color;
@@ -52,7 +53,7 @@ public class MainActivity extends Activity {
     private SwipeRefreshLayout swipeRefreshLayout;
 
     // Header Quick Actions
-    private TextView btnHeaderAi, btnHeaderGenre, btnHeaderHelp;
+    private TextView btnHeaderAi, btnHeaderGenre, btnHeaderHelp, btnHeaderHistory;
 
     // Segmented Tabs & Pagination
     private TextView btnTabMusim, btnTabAiring, btnTabKatalog;
@@ -70,6 +71,7 @@ public class MainActivity extends Activity {
     private View layoutActiveFilter;
     private TextView tvActiveFilterLabel;
     private Button btnClearFilter;
+    private TextView btnClearHistoryAll;
 
     private final Handler bannerHandler = new Handler(Looper.getMainLooper());
     private final Runnable hideBannerRunnable = () -> {
@@ -77,7 +79,7 @@ public class MainActivity extends Activity {
     };
 
     // State navigasi tampilan & paging
-    private String currentView = "musim"; // "musim" | "airing" | "katalog" | "cari" | "genre" | "season_filter"
+    private String currentView = "musim"; // "musim" | "airing" | "katalog" | "cari" | "genre" | "season_filter" | "riwayat"
     private String currentSearchQuery = "";
     private String currentGenre = "";
     private String currentSeasonName = "";
@@ -103,6 +105,7 @@ public class MainActivity extends Activity {
         btnHeaderAi = findViewById(R.id.btn_header_ai);
         btnHeaderGenre = findViewById(R.id.btn_header_genre);
         btnHeaderHelp = findViewById(R.id.btn_header_help);
+        btnHeaderHistory = findViewById(R.id.btn_header_history);
 
         btnTabMusim = findViewById(R.id.btn_tab_musim);
         btnTabAiring = findViewById(R.id.btn_tab_airing);
@@ -123,6 +126,7 @@ public class MainActivity extends Activity {
         layoutActiveFilter = findViewById(R.id.layout_active_filter);
         tvActiveFilterLabel = findViewById(R.id.tv_active_filter_label);
         btnClearFilter = findViewById(R.id.btn_clear_filter);
+        btnClearHistoryAll = findViewById(R.id.btn_clear_history_all);
 
         rvGrid.setLayoutManager(new GridLayoutManager(this, 2));
         adapter = new AnimeAdapter(this);
@@ -207,6 +211,14 @@ public class MainActivity extends Activity {
             btnHeaderHelp.setOnClickListener(v -> showCommandHelpDialog());
         }
 
+        if (btnHeaderHistory != null) {
+            btnHeaderHistory.setOnClickListener(v -> switchView("riwayat"));
+        }
+
+        if (btnClearHistoryAll != null) {
+            btnClearHistoryAll.setOnClickListener(v -> confirmAndClearHistory());
+        }
+
         if (btnClearSearch != null) {
             btnClearSearch.setOnClickListener(v -> {
                 etSearch.setText("");
@@ -262,14 +274,22 @@ public class MainActivity extends Activity {
         if ("genre".equals(currentView)) {
             layoutActiveFilter.setVisibility(View.VISIBLE);
             tvActiveFilterLabel.setText("🏷 GENRE: " + currentGenre.toUpperCase().replace("-", " "));
+            if (btnClearHistoryAll != null) btnClearHistoryAll.setVisibility(View.GONE);
         } else if ("season_filter".equals(currentView)) {
             layoutActiveFilter.setVisibility(View.VISIBLE);
             tvActiveFilterLabel.setText("❄ MUSIM: " + currentSeasonName.toUpperCase() + " " + currentSeasonYear);
+            if (btnClearHistoryAll != null) btnClearHistoryAll.setVisibility(View.GONE);
         } else if ("cari".equals(currentView)) {
             layoutActiveFilter.setVisibility(View.VISIBLE);
             tvActiveFilterLabel.setText("🔍 CARI: \"" + currentSearchQuery + "\"");
+            if (btnClearHistoryAll != null) btnClearHistoryAll.setVisibility(View.GONE);
+        } else if ("riwayat".equals(currentView)) {
+            layoutActiveFilter.setVisibility(View.VISIBLE);
+            tvActiveFilterLabel.setText("🕒 RIWAYAT TONTONAN");
+            if (btnClearHistoryAll != null) btnClearHistoryAll.setVisibility(View.VISIBLE);
         } else {
             layoutActiveFilter.setVisibility(View.GONE);
+            if (btnClearHistoryAll != null) btnClearHistoryAll.setVisibility(View.GONE);
         }
     }
 
@@ -387,6 +407,17 @@ public class MainActivity extends Activity {
             case "model":
             case "apiurl":
                 cmdTranslateSetting(cmd, args);
+                break;
+
+            case "riwayat":
+            case "history":
+            case "lanjutan":
+                if (args.equalsIgnoreCase("clear") || args.equalsIgnoreCase("hapus") || args.equalsIgnoreCase("reset")) {
+                    clearWatchHistory();
+                } else {
+                    switchView("riwayat");
+                    showCommandOutput("> tatap$ :riwayat [Menampilkan Riwayat Tontonan]", false);
+                }
                 break;
 
             case "logs":
@@ -611,6 +642,14 @@ public class MainActivity extends Activity {
             dialog.dismiss();
             showTranslateLogsDialog();
         });
+
+        View itemRiwayat = dialog.findViewById(R.id.cmd_item_riwayat);
+        if (itemRiwayat != null) {
+            itemRiwayat.setOnClickListener(v -> {
+                dialog.dismiss();
+                switchView("riwayat");
+            });
+        }
 
         dialog.findViewById(R.id.cmd_item_clear).setOnClickListener(v -> {
             dialog.dismiss();
@@ -1005,6 +1044,7 @@ public class MainActivity extends Activity {
         boolean isMusim = "musim".equals(currentView);
         boolean isAiring = "airing".equals(currentView);
         boolean isKatalog = "katalog".equals(currentView);
+        boolean isRiwayat = "riwayat".equals(currentView);
 
         btnTabMusim.setBackgroundResource(isMusim ? R.drawable.bg_tab_active : R.drawable.bg_tab_inactive);
         btnTabMusim.setTextColor(isMusim ? 0xFFFFFFFF : 0xFF8892B0);
@@ -1014,6 +1054,10 @@ public class MainActivity extends Activity {
 
         btnTabKatalog.setBackgroundResource(isKatalog ? R.drawable.bg_tab_active : R.drawable.bg_tab_inactive);
         btnTabKatalog.setTextColor(isKatalog ? 0xFFFFFFFF : 0xFF8892B0);
+
+        if (btnHeaderHistory != null) {
+            btnHeaderHistory.setTextColor(isRiwayat ? 0xFF00DBEB : 0xFF94A3B8);
+        }
     }
 
     private void hideKeyboard() {
@@ -1120,12 +1164,18 @@ public class MainActivity extends Activity {
         } else if ("season_filter".equals(currentView)) {
             title = "Musim: " + currentSeasonName.toUpperCase() + " " + currentSeasonYear + " (Hal " + currentPage + ")";
             endpoint = "/api/seasonal?season=" + URLEncoder.encode(currentSeasonName) + "&year=" + currentSeasonYear + "&page=" + currentPage;
+        } else if ("riwayat".equals(currentView)) {
+            title = "Riwayat Tontonan";
+            endpoint = "/api/history";
         } else {
             title = "Hasil Pencarian: " + currentSearchQuery;
             endpoint = "/api/search?q=" + URLEncoder.encode(currentSearchQuery) + "&limit=24";
         }
 
         tvSectionTitle.setText(title);
+        if (layoutPagination != null) {
+            layoutPagination.setVisibility("riwayat".equals(currentView) ? View.GONE : View.VISIBLE);
+        }
 
         new Thread(() -> {
             try {
@@ -1141,9 +1191,14 @@ public class MainActivity extends Activity {
 
                 JSONObject res = new JSONObject(sb.toString());
                 if (res.optBoolean("success")) {
-                    JSONObject data = res.getJSONObject("data");
-                    JSONArray arr = data.optJSONArray("results");
-                    if (arr == null) arr = data.optJSONArray("items");
+                    JSONArray arr = res.optJSONArray("data");
+                    if (arr == null) {
+                        JSONObject data = res.optJSONObject("data");
+                        if (data != null) {
+                            arr = data.optJSONArray("results");
+                            if (arr == null) arr = data.optJSONArray("items");
+                        }
+                    }
                     if (arr == null) arr = new JSONArray();
 
                     List<JSONObject> list = new ArrayList<>();
@@ -1163,8 +1218,13 @@ public class MainActivity extends Activity {
                         if (count == 0) {
                             if (layoutEmptyState != null) {
                                 layoutEmptyState.setVisibility(View.VISIBLE);
-                                tvEmptyTitle.setText("Tidak Ada Anime Ditemukan");
-                                tvEmptyDesc.setText("Tidak ada judul anime yang cocok dengan filter atau pencarian ini.");
+                                if ("riwayat".equals(currentView)) {
+                                    tvEmptyTitle.setText("Belum Ada Riwayat Tontonan");
+                                    tvEmptyDesc.setText("Anime yang Anda tonton akan otomatis tercatat di sini.");
+                                } else {
+                                    tvEmptyTitle.setText("Tidak Ada Anime Ditemukan");
+                                    tvEmptyDesc.setText("Tidak ada judul anime yang cocok dengan filter atau pencarian ini.");
+                                }
                             }
                             if (rvGrid != null) rvGrid.setVisibility(View.GONE);
                         } else {
@@ -1201,6 +1261,39 @@ public class MainActivity extends Activity {
                         tvEmptyDesc.setText(e.getMessage());
                     }
                 });
+            }
+        }).start();
+    }
+
+    private void confirmAndClearHistory() {
+        new AlertDialog.Builder(this)
+                .setTitle("Hapus Riwayat?")
+                .setMessage("Seluruh riwayat anime yang pernah Anda tonton akan dibersihkan.")
+                .setPositiveButton("Hapus Semua", (d, w) -> clearWatchHistory())
+                .setNegativeButton("Batal", null)
+                .show();
+    }
+
+    private void clearWatchHistory() {
+        showCommandOutput("> tatap$ Menghapus riwayat tontonan...", false);
+        new Thread(() -> {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:8767/api/history").openConnection();
+                conn.setRequestMethod("DELETE");
+                conn.setConnectTimeout(3000);
+                conn.getResponseCode();
+                conn.disconnect();
+
+                getSharedPreferences("tatap_history", Context.MODE_PRIVATE).edit().clear().apply();
+
+                runOnUiThread(() -> {
+                    showCommandOutput("> tatap$ [OK] Seluruh riwayat tontonan berhasil dibersihkan", false);
+                    if ("riwayat".equals(currentView)) {
+                        fetchData();
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> showCommandOutput("> tatap$ [ERROR] Gagal hapus riwayat: " + e.getMessage(), true));
             }
         }).start();
     }

@@ -444,6 +444,34 @@
                     android:fontFamily="monospace" />
             </LinearLayout>
 
+            <!-- Item: :riwayat -->
+            <LinearLayout
+                android:id="@+id/cmd_item_riwayat"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_command_tag"
+                android:orientation="vertical"
+                android:padding="8dp"
+                android:layout_marginBottom="6dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=":riwayat"
+                    android:textColor="#00DBEB"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Buka daftar riwayat anime yang pernah Anda tonton (:riwayat clear untuk hapus)"
+                    android:textColor="#8892B0"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace" />
+            </LinearLayout>
+
             <!-- Item: :clear -->
             <LinearLayout
                 android:id="@+id/cmd_item_clear"

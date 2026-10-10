@@ -73,6 +73,23 @@
             android:textSize="11sp"
             android:fontFamily="monospace" />
 
+        <!-- Header Quick Action: Watch History Button -->
+        <TextView
+            android:id="@+id/btn_header_history"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_header_button"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:paddingHorizontal="9dp"
+            android:text="🕒 Riwayat"
+            android:textColor="#94A3B8"
+            android:textSize="11sp"
+            android:fontFamily="monospace" />
+
         <!-- Header Quick Action: Terminal Help Button -->
         <TextView
             android:id="@+id/btn_header_help"
@@ -249,6 +266,29 @@
                 android:textStyle="bold"
                 android:fontFamily="monospace" />
         </LinearLayout>
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <!-- Tombol Hapus Semua Riwayat (Aktif hanya saat View Riwayat) -->
+        <TextView
+            android:id="@+id/btn_clear_history_all"
+            android:layout_width="wrap_content"
+            android:layout_height="28dp"
+            android:background="@drawable/bg_header_button"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:paddingHorizontal="10dp"
+            android:text="🗑 Hapus Semua"
+            android:textColor="#EF4444"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"
+            android:visibility="gone" />
     </LinearLayout>
 
     <!-- Modern Segmented Tab Switcher (Musim Ini, Masih Tayang, Terpopuler) -->
