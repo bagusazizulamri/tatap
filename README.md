@@ -70,21 +70,21 @@ chmod +x Tatap-x86_64.AppImage
 2. Klik ganda **`Tatap.exe`** (memerlukan Microsoft Edge WebView2 bawaan Windows 10/11).
 3. Backend dan pemutar akan berjalan otomatis dalam jendela native tanpa perlu instalasi Python.
 
-### Android (APK Mandiri / Standalone)
+### Android (Standalone)
 
 1. Unduh **`tatap-release-v2.2.0.apk`** dari halaman [GitHub Releases](https://github.com/bagusazizulamri/tatap/releases).
-2. Instal di smartphone Android (Android 7.0+ / arsitektur arm64-v8a, armeabi-v7a, x86_64).
-3. Buka aplikasi — Tatap menjalankan backend Python lokal otomatis di latar belakang secara mandiri (berjalan di localhost perangkat tanpa butuh PC/server perantara terpisah; streaming & scraping data langsung ke sumber HiAnime).
+2. Instal di smartphone Android (Android 7.0+ / arm64-v8a, armeabi-v7a, x86_64).
+3. Buka aplikasi dan nikmati pengalaman streaming langsung dari perangkat Anda.
 4. **Fitur & Tampilan Android**:
-   - **Desain Minimalis**: Layout bersih, modern, dan bebas distorsi visual/AI-slop.
-   - **Dua Tahap Subtitle Instan**: Subtitle langsung muncul pada detik pertama pemutaran tanpa jeda layar hitam.
+   - **Desain Minimalis**: Layout bersih, modern, dan nyaman di mata.
+   - **Subtitle Instan**: Pemuatan subtitle cepat dan responsif.
    - **Gesture Pemutar Video**:
      - *Double-tap* kiri/kanan: Lompat -10s / +10s dengan animasi ripple ala YouTube.
      - *Double-tap* tengah: Play / Pause seketika.
      - *Swipe vertikal* kiri: Pengaturan Brightness layar dengan OSD HUD.
      - *Swipe vertikal* kanan: Pengaturan Volume audio.
      - *Swipe horizontal*: Scrubbing timeline pencarian detik cepat.
-     - *HUD Buffering Cyber*: Indikator proses buffering video yang informatif dan mulus.
+     - *HUD Buffering*: Indikator proses buffering yang bersih dan informatif.
 
 ---
 
@@ -98,6 +98,6 @@ Jika Tatap bermanfaat buatmu dan ingin mentraktir kopi:
 
 ## Disclaimer & Lisensi
 
-- **Sumber Konten**: Tatap melakukan agregasi dari situs pihak ketiga publik (`hianime.at`, embed stream, dan AniList). Tatap tidak menyimpan atau meng-host file video apa pun.
-- **Penggunaan Pribadi**: Dibuat untuk konsumsi pribadi dan edukasi di komputer lokal (`127.0.0.1`).
+- **Sumber Konten**: Tatap merupakan agregator pemutar pihak ketiga publik. Tatap tidak menyimpan atau meng-host file video apa pun di server sendiri.
+- **Penggunaan Pribadi**: Dibuat untuk konsumsi pribadi dan edukasi.
 - **Lisensi**: GPL-3.0.
