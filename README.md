@@ -74,7 +74,7 @@ chmod +x Tatap-x86_64.AppImage
 
 1. Unduh **`tatap-release-v2.2.0.apk`** dari halaman [GitHub Releases](https://github.com/bagusazizulamri/tatap/releases).
 2. Instal di smartphone Android (Android 7.0+ / arsitektur arm64-v8a, armeabi-v7a, x86_64).
-3. Buka aplikasi — Tatap menjalankan backend Python lokal otomatis di latar belakang secara mandiri (100% offline localhost tanpa butuh PC/server terpisah).
+3. Buka aplikasi — Tatap menjalankan backend Python lokal otomatis di latar belakang secara mandiri (berjalan di localhost perangkat tanpa butuh PC/server perantara terpisah; streaming & scraping data langsung ke sumber HiAnime).
 4. **Fitur & Tampilan Android**:
    - **Desain Minimalis**: Layout bersih, modern, dan bebas distorsi visual/AI-slop.
    - **Dua Tahap Subtitle Instan**: Subtitle langsung muncul pada detik pertama pemutaran tanpa jeda layar hitam.
