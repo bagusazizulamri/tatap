@@ -231,6 +231,24 @@ def detect_provider(apiurl: str) -> str:
     return "custom"
 
 
+def detect_provider_from_key(key: str) -> tuple:
+    """Mengembalikan (provider, default_model, default_apiurl) menyesuaikan apikey dari user."""
+    k = (key or "").strip().strip("\"'").strip()
+    if not k:
+        return ("google", "gemini-3.1-flash-lite", "https://generativelanguage.googleapis.com/v1beta/openai")
+    if k.startswith("gsk_"):
+        return ("groq", "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1")
+    if k.startswith("AQ.") or k.startswith("AIza") or k.startswith("AQ"):
+        return ("google", "gemini-3.1-flash-lite", "https://generativelanguage.googleapis.com/v1beta/openai")
+    if k.startswith("sk-or-"):
+        return ("openrouter", "google/gemini-2.0-flash-exp:free", "https://openrouter.ai/api/v1")
+    if k.startswith("ollama_") or k.startswith("ol_") or (len(k) > 35 and "." in k):
+        return ("ollama", "gpt-oss:20b", "https://ollama.com/v1")
+    if k.startswith("sk-") or k.startswith("sk_"):
+        return ("openai", "gpt-4o-mini", "https://api.openai.com/v1")
+    return ("custom", "gpt-4o-mini", "https://api.openai.com/v1")
+
+
 def _model_chain(prov: str, model: str):
     """Urutan model yang dicoba; model berikutnya dipakai saat limit/402/404."""
     chain = [model]
@@ -1027,8 +1045,17 @@ async def call_openai_translate(cues, src, tgt, apikey, model, apiurl, timeout=1
     if not cues:
         return cues, stats
     apikey = (apikey or "").strip().strip("\"'").strip()
-    apiurl = (apiurl or "https://ollama.com/v1").strip().rstrip("/")
+    apiurl = (apiurl or "https://generativelanguage.googleapis.com/v1beta/openai").strip().rstrip("/")
     prov = detect_provider(apiurl)
+
+    # Otomatis sesuaikan model & apiurl berdasarkan format apikey dari pengguna
+    if apikey:
+        inferred_prov, inferred_model, inferred_url = detect_provider_from_key(apikey)
+        if inferred_prov != "custom" and (prov != inferred_prov or not model):
+            prov = inferred_prov
+            apiurl = inferred_url
+            model = inferred_model
+
     model = (model or "").strip() or _DEFAULT_MODEL[prov]
     model = _LEGACY_MODEL_UPGRADE.get(prov, {}).get(model, model)
     cfg = _PROVIDER_CFG[prov]

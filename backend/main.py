@@ -1094,13 +1094,24 @@ async def get_set():
 @app.post("/api/settings")
 async def set_set(body: dict = None):
     body = body or {}
+    # Otomatis sesuaikan model & apiurl berdasarkan format apikey dari pengguna jika tidak dispesifikasikan eksplisit
+    if "translate_apikey" in body:
+        val = body["translate_apikey"]
+        if isinstance(val, str):
+            val = val.strip().strip("\"'").strip()
+            body["translate_apikey"] = val
+            if val:
+                from api.translate import detect_provider_from_key
+                _, inferred_model, inferred_url = detect_provider_from_key(val)
+                if not body.get("translate_model"):
+                    body["translate_model"] = inferred_model
+                if not body.get("translate_apiurl"):
+                    body["translate_apiurl"] = inferred_url
+
     for k in ("quality", "mode", "player", "sub_lang", "preferred_source",
               "translate_apikey", "translate_model", "translate_apiurl"):
         if k in body:
-            val = body[k]
-            if k == "translate_apikey" and isinstance(val, str):
-                val = val.strip().strip("\"'").strip()
-            await set_setting(k, val)
+            await set_setting(k, body[k])
     return await get_set()
 
 @app.get("/api/translate/logs")

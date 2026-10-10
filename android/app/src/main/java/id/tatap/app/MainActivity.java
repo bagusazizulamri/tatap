@@ -743,6 +743,38 @@ public class MainActivity extends Activity {
 
         btnClose.setOnClickListener(v -> dialog.dismiss());
 
+        etKey.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                String k = s.toString().trim();
+                if (k.startsWith("gsk_")) {
+                    etModel.setText("llama-3.3-70b-versatile");
+                    etUrl.setText("https://api.groq.com/openai/v1");
+                    tvKey.setText("API Key : " + maskKey(k) + " (Groq Cloud)");
+                } else if (k.startsWith("AQ.") || k.startsWith("AIza") || k.startsWith("AQ")) {
+                    etModel.setText("gemini-3.1-flash-lite");
+                    etUrl.setText("https://generativelanguage.googleapis.com/v1beta/openai");
+                    tvKey.setText("API Key : " + maskKey(k) + " (Google AI Studio)");
+                } else if (k.startsWith("sk-or-")) {
+                    etModel.setText("google/gemini-2.0-flash-exp:free");
+                    etUrl.setText("https://openrouter.ai/api/v1");
+                    tvKey.setText("API Key : " + maskKey(k) + " (OpenRouter)");
+                } else if (k.startsWith("ollama_") || k.startsWith("ol_") || (k.length() > 35 && k.contains("."))) {
+                    etModel.setText("gpt-oss:20b");
+                    etUrl.setText("https://ollama.com/v1");
+                    tvKey.setText("API Key : " + maskKey(k) + " (Ollama Cloud)");
+                } else if (k.startsWith("sk-") || k.startsWith("sk_")) {
+                    etModel.setText("gpt-4o-mini");
+                    etUrl.setText("https://api.openai.com/v1");
+                    tvKey.setText("API Key : " + maskKey(k) + " (OpenAI)");
+                }
+            }
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+
         btnLogs.setOnClickListener(v -> {
             dialog.dismiss();
             showTranslateLogsDialog();
