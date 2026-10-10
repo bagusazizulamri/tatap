@@ -36,11 +36,17 @@ android {
     signingConfigs {
         release {
             def keystorePath = System.getenv("KEYSTORE_FILE") ?: (project.hasProperty('RELEASE_STORE_FILE') ? project.property('RELEASE_STORE_FILE') : "")
-            if (keystorePath && file(keystorePath).exists()) {
-                storeFile file(keystorePath)
-                storePassword System.getenv("KEYSTORE_PASSWORD") ?: (project.hasProperty('RELEASE_STORE_PASSWORD') ? project.property('RELEASE_STORE_PASSWORD') : "")
-                keyAlias System.getenv("KEY_ALIAS") ?: (project.hasProperty('RELEASE_KEY_ALIAS') ? project.property('RELEASE_KEY_ALIAS') : "")
-                keyPassword System.getenv("KEY_PASSWORD") ?: (project.hasProperty('RELEASE_KEY_PASSWORD') ? project.property('RELEASE_KEY_PASSWORD') : "")
+            if (keystorePath) {
+                def ksFile = file(keystorePath)
+                if (!ksFile.exists()) {
+                    ksFile = rootProject.file(keystorePath)
+                }
+                if (ksFile.exists()) {
+                    storeFile ksFile
+                    storePassword System.getenv("KEYSTORE_PASSWORD") ?: (project.hasProperty('RELEASE_STORE_PASSWORD') ? project.property('RELEASE_STORE_PASSWORD') : "")
+                    keyAlias System.getenv("KEY_ALIAS") ?: (project.hasProperty('RELEASE_KEY_ALIAS') ? project.property('RELEASE_KEY_ALIAS') : "")
+                    keyPassword System.getenv("KEY_PASSWORD") ?: (project.hasProperty('RELEASE_KEY_PASSWORD') ? project.property('RELEASE_KEY_PASSWORD') : "")
+                }
             }
         }
     }
@@ -49,10 +55,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            def keystorePath = System.getenv("KEYSTORE_FILE") ?: (project.hasProperty('RELEASE_STORE_FILE') ? project.property('RELEASE_STORE_FILE') : "")
-            if (keystorePath && file(keystorePath).exists()) {
-                signingConfig signingConfigs.release
-            }
+            signingConfig signingConfigs.release
         }
     }
 
