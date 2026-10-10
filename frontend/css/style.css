@@ -220,10 +220,53 @@ body.no-ambient #ambient,body.no-ambient #ambient-fallback{display:none}
   padding:.15em .5em;border-radius:3px;line-height:1.45;font-weight:600;
   text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000;font-family:inherit}
 .subs-overlay span:empty{display:none;padding:0;background:transparent}
-video::cue{color:#fff;background:rgba(0,0,0,.7);font-family:inherit}
 .subs-overlay.sz-s span{font-size:clamp(12px,.6vw + .55rem,14px)}
 .subs-overlay.sz-m span{font-size:clamp(15px,.9vw + .7rem,20px)}
 .subs-overlay.sz-l span{font-size:clamp(18px,1.3vw + .9rem,26px)}
+
+/* Fullscreen styles for ambient-stage container */
+.ambient-stage:fullscreen {
+  width:100vw;height:100vh;max-height:100vh;display:flex;align-items:center;justify-content:center;background:#000;border-radius:0;
+}
+.ambient-stage:-webkit-full-screen {
+  width:100vw;height:100vh;max-height:100vh;display:flex;align-items:center;justify-content:center;background:#000;border-radius:0;
+}
+.ambient-stage:-moz-full-screen {
+  width:100vw;height:100vh;max-height:100vh;display:flex;align-items:center;justify-content:center;background:#000;border-radius:0;
+}
+.ambient-stage:fullscreen video,
+.ambient-stage:-webkit-full-screen video,
+.ambient-stage:-moz-full-screen video {
+  width:100vw;height:100vh;max-height:100vh;aspect-ratio:unset;border-radius:0;object-fit:contain;
+}
+.ambient-stage:fullscreen #ambient,
+.ambient-stage:fullscreen #ambient-fallback,
+.ambient-stage:-webkit-full-screen #ambient,
+.ambient-stage:-webkit-full-screen #ambient-fallback {
+  display:none;
+}
+.ambient-stage:fullscreen .subs-overlay,
+.ambient-stage:-webkit-full-screen .subs-overlay {
+  bottom:8%;padding:0 6%;
+}
+.ambient-stage:fullscreen .subs-overlay.sz-s span,
+.ambient-stage:-webkit-full-screen .subs-overlay.sz-s span {
+  font-size:clamp(15px,1.3vw + .7rem,22px);
+}
+.ambient-stage:fullscreen .subs-overlay.sz-m span,
+.ambient-stage:-webkit-full-screen .subs-overlay.sz-m span {
+  font-size:clamp(19px,1.7vw + .9rem,30px);
+}
+.ambient-stage:fullscreen .subs-overlay.sz-l span,
+.ambient-stage:-webkit-full-screen .subs-overlay.sz-l span {
+  font-size:clamp(23px,2.1vw + 1.1rem,38px);
+}
+
+/* Native video cues (rendered when browser fullscreens the <video> directly) */
+video::cue {
+  color:#fff;background:rgba(0,0,0,.78);font-family:inherit;font-weight:600;line-height:1.45;font-size:1.25rem;
+  text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000;
+}
 .player-foot{padding:8px 4px}
 .player-foot>.variants{flex:0 1 auto;max-width:55%}
 .player-foot>.sub-picker{flex:0 0 auto}

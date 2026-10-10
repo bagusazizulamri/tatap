@@ -328,9 +328,10 @@ function parseVtt(text){
   var start=-1,end=-1,buf=[];
   var flush=function(){
     if(start>=0&&end>start&&buf.length){
+      var plain=buf.map(function(x){return x.replace(/<[^>]+>/g,"");}).join("\n");
       var html=buf.map(function(x){return esc(x);}).join("<br>");
       html=html.replace(/&lt;[^&]*?&gt;/g,"");
-      out.push({start:start,end:end,html:html});
+      out.push({start:start,end:end,html:html,plain:plain});
     }
     start=-1;end=-1;buf=[];
   };
@@ -353,7 +354,104 @@ function clearOverlay(){
   var box=$("pm-subs-overlay");
   if(!box)return;
   var s=box.querySelector("span");
-  if(s)s.innerHTML="";
+  if(s){s.innerHTML="";s._last="";}
+}
+function isVideoFullscreen(){
+  var fsEl=document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement;
+  var v=$("vid");
+  return !!(fsEl&&fsEl===v);
+}
+function syncFullscreenSubtitles(){
+  var v=$("vid");
+  if(!v||!v.textTracks)return;
+  var isVidFs=isVideoFullscreen();
+  for(var i=0;i<v.textTracks.length;i++){
+    var t=v.textTracks[i];
+    if(t.label&&t.label.indexOf("Tatap")>=0){
+      t.mode=isVidFs?"showing":"hidden";
+    }
+  }
+}
+function syncNativeTextTrack(vttText, cues, langCode){
+  var v=$("vid");
+  if(!v)return;
+
+  var oldTracks=v.querySelectorAll("track.tatap-sub-track");
+  for(var i=0;i<oldTracks.length;i++){
+    var trk=oldTracks[i];
+    if(trk.src&&trk.src.indexOf("blob:")===0){
+      try{URL.revokeObjectURL(trk.src);}catch(e){}
+    }
+    if(trk.parentNode)trk.parentNode.removeChild(trk);
+  }
+
+  if(v.textTracks){
+    for(var j=0;j<v.textTracks.length;j++){
+      if(v.textTracks[j].label&&v.textTracks[j].label.indexOf("Tatap")>=0){
+        v.textTracks[j].mode="disabled";
+      }
+    }
+  }
+
+  if(!vttText&&(!cues||!cues.length))return;
+
+  try{
+    var trackEl=document.createElement("track");
+    trackEl.className="tatap-sub-track";
+    trackEl.kind="subtitles";
+    trackEl.label="Tatap Subtitle";
+    trackEl.srclang=langCode||"id";
+    trackEl.default=true;
+
+    if(vttText&&window.Blob&&window.URL&&window.URL.createObjectURL){
+      var blob=new Blob([vttText],{type:"text/vtt"});
+      trackEl.src=URL.createObjectURL(blob);
+    }
+
+    var applyMode=function(){
+      if(trackEl.track){
+        trackEl.track.mode=isVideoFullscreen()?"showing":"hidden";
+      }
+    };
+
+    trackEl.addEventListener("load",applyMode);
+    v.appendChild(trackEl);
+    applyMode();
+
+    setTimeout(function(){
+      if(trackEl.track&&(!trackEl.track.cues||trackEl.track.cues.length===0)&&cues&&cues.length&&window.VTTCue){
+        for(var k=0;k<cues.length;k++){
+          var c=cues[k];
+          var plain=c.plain||(c.html?c.html.replace(/<br\s*\/?>/gi,"\n").replace(/<[^>]+>/g,""):"");
+          try{
+            trackEl.track.addCue(new VTTCue(c.start,c.end,plain));
+          }catch(e){}
+        }
+        applyMode();
+      }
+    },200);
+  }catch(err){
+    console.warn("syncNativeTextTrack error:",err);
+  }
+}
+function toggleFullscreen(){
+  var stage=document.querySelector(".ambient-stage");
+  var fsEl=document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement;
+  if(fsEl){
+    if(document.exitFullscreen)document.exitFullscreen();
+    else if(document.webkitExitFullscreen)document.webkitExitFullscreen();
+    else if(document.mozCancelFullScreen)document.mozCancelFullScreen();
+    else if(document.msExitFullscreen)document.msExitFullscreen();
+  }else if(stage){
+    if(stage.requestFullscreen)stage.requestFullscreen();
+    else if(stage.webkitRequestFullscreen)stage.webkitRequestFullscreen();
+    else if(stage.mozRequestFullScreen)stage.mozRequestFullScreen();
+    else if(stage.msRequestFullscreen)stage.msRequestFullscreen();
+    else{
+      var v=$("vid");
+      if(v&&v.requestFullscreen)v.requestFullscreen();
+    }
+  }
 }
 function paintCue(){
   var box=$("pm-subs-overlay");
@@ -419,9 +517,8 @@ function switchSubtitleTrack(url, langCode){
   // langCode opsional ("id", "ja", dst.) — backend akan translate kalau beda.
   var v=$("vid");
   if(!v)return;
-  // Bersihkan <track> lama kalau ada (legacy), lalu kosongkan overlay.
-  var oldTracks=v.querySelectorAll("track");
-  for(var i=0;i<oldTracks.length;i++)oldTracks[i].parentNode.removeChild(oldTracks[i]);
+  // Bersihkan track lama lalu kosongkan overlay.
+  syncNativeTextTrack("", [], "");
   cur.cues=[];
   clearOverlay();
   if(cur._subUpgradeTimer){
@@ -464,6 +561,7 @@ function switchSubtitleTrack(url, langCode){
     clearOverlay();
     cur.cues=parseVtt(res.text);
     paintCue();
+    syncNativeTextTrack(res.text, cur.cues, langCode);
     if(langCode==="id"){
       if(res.tier==="source"){
         var msg="Gagal translate";
@@ -500,6 +598,7 @@ function switchSubtitleTrack(url, langCode){
                   ur.text().then(function(uText){
                     cur.cues = parseVtt(uText);
                     paintCue();
+                    syncNativeTextTrack(uText, cur.cues, "id");
                     var lbl = "AI Fansub" + (uModel ? " · " + uModel : "");
                     toast("✨ Subtitle berhasil di-upgrade ke " + lbl + "!", 5000);
                   });
@@ -516,6 +615,7 @@ function switchSubtitleTrack(url, langCode){
   }).catch(function(err){
     cur.cues=[];
     clearOverlay();
+    syncNativeTextTrack("", [], "");
     if(langCode==="id"){
       toast("Gagal menerjemahkan subtitle: "+(err&&err.message||err));
     }
@@ -841,6 +941,7 @@ function closePlayer(){
   if(window._hls){try{window._hls.destroy();window._hls=null;}catch(e){}}
   cur.cues=[];
   clearOverlay();
+  syncNativeTextTrack("", [], "");
   v.removeAttribute("src");
   try{v.load();}catch(e){}
   $("player-modal").classList.add("hidden");
@@ -919,12 +1020,18 @@ function onKeyPlayer(e){
   if(typing&&e.key==="Escape"){e.target.blur();return;}
   var v=$("vid");
   if(e.key==="Escape"){
+    var fsEl=document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement;
+    if(fsEl){
+      // Fullscreen will be closed natively by browser, keep player modal open
+      return;
+    }
     if(!$("player-modal").classList.contains("hidden"))closePlayer();
     else if(!$("title-modal").classList.contains("hidden"))closeTitle();
     return;
   }
   if($("player-modal").classList.contains("hidden"))return;
   if(e.key===" "){e.preventDefault();if(v.paused)v.play();else v.pause();}
+  else if(e.key==="f"||e.key==="F"){e.preventDefault();toggleFullscreen();}
   else if(e.key==="n")stepEp(1);
   else if(e.key==="p")stepEp(-1);
   else if(e.key==="m")v.muted=!v.muted;
@@ -1039,8 +1146,39 @@ function init(){
   document.querySelectorAll(".sub-size button").forEach(function(b){
     b.addEventListener("click",function(){setSubSize(b.getAttribute("data-subsize"));});
   });
-  $("vid").addEventListener("timeupdate",paintCue);
-  $("vid").addEventListener("seeked",paintCue);
+  var v=$("vid");
+  if(v){
+    v.addEventListener("timeupdate",paintCue);
+    v.addEventListener("seeked",paintCue);
+    v.addEventListener("fullscreenchange",syncFullscreenSubtitles);
+    v.addEventListener("webkitfullscreenchange",syncFullscreenSubtitles);
+    v.addEventListener("dblclick",function(e){
+      e.preventDefault();
+      toggleFullscreen();
+    });
+    if(!v._tatapFsHooked){
+      v._tatapFsHooked=true;
+      var origFs=v.requestFullscreen||v.webkitRequestFullscreen||v.mozRequestFullScreen||v.msRequestFullscreen;
+      var fsHandler=function(options){
+        var stage=document.querySelector(".ambient-stage");
+        if(stage&&(stage.requestFullscreen||stage.webkitRequestFullscreen)){
+          if(stage.requestFullscreen)return stage.requestFullscreen(options);
+          if(stage.webkitRequestFullscreen)return stage.webkitRequestFullscreen(options);
+        }
+        if(origFs)return origFs.call(v,options);
+      };
+      v.requestFullscreen=fsHandler;
+      if(v.webkitRequestFullscreen)v.webkitRequestFullscreen=fsHandler;
+      if(v.mozRequestFullScreen)v.mozRequestFullScreen=fsHandler;
+      if(v.msRequestFullscreen)v.msRequestFullscreen=fsHandler;
+    }
+  }
+  document.addEventListener("fullscreenchange",syncFullscreenSubtitles);
+  document.addEventListener("webkitfullscreenchange",syncFullscreenSubtitles);
+  document.addEventListener("mozfullscreenchange",syncFullscreenSubtitles);
+  document.addEventListener("MSFullscreenChange",syncFullscreenSubtitles);
+  var pmFs=$("pm-fs");
+  if(pmFs)pmFs.addEventListener("click",toggleFullscreen);
   renderSourceUI();
   var sbSrc=$("sb-source");
   if(sbSrc) sbSrc.addEventListener("click",function(){switchSource();});
