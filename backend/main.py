@@ -638,8 +638,9 @@ async def proxy_video(url: str = Query(""), referer: str = Query("")):
 
 
 def _rewrite_m3u8_content(txt: str, base_url: str, referer: str) -> str:
-    """Tulis ulang m3u8 dan pastikan audio codec terdaftar di manifest."""
+    """Tulis ulang m3u8 dan pastikan audio codec & sub-manifests (audio, subtitles, init) ter-proxy."""
     import urllib.parse as _up
+    import re as _re
     base = base_url.rsplit("/", 1)[0] + "/"
     out = []
     for ln in txt.splitlines():
@@ -651,11 +652,18 @@ def _rewrite_m3u8_content(txt: str, base_url: str, referer: str) -> str:
         # agar browser/Hls.js tahu ada stream audio AAC dan menyiapkan audio SourceBuffer
         if s.startswith("#EXT-X-STREAM-INF:") and "CODECS=" not in s:
             s += ',CODECS="avc1.64001f,mp4a.40.2"'
+
+        if s.startswith("#"):
+            # Rewrite URI="..." di dalam tag seperti #EXT-X-MEDIA (audio/subtitles), #EXT-X-MAP, #EXT-X-KEY
+            if "URI=" in s:
+                def _rep_uri(m):
+                    raw_uri = m.group(1) or m.group(2) or m.group(3)
+                    absu = raw_uri if raw_uri.startswith("http") else _up.urljoin(base, raw_uri)
+                    return f'URI="/api/player/video?url={_up.quote(absu, safe="")}&referer={_up.quote(referer or "", safe="")}"'
+                s = _re.sub(r'URI=(?:"([^"]+)"|\'([^\']+)\'|([^,\s]+))', _rep_uri, s)
             out.append(s)
             continue
-        if s.startswith("#"):
-            out.append(ln)
-            continue
+
         absu = s if s.startswith("http") else _up.urljoin(base, s)
         out.append(f"/api/player/video?url={_up.quote(absu, safe='')}&referer={_up.quote(referer or '', safe='')}")
     return "\n".join(out)

@@ -92,16 +92,20 @@ def _probe_master(master_url, referer):
 
     # Direct connection biasa untuk semua host normal
     try:
-        from curl_cffi import requests as creq
-        kw = dict(headers=headers, impersonate="chrome124", timeout=10)
-        r = creq.get(master_url, **kw)
+        try:
+            from curl_cffi import requests as creq
+            kw = dict(headers=headers, impersonate="chrome124", timeout=10)
+            r = creq.get(master_url, **kw)
+        except Exception:
+            import httpx
+            r = httpx.get(master_url, headers=headers, timeout=10, follow_redirects=True)
         if r.status_code == 200 and r.content:
             return r.content
         if r.status_code >= 400:
             raise RuntimeError(f"upstream {r.status_code} for {host}")
     except Exception as e:
         err_str = str(e).lower()
-        if "reset" in err_str or "ssl" in err_str or "recv failure" in err_str:
+        if any(w in err_str for w in ("reset", "ssl", "recv failure", "connect", "timeout")):
             _BLOCKED_DPI_HOSTS.add(host)
             try:
                 from api.desync import tls_desync_request
